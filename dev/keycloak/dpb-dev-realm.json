@@ -31,7 +31,7 @@
       ],
       "webOrigins": ["http://localhost:3000"],
       "attributes": {
-        "post.logout.redirect.uris": "http://localhost:3000/*",
+        "post.logout.redirect.uris": "http://localhost:3000/login",
         "pkce.code.challenge.method": ""
       },
       "protocolMappers": [
