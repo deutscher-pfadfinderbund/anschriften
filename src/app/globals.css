@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/*
+ * Design-Tokens Anschriftenverzeichnis.
+ * Grundton neutral (Papier/Anthrazit), Tannengrün NUR als Akzent
+ * (Primär-Buttons, Links, aktive Markierung). Flächen und Hover neutral.
+ */
+:root {
+  --paper: #fafaf8;
+  --surface: #ffffff;
+  --surface-2: #f3f3f0;
+  --ink: #232724;
+  --ink-soft: #5b625d;
+  --ink-faint: #8e948f;
+  --line: #e5e5e0;
+  --line-strong: #cbccc5;
+  --fir: #2e5c46;
+  --fir-deep: #234b38;
+  --fir-tint: #eef2ef;
+  --brass: #a08028;
+  --brass-tint: #f4efdf;
+  --crit: #a63d2f;
+  --crit-tint: #f6e7e4;
+  --sel: #f0f1ee;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #161917;
+    --surface: #1d211e;
+    --surface-2: #191d1a;
+    --ink: #e5e8e4;
+    --ink-soft: #a8afa9;
+    --ink-faint: #6f766f;
+    --line: #2c312d;
+    --line-strong: #3f453f;
+    --fir: #85b99a;
+    --fir-deep: #a3cdb3;
+    --fir-tint: #222a24;
+    --brass: #c8a94e;
+    --brass-tint: #2e2a1c;
+    --crit: #d97a6a;
+    --crit-tint: #382522;
+    --sel: #222623;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #161917;
+  --surface: #1d211e;
+  --surface-2: #191d1a;
+  --ink: #e5e8e4;
+  --ink-soft: #a8afa9;
+  --ink-faint: #6f766f;
+  --line: #2c312d;
+  --line-strong: #3f453f;
+  --fir: #85b99a;
+  --fir-deep: #a3cdb3;
+  --fir-tint: #222a24;
+  --brass: #c8a94e;
+  --brass-tint: #2e2a1c;
+  --crit: #d97a6a;
+  --crit-tint: #382522;
+  --sel: #222623;
+}
+
+:root[data-theme="light"] {
+  --paper: #fafaf8;
+  --surface: #ffffff;
+  --surface-2: #f3f3f0;
+  --ink: #232724;
+  --ink-soft: #5b625d;
+  --ink-faint: #8e948f;
+  --line: #e5e5e0;
+  --line-strong: #cbccc5;
+  --fir: #2e5c46;
+  --fir-deep: #234b38;
+  --fir-tint: #eef2ef;
+  --brass: #a08028;
+  --brass-tint: #f4efdf;
+  --crit: #a63d2f;
+  --crit-tint: #f6e7e4;
+  --sel: #f0f1ee;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fir: var(--fir);
+  --color-fir-deep: var(--fir-deep);
+  --color-fir-tint: var(--fir-tint);
+  --color-brass: var(--brass);
+  --color-brass-tint: var(--brass-tint);
+  --color-crit: var(--crit);
+  --color-crit-tint: var(--crit-tint);
+  --color-sel: var(--sel);
+  --font-sans: var(--font-fira-sans), "Fira Sans", "Seravek", "Avenir Next", "Segoe UI", sans-serif;
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-mono: "Fira Code", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
