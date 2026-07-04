@@ -15,6 +15,13 @@
       "when": 1783161308210,
       "tag": "0001_funny_ink",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783180352622,
+      "tag": "0002_flaky_daredevil",
+      "breakpoints": true
     }
   ]
 }
