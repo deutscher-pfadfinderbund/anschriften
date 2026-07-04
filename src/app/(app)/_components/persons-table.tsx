@@ -395,7 +395,7 @@ export function PersonsTable({
           <Button asChild className="ml-auto">
             <Link href="/personen/neu">
               <Plus className="size-4" />
-              Neue Anschrift
+              Neue Person
             </Link>
           </Button>
         </div>

@@ -54,6 +54,9 @@ type AssignmentRow = {
   groupId: number | null;
   officeId: number | null;
   startDate: string;
+  // Optional "bis": a row with an end date is saved as a finished tenure (history),
+  // so past offices can be captured directly — also when creating a new person.
+  endDate: string;
 };
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -155,13 +158,14 @@ export function PersonForm({
   const [assignments, setAssignments] = useState<AssignmentRow[]>(() => {
     const existing = person?.assignments ?? [];
     if (existing.length === 0)
-      return [{ key: "a0", id: null, groupId: null, officeId: null, startDate: "" }];
+      return [{ key: "a0", id: null, groupId: null, officeId: null, startDate: "", endDate: "" }];
     return existing.map((a, i) => ({
       key: `a${i}`,
       id: a.id,
       groupId: a.groupId,
       officeId: a.officeId,
       startDate: a.startDate ?? "",
+      endDate: "",
     }));
   });
 
@@ -225,7 +229,9 @@ export function PersonForm({
     const dups = new Set<string>();
     for (const a of assignments) {
       if (a.groupId == null) continue;
-      const combo = `${a.groupId}:${a.officeId ?? "null"}`;
+      // The end date is part of the identity: one active row plus finished tenures
+      // of the same combination are fine, only exact duplicates are flagged.
+      const combo = `${a.groupId}:${a.officeId ?? "null"}:${a.endDate || "active"}`;
       if (seen.has(combo)) {
         dups.add(a.key);
         dups.add(seen.get(combo)!);
@@ -239,7 +245,7 @@ export function PersonForm({
   const heading =
     mode === "edit" && person
       ? formatName(person) + (person.scoutName && (person.lastName || person.firstName) ? ` „${person.scoutName}“` : "")
-      : "Neue Anschrift";
+      : "Neue Person";
   const subtitle =
     mode === "edit"
       ? "Anschrift bearbeiten"
@@ -283,6 +289,7 @@ export function PersonForm({
           groupId: a.groupId as number,
           officeId: a.officeId,
           startDate: a.startDate || null,
+          endDate: a.endDate || null,
         })),
       distributionListIds: [...listIds],
     };
@@ -522,13 +529,16 @@ export function PersonForm({
               </button>
             </Panel>
 
-            <Panel title="Ämter & Gliederung" hint="aktuell · Amt optional · „seit“ optional">
+            <Panel
+              title="Ämter & Gliederung"
+              hint="Amt optional · „seit“ optional · mit „bis“ wird es als früheres Amt gespeichert"
+            >
               <div className="flex flex-col gap-2.5">
                 {assignments.map((a) => {
                   const isDup = duplicateKeys.has(a.key);
                   return (
                     <div key={a.key}>
-                      <div className="grid grid-cols-[1fr_1fr_128px_auto] items-end gap-2.5">
+                      <div className="grid grid-cols-[1fr_1fr_118px_118px_auto] items-end gap-2.5">
                         <Field label="Amt">
                           <Combobox
                             aria-label="Amt"
@@ -559,6 +569,14 @@ export function PersonForm({
                             aria-label="Amt seit"
                             value={a.startDate}
                             onChange={(e) => updateAssignment(a.key, { startDate: e.target.value })}
+                          />
+                        </Field>
+                        <Field label="bis (für frühere Ämter)">
+                          <Input
+                            type="date"
+                            aria-label="Amt bis"
+                            value={a.endDate}
+                            onChange={(e) => updateAssignment(a.key, { endDate: e.target.value })}
                           />
                         </Field>
                         <div className="flex items-center">
@@ -603,7 +621,7 @@ export function PersonForm({
                 onClick={() =>
                   setAssignments((rows) => [
                     ...rows,
-                    { key: nextKey(), id: null, groupId: null, officeId: null, startDate: "" },
+                    { key: nextKey(), id: null, groupId: null, officeId: null, startDate: "", endDate: "" },
                   ])
                 }
                 className="mt-2.5 w-full rounded-md border border-dashed border-line-strong py-2 text-[13px] text-ink-soft transition-colors hover:border-fir hover:text-fir"
