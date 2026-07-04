@@ -42,6 +42,10 @@ export async function GET(request: Request): Promise<Response> {
     if (ids.length === 0) {
       return new Response("Keine gültigen IDs übergeben.", { status: 400 });
     }
+    // Sanity cap far above the real dataset (~700 persons) against abusive queries.
+    if (ids.length > 5000) {
+      return new Response("Zu viele IDs übergeben.", { status: 400 });
+    }
     rows = await personsForCsvByIds(ids);
     baseName = "auswahl";
   } else {

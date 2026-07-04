@@ -47,6 +47,18 @@ describe("buildCsv", () => {
     expect(row).toContain('"say ""hi"""');
     expect(row).toContain('"line1\nline2"');
   });
+
+  it("neutralizes spreadsheet formula starters (CSV injection)", () => {
+    const csv = buildCsv([
+      { ...emptyPerson, firstName: "=1+1", lastName: "@SUM(A1)", scoutName: "+49", city: "-foo" },
+    ]);
+    const row = csv.split("\r\n")[1];
+    expect(row).toContain("'=1+1");
+    expect(row).toContain("'@SUM(A1)");
+    expect(row).toContain("'+49");
+    expect(row).toContain("'-foo");
+    expect(row).not.toMatch(/(^|;)=/);
+  });
 });
 
 describe("buildBcc", () => {

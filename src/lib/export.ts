@@ -29,9 +29,15 @@ export type CsvPerson = {
   email: string | null;
 };
 
-/** RFC-4180 field: quote only when the value contains `"`, `;`, CR or LF; double inner quotes. */
+/**
+ * RFC-4180 field: quote when the value contains `"`, `;`, CR or LF; double inner quotes.
+ * Values starting with =, +, -, @ or tab get an apostrophe prefix so spreadsheet
+ * apps render them as text instead of executing them as a formula (CSV injection —
+ * person data is not trusted input).
+ */
 function csvField(value: string | null | undefined): string {
-  const s = (value ?? "").trim();
+  let s = (value ?? "").trim();
+  if (/^[=+\-@\t]/.test(s)) s = `'${s}`;
   return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
