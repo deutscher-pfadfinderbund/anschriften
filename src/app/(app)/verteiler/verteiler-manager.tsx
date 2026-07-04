@@ -2,10 +2,31 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Download, Mail, Pencil, Plus, Trash2, UserPlus, Users, X } from "lucide-react";
+import {
+  Briefcase,
+  Copy,
+  Download,
+  Lock,
+  Mail,
+  Pencil,
+  Plus,
+  Trash2,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
-import { addMembers, createList, deleteList, removeMember, updateList } from "@/actions/lists";
+import {
+  addMembers,
+  addOfficeRule,
+  createList,
+  deleteList,
+  removeMember,
+  removeOfficeRule,
+  updateList,
+} from "@/actions/lists";
+import { Combobox } from "@/components/combobox";
 import { MultiSelectList } from "@/components/multi-select-list";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -21,7 +42,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { DistributionListWithMembers, ListMemberRow, PersonOption } from "@/db/queries";
+import type {
+  DistributionListWithMembers,
+  ListMemberRow,
+  OfficeRow,
+  PersonOption,
+} from "@/db/queries";
 import { buildBcc, type BccSeparator } from "@/lib/export";
 import { formatName } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -46,10 +72,12 @@ function hasEmail(m: ListMemberRow): boolean {
 export function VerteilerManager({
   lists,
   personOptions,
+  offices,
   initialListId,
 }: {
   lists: DistributionListWithMembers[];
   personOptions: PersonOption[];
+  offices: OfficeRow[];
   initialListId?: number | null;
 }) {
   const router = useRouter();
@@ -157,6 +185,35 @@ export function VerteilerManager({
     if (!activeList) return;
     startTransition(async () => {
       const res = await removeMember(activeList.id, personId);
+      if (!res.ok) return void toast.error(res.message);
+      router.refresh();
+    });
+  }
+
+  // Offices not yet a rule on the active list — the "+ Amt hinzufügen" combobox.
+  const ruleOfficeOptions = useMemo(() => {
+    if (!activeList) return [];
+    const existing = new Set(activeList.officeRules.map((r) => r.officeId));
+    return offices
+      .filter((o) => !existing.has(o.id))
+      .map((o) => ({ value: String(o.id), label: o.name }));
+  }, [activeList, offices]);
+
+  function handleAddRule(officeId: number) {
+    if (!activeList || !Number.isInteger(officeId)) return;
+    startTransition(async () => {
+      const res = await addOfficeRule(activeList.id, officeId);
+      if (!res.ok) return void toast.error(res.message);
+      const name = offices.find((o) => o.id === officeId)?.name ?? "Amt";
+      toast.success(`Regel „${name}“ hinzugefügt.`);
+      router.refresh();
+    });
+  }
+
+  function handleRemoveRule(officeId: number) {
+    if (!activeList) return;
+    startTransition(async () => {
+      const res = await removeOfficeRule(activeList.id, officeId);
       if (!res.ok) return void toast.error(res.message);
       router.refresh();
     });
@@ -328,6 +385,57 @@ export function VerteilerManager({
                 </div>
               </section>
 
+              {/* Office rules: automatic membership by office */}
+              <section className="rounded-lg border border-line bg-surface shadow-sm">
+                <div className="border-b border-line px-[18px] py-3">
+                  <span className="font-display text-[15.5px] font-semibold text-ink">
+                    Automatisch enthalten (nach Amt)
+                  </span>
+                  <p className="mt-0.5 text-[12.5px] text-ink-faint">
+                    Wer eines dieser Ämter innehat, ist automatisch Mitglied — bei einem Amtswechsel
+                    wandert die Mitgliedschaft mit.
+                  </p>
+                </div>
+                <div className="p-[18px]">
+                  {activeList.officeRules.length === 0 ? (
+                    <p className="mb-3 text-[13px] text-ink-soft">Noch keine Amts-Regel.</p>
+                  ) : (
+                    <ul className="mb-3 flex flex-col gap-1.5">
+                      {activeList.officeRules.map((r) => (
+                        <li
+                          key={r.officeId}
+                          className="group/rule flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[13.5px]"
+                        >
+                          <Briefcase className="size-3.5 shrink-0 text-ink-faint" />
+                          <span className="min-w-0 flex-1 truncate text-ink">{r.officeName}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Regel „${r.officeName}“ entfernen`}
+                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100"
+                            disabled={isPending}
+                            onClick={() => handleRemoveRule(r.officeId)}
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="max-w-sm">
+                    <Combobox
+                      aria-label="Amt als Regel hinzufügen"
+                      options={ruleOfficeOptions}
+                      value={null}
+                      onChange={(v) => handleAddRule(Number(v))}
+                      placeholder="+ Amt hinzufügen"
+                      searchPlaceholder="Amt suchen …"
+                      emptyText="Kein Amt gefunden."
+                    />
+                  </div>
+                </div>
+              </section>
+
               {/* Members */}
               <section className="rounded-lg border border-line bg-surface shadow-sm">
                 <div className="flex items-center justify-between border-b border-line px-[18px] py-3">
@@ -358,9 +466,24 @@ export function VerteilerManager({
                               <span className="ml-1.5 font-normal text-fir">„{m.scoutName}“</span>
                             ) : null}
                           </div>
-                          {m.mainOffice ? (
-                            <div className="text-xs text-ink-faint">{m.mainOffice}</div>
-                          ) : null}
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                            {m.manual ? (
+                              <span className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-faint">
+                                manuell
+                              </span>
+                            ) : null}
+                            {m.viaOffices.map((o) => (
+                              <span
+                                key={o.id}
+                                className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
+                              >
+                                über Amt: {o.name}
+                              </span>
+                            ))}
+                            {m.mainOffice && m.viaOffices.length === 0 ? (
+                              <span className="text-xs text-ink-faint">{m.mainOffice}</span>
+                            ) : null}
+                          </div>
                         </div>
                         <div className="hidden min-w-0 flex-1 sm:block">
                           {hasEmail(m) ? (
@@ -374,16 +497,25 @@ export function VerteilerManager({
                             <span className="text-ink-faint">— ohne E-Mail</span>
                           )}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`${formatName(m)} entfernen`}
-                          className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/row:opacity-100"
-                          disabled={isPending}
-                          onClick={() => handleRemove(m.personId)}
-                        >
-                          <X className="size-4" />
-                        </Button>
+                        {m.manual ? (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`${formatName(m)} entfernen`}
+                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/row:opacity-100"
+                            disabled={isPending}
+                            onClick={() => handleRemove(m.personId)}
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        ) : (
+                          <span
+                            className="shrink-0 text-ink-faint"
+                            title="Über ein Amt enthalten — die Regel entfernen oder der Person das Amt entziehen."
+                          >
+                            <Lock className="size-3.5 opacity-50" />
+                          </span>
+                        )}
                       </li>
                     ))}
                   </ul>

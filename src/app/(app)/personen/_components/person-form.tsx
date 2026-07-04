@@ -34,6 +34,7 @@ import type { GroupRow, OfficeRow, PersonEditData, RankRow } from "@/db/queries"
 import { PHONE_LABELS, SALUTATIONS, formatDateTime, formatName } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 import type { FieldErrors, PersonInput } from "@/lib/person-schema";
+import { cn } from "@/lib/utils";
 
 const NONE = "none";
 const OFFICE_NONE = "none";
@@ -144,6 +145,17 @@ export function PersonForm({
   const [listIds, setListIds] = useState<Set<number>>(
     () => new Set(person?.distributionListIds ?? []),
   );
+
+  // Lists this person belongs to automatically because they hold a rule office.
+  // These checkboxes render locked + ticked; the editable `listIds` state below
+  // still only ever carries the *manual* memberships.
+  const ruleOfficeNamesByList = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const r of person?.ruleMemberships ?? []) {
+      map.set(r.listId, r.officeNames.join(", "));
+    }
+    return map;
+  }, [person?.ruleMemberships]);
 
   const [errors, setErrors] = useState<FieldErrors>({});
 
@@ -480,25 +492,51 @@ export function PersonForm({
                 </p>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {distributionLists.map((l) => (
-                    <label
-                      key={l.id}
-                      className="flex cursor-pointer items-center gap-2.5 text-[13.5px] text-ink"
-                    >
-                      <Checkbox
-                        checked={listIds.has(l.id)}
-                        onCheckedChange={(v) =>
-                          setListIds((prev) => {
-                            const next = new Set(prev);
-                            if (v === true) next.add(l.id);
-                            else next.delete(l.id);
-                            return next;
-                          })
+                  {distributionLists.map((l) => {
+                    const viaOffice = ruleOfficeNamesByList.get(l.id);
+                    const isRuleBased = viaOffice != null;
+                    // Ticked when a manual membership OR a rule applies; locked when a
+                    // rule applies (the rule, not this checkbox, controls it then).
+                    const checked = listIds.has(l.id) || isRuleBased;
+                    return (
+                      <label
+                        key={l.id}
+                        className={cn(
+                          "flex items-center gap-2.5 text-[13.5px]",
+                          isRuleBased ? "cursor-default text-ink-faint" : "cursor-pointer text-ink",
+                        )}
+                        title={
+                          isRuleBased
+                            ? `Automatisch enthalten über Amt ${viaOffice} — über den Verteiler oder das Amt änderbar.`
+                            : undefined
                         }
-                      />
-                      {l.name}
-                    </label>
-                  ))}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          disabled={isRuleBased}
+                          onCheckedChange={
+                            isRuleBased
+                              ? undefined
+                              : (v) =>
+                                  setListIds((prev) => {
+                                    const next = new Set(prev);
+                                    if (v === true) next.add(l.id);
+                                    else next.delete(l.id);
+                                    return next;
+                                  })
+                          }
+                        />
+                        <span className="min-w-0">
+                          {l.name}
+                          {isRuleBased ? (
+                            <span className="ml-1.5 text-xs text-ink-faint">
+                              · über Amt {viaOffice}
+                            </span>
+                          ) : null}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </Panel>
