@@ -11,9 +11,9 @@ Bundesanschriftenverzeichnis des Deutschen Pfadfinderbundes als Webanwendung. Er
 ```bash
 docker compose -f compose.dev.yml up -d   # lokale Postgres (Port 5544)
 cp .env.example .env.local                # Werte eintragen
-npm install
-npx drizzle-kit migrate                   # Schema anwenden
-npm run dev
+bun install
+bunx drizzle-kit migrate                  # Schema anwenden
+bun run dev
 ```
 
 ## Mail-Modul (optional)

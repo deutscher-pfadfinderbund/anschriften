@@ -47,13 +47,17 @@ Referenz-Mockup (Struktur übernehmen): https://claude.ai/code/artifact/f1874284
 
 ## Befehle
 
+**Package-Manager ist bun** (`bun.lock`; kein npm/npx verwenden, kein package-lock.json erzeugen).
+
 ```bash
-npm run dev                        # Dev-Server (braucht laufende Dev-DB)
+bun install                        # Dependencies
+bun run dev                        # Dev-Server (braucht laufende Dev-DB)
 docker compose -f compose.dev.yml up -d   # lokale Postgres (Port 5544)
-npx drizzle-kit generate           # Migration aus Schema-Änderung erzeugen (SQL einchecken!)
-npx drizzle-kit migrate            # Migrationen anwenden
-npm test                           # vitest
-npm run build                      # Prod-Build (standalone)
+bunx drizzle-kit generate          # Migration aus Schema-Änderung erzeugen (SQL einchecken!)
+bunx drizzle-kit migrate           # Migrationen anwenden
+bun run test                       # vitest
+bun run build                      # Prod-Build (standalone)
+bun scripts/import-mdb.ts <mdb> --dry-run   # Access-Import (bun führt TS direkt aus)
 ```
 
 Env-Variablen: siehe `.env.example`. Lokal `.env.local` anlegen.
@@ -62,4 +66,4 @@ Env-Variablen: siehe `.env.example`. Lokal `.env.local` anlegen.
 
 - Feature-Branch pro Issue (`m1-auth`, `m2-schema-import`, …), PR gegen `main`, Issue im PR-Text mit `Closes #n` verknüpfen
 - Commits klein und thematisch; Migrationen (`drizzle/*.sql`) immer mit einchecken
-- Vor PR: `npm run build` und `npm test` müssen grün sein
+- Vor PR: `bun run build` und `bun run test` müssen grün sein

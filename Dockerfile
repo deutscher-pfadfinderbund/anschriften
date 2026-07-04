@@ -1,14 +1,22 @@
 # syntax=docker/dockerfile:1
 
 # ---------------------------------------------------------------------------
-# Stage 1: Build the Next.js standalone bundle.
+# Stage 1a: Install dependencies with bun (the project's package manager).
+# ---------------------------------------------------------------------------
+FROM oven/bun:1 AS deps
+WORKDIR /app
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
+
+# ---------------------------------------------------------------------------
+# Stage 1b: Build the Next.js standalone bundle. Runs on Node because the
+# standalone output targets the Node runtime; bun is only the installer.
 # ---------------------------------------------------------------------------
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN node_modules/.bin/next build
 
 # ---------------------------------------------------------------------------
 # Stage 2: Fetch the pinned Typst release for the target architecture.
