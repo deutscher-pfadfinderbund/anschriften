@@ -46,14 +46,18 @@ function hasEmail(m: ListMemberRow): boolean {
 export function VerteilerManager({
   lists,
   personOptions,
+  initialListId,
 }: {
   lists: DistributionListWithMembers[];
   personOptions: PersonOption[];
+  initialListId?: number | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [selectedListId, setSelectedListId] = useState<number | null>(lists[0]?.id ?? null);
+  const [selectedListId, setSelectedListId] = useState<number | null>(
+    initialListId ?? lists[0]?.id ?? null,
+  );
   const [separator, setSeparator] = useState<BccSeparator>("; ");
 
   const [listForm, setListForm] = useState<ListFormState | null>(null);
