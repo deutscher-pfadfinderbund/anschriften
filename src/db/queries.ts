@@ -1,15 +1,20 @@
-import { asc, count, eq, inArray } from "drizzle-orm";
+import { asc, count, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
   assignments,
   distributionListMembers,
+  distributionListOfficeRules,
   distributionLists,
   groups,
   offices,
   persons,
   ranks,
 } from "@/db/schema";
+import {
+  computeEffectiveMembership,
+  type MemberOrigin,
+} from "@/lib/effective-members";
 import type { CsvPerson } from "@/lib/export";
 
 export type PhoneEntry = { label: string; number: string };
@@ -40,6 +45,8 @@ export type PersonListRow = {
   phones: PhoneEntry[];
   doNotPrint: boolean;
   assignments: PersonAssignment[];
+  /** Lists this person is an effective member of (manual ∪ office rule) — for the table filter. */
+  effectiveListIds: number[];
 };
 
 export type GroupRow = {
@@ -56,14 +63,27 @@ export type RankRow = { id: number; name: string; sortOrder: number };
 
 /** All persons with their assignments (group + office) and rank — one shot for the table. */
 export async function listPersons(): Promise<PersonListRow[]> {
-  const rows = await db.query.persons.findMany({
-    with: {
-      rank: true,
-      assignments: {
-        with: { group: true, office: true },
+  const [rows, membership] = await Promise.all([
+    db.query.persons.findMany({
+      with: {
+        rank: true,
+        assignments: {
+          with: { group: true, office: true },
+        },
       },
-    },
-  });
+    }),
+    loadEffectiveMembership(),
+  ]);
+
+  // Invert listId → members into personId → effective list ids.
+  const listIdsByPerson = new Map<number, number[]>();
+  for (const [listId, members] of membership) {
+    for (const personId of members.keys()) {
+      const arr = listIdsByPerson.get(personId);
+      if (arr) arr.push(listId);
+      else listIdsByPerson.set(personId, [listId]);
+    }
+  }
 
   return rows.map((p) => ({
     id: p.id,
@@ -89,6 +109,7 @@ export async function listPersons(): Promise<PersonListRow[]> {
       officeName: a.office?.name ?? null,
       officeRank: a.office?.rank ?? 999,
     })),
+    effectiveListIds: listIdsByPerson.get(p.id) ?? [],
   }));
 }
 
@@ -114,15 +135,50 @@ export type PersonEditData = {
   updatedBy: string | null;
   assignments: { groupId: number; officeId: number | null }[];
   distributionListIds: number[];
+  /**
+   * Lists this person belongs to automatically because they hold a rule office
+   * (living only). Rendered as a locked, ticked checkbox with an "über Amt …" hint.
+   */
+  ruleMemberships: { listId: number; officeNames: string[] }[];
 };
 
 /** One person shaped for the editor, or null if not found. */
 export async function getPersonForEdit(id: number): Promise<PersonEditData | null> {
-  const p = await db.query.persons.findFirst({
-    where: eq(persons.id, id),
-    with: { assignments: true, distributionListMembers: true },
-  });
+  const [p, ruleRows] = await Promise.all([
+    db.query.persons.findFirst({
+      where: eq(persons.id, id),
+      with: { assignments: true, distributionListMembers: true },
+    }),
+    db
+      .select({
+        listId: distributionListOfficeRules.listId,
+        officeId: distributionListOfficeRules.officeId,
+        officeName: offices.name,
+      })
+      .from(distributionListOfficeRules)
+      .innerJoin(offices, eq(offices.id, distributionListOfficeRules.officeId)),
+  ]);
   if (!p) return null;
+
+  // Which lists this person is auto-included in: match their held offices against
+  // the rules. Deceased persons are excluded from rule-based membership entirely.
+  const heldOfficeIds = new Set(
+    p.assignments.map((a) => a.officeId).filter((o): o is number => o != null),
+  );
+  const ruleByList = new Map<number, Set<string>>();
+  if (!p.deathDate) {
+    for (const r of ruleRows) {
+      if (!heldOfficeIds.has(r.officeId)) continue;
+      const names = ruleByList.get(r.listId) ?? new Set<string>();
+      names.add(r.officeName);
+      ruleByList.set(r.listId, names);
+    }
+  }
+  const ruleMemberships = [...ruleByList.entries()].map(([listId, names]) => ({
+    listId,
+    officeNames: [...names],
+  }));
+
   return {
     id: p.id,
     salutation: p.salutation,
@@ -145,6 +201,7 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
     updatedBy: p.updatedBy,
     assignments: p.assignments.map((a) => ({ groupId: a.groupId, officeId: a.officeId })),
     distributionListIds: p.distributionListMembers.map((m) => m.listId),
+    ruleMemberships,
   };
 }
 
@@ -225,7 +282,7 @@ export async function rankUsage(): Promise<Map<number, number>> {
   return map;
 }
 
-// --- distribution lists (M4) ---
+// --- distribution lists (M4 + office rules M-issue16) ---
 
 export type ListMemberRow = {
   personId: number;
@@ -235,12 +292,19 @@ export type ListMemberRow = {
   email: string | null;
   /** The member's senior office (lowest office rank across their assignments), or null. */
   mainOffice: string | null;
+  /** True if added by hand (has a removable membership); false if only via an office rule. */
+  manual: boolean;
+  /** Offices (rules) through which this person is auto-included, for the "über Amt: …" chip. */
+  viaOffices: { id: number; name: string }[];
 };
+
+export type OfficeRuleRow = { officeId: number; officeName: string };
 
 export type DistributionListWithMembers = {
   id: number;
   name: string;
   description: string | null;
+  officeRules: OfficeRuleRow[];
   members: ListMemberRow[];
 };
 
@@ -249,36 +313,154 @@ function memberSortKey(m: ListMemberRow): string {
   return (m.lastName || m.scoutName || "").toLowerCase();
 }
 
-/** Every distribution list with its members (incl. senior office + e-mail) — one shot for /verteiler. */
+/**
+ * Load the raw membership inputs and compute effective membership for every list.
+ * Reused by the table filter and the CSV export; the pure union/dedupe logic lives
+ * in `@/lib/effective-members`.
+ */
+async function loadEffectiveMembership(): Promise<Map<number, Map<number, MemberOrigin>>> {
+  const [manualMembers, ruleRows, assignmentRows, deceasedRows] = await Promise.all([
+    db
+      .select({
+        listId: distributionListMembers.listId,
+        personId: distributionListMembers.personId,
+      })
+      .from(distributionListMembers),
+    db
+      .select({
+        listId: distributionListOfficeRules.listId,
+        officeId: distributionListOfficeRules.officeId,
+      })
+      .from(distributionListOfficeRules),
+    db
+      .select({ personId: assignments.personId, officeId: assignments.officeId })
+      .from(assignments)
+      .where(isNotNull(assignments.officeId)),
+    db.select({ id: persons.id }).from(persons).where(isNotNull(persons.deathDate)),
+  ]);
+
+  return computeEffectiveMembership({
+    manualMembers,
+    officeRules: ruleRows,
+    officeAssignments: assignmentRows.map((a) => ({ personId: a.personId, officeId: a.officeId! })),
+    deceasedPersonIds: deceasedRows.map((r) => r.id),
+  });
+}
+
+/** Every distribution list with its office rules and effective members — one shot for /verteiler. */
 export async function listDistributionLists(): Promise<DistributionListWithMembers[]> {
-  const rows = await db.query.distributionLists.findMany({
-    orderBy: (dl, { asc }) => [asc(dl.name)],
-    with: {
-      members: {
-        with: {
-          person: { with: { assignments: { with: { office: true } } } },
-        },
-      },
-    },
+  const [lists, ruleRows, personRows, manualMembers] = await Promise.all([
+    db
+      .select({
+        id: distributionLists.id,
+        name: distributionLists.name,
+        description: distributionLists.description,
+      })
+      .from(distributionLists)
+      .orderBy(asc(distributionLists.name)),
+    db
+      .select({
+        listId: distributionListOfficeRules.listId,
+        officeId: distributionListOfficeRules.officeId,
+        officeName: offices.name,
+        officeRank: offices.rank,
+      })
+      .from(distributionListOfficeRules)
+      .innerJoin(offices, eq(offices.id, distributionListOfficeRules.officeId)),
+    db.query.persons.findMany({ with: { assignments: { with: { office: true } } } }),
+    db
+      .select({
+        listId: distributionListMembers.listId,
+        personId: distributionListMembers.personId,
+      })
+      .from(distributionListMembers),
+  ]);
+
+  const personById = new Map(personRows.map((p) => [p.id, p]));
+  const officeNameById = new Map(ruleRows.map((r) => [r.officeId, r.officeName]));
+
+  const officeAssignments: { personId: number; officeId: number }[] = [];
+  const deceasedPersonIds: number[] = [];
+  for (const p of personRows) {
+    if (p.deathDate) deceasedPersonIds.push(p.id);
+    for (const a of p.assignments) {
+      if (a.officeId != null) officeAssignments.push({ personId: p.id, officeId: a.officeId });
+    }
+  }
+
+  const membership = computeEffectiveMembership({
+    manualMembers,
+    officeRules: ruleRows.map((r) => ({ listId: r.listId, officeId: r.officeId })),
+    officeAssignments,
+    deceasedPersonIds,
   });
 
-  return rows.map((dl) => {
-    const members = dl.members.map((m) => {
-      const withOffice = m.person.assignments
+  // Rules per list, ordered by office rank then name (PDF-style office ordering).
+  const rulesByList = new Map<number, OfficeRuleRow[]>();
+  const sortedRules = [...ruleRows].sort(
+    (a, b) => a.officeRank - b.officeRank || a.officeName.localeCompare(b.officeName, "de"),
+  );
+  for (const r of sortedRules) {
+    const arr = rulesByList.get(r.listId) ?? [];
+    arr.push({ officeId: r.officeId, officeName: r.officeName });
+    rulesByList.set(r.listId, arr);
+  }
+
+  return lists.map((dl) => {
+    const memberMap = membership.get(dl.id) ?? new Map<number, MemberOrigin>();
+    const members: ListMemberRow[] = [...memberMap.entries()].map(([personId, origin]) => {
+      const p = personById.get(personId)!;
+      const withOffice = p.assignments
         .filter((a) => a.office)
         .sort((a, b) => (a.office!.rank ?? 999) - (b.office!.rank ?? 999));
+      const viaOffices = origin.viaOfficeIds
+        .map((id) => ({ id, name: officeNameById.get(id) ?? "" }))
+        .sort((a, b) => a.name.localeCompare(b.name, "de"));
       return {
-        personId: m.person.id,
-        firstName: m.person.firstName,
-        lastName: m.person.lastName,
-        scoutName: m.person.scoutName,
-        email: m.person.email,
+        personId,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        scoutName: p.scoutName,
+        email: p.email,
         mainOffice: withOffice[0]?.office?.name ?? null,
+        manual: origin.manual,
+        viaOffices,
       };
     });
     members.sort((a, b) => memberSortKey(a).localeCompare(memberSortKey(b), "de"));
-    return { id: dl.id, name: dl.name, description: dl.description, members };
+    return {
+      id: dl.id,
+      name: dl.name,
+      description: dl.description,
+      officeRules: rulesByList.get(dl.id) ?? [],
+      members,
+    };
   });
+}
+
+export type OfficeListRule = { listId: number; listName: string };
+
+/**
+ * Which distribution lists each office is an automatic member of (read-only display
+ * on the Ämter page). Keyed by office id.
+ */
+export async function officeListRules(): Promise<Map<number, OfficeListRule[]>> {
+  const rows = await db
+    .select({
+      officeId: distributionListOfficeRules.officeId,
+      listId: distributionListOfficeRules.listId,
+      listName: distributionLists.name,
+    })
+    .from(distributionListOfficeRules)
+    .innerJoin(distributionLists, eq(distributionLists.id, distributionListOfficeRules.listId))
+    .orderBy(asc(distributionLists.name));
+  const map = new Map<number, OfficeListRule[]>();
+  for (const r of rows) {
+    const arr = map.get(r.officeId) ?? [];
+    arr.push({ listId: r.listId, listName: r.listName });
+    map.set(r.officeId, arr);
+  }
+  return map;
 }
 
 export type DistributionListSummary = {
@@ -349,14 +531,13 @@ const csvColumns = {
   email: persons.email,
 };
 
-/** CSV export rows for a whole distribution list, ordered like the directory. */
+/** CSV export rows for a whole distribution list (effective members), ordered like the directory. */
 export async function personsForCsvByList(listId: number): Promise<CsvPerson[]> {
-  return db
-    .select(csvColumns)
-    .from(distributionListMembers)
-    .innerJoin(persons, eq(persons.id, distributionListMembers.personId))
-    .where(eq(distributionListMembers.listId, listId))
-    .orderBy(asc(persons.lastName), asc(persons.firstName), asc(persons.scoutName));
+  const membership = await loadEffectiveMembership();
+  const members = membership.get(listId);
+  if (!members || members.size === 0) return [];
+  // Reuse the by-ids query so effective (manual ∪ rule, deduped) members are exported.
+  return personsForCsvByIds([...members.keys()]);
 }
 
 /** CSV export rows for an explicit selection of person ids. */

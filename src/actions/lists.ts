@@ -5,7 +5,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { distributionListMembers, distributionLists } from "@/db/schema";
+import {
+  distributionListMembers,
+  distributionListOfficeRules,
+  distributionLists,
+} from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
 
 export type ActionResult = { ok: true } | { ok: false; message: string };
@@ -121,5 +125,50 @@ export async function removeMember(listId: number, personId: number): Promise<Ac
       ),
     );
   revalidatePath("/verteiler");
+  return { ok: true };
+}
+
+/**
+ * Office rules change the effective membership of a list, so they affect the
+ * Verteiler detail, the directory table filter and the Ämter page alike.
+ */
+function revalidateEffectiveMembership() {
+  revalidatePath("/verteiler");
+  revalidatePath("/");
+  revalidatePath("/stammdaten");
+}
+
+/** Bind an office to a list: whoever holds it is then an automatic member. Idempotent. */
+export async function addOfficeRule(listId: number, officeId: number): Promise<ActionResult> {
+  await requireSession();
+  if (!Number.isInteger(officeId) || officeId <= 0)
+    return { ok: false, message: "Ungültiges Amt." };
+  try {
+    await db.insert(distributionListOfficeRules).values({ listId, officeId }).onConflictDoNothing();
+  } catch (err) {
+    // Race: the list or the office was deleted between page load and this call.
+    if (isForeignKeyViolation(err))
+      return {
+        ok: false,
+        message: "Verteiler oder Amt existiert nicht mehr. Bitte Seite neu laden.",
+      };
+    throw err;
+  }
+  revalidateEffectiveMembership();
+  return { ok: true };
+}
+
+/** Remove an office rule from a list. The office holders are no longer auto-included. */
+export async function removeOfficeRule(listId: number, officeId: number): Promise<ActionResult> {
+  await requireSession();
+  await db
+    .delete(distributionListOfficeRules)
+    .where(
+      and(
+        eq(distributionListOfficeRules.listId, listId),
+        eq(distributionListOfficeRules.officeId, officeId),
+      ),
+    );
+  revalidateEffectiveMembership();
   return { ok: true };
 }
