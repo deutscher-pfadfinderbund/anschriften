@@ -1,0 +1,399 @@
+import { describe, expect, it } from "vitest";
+import {
+  buildProfileData,
+  formatDate,
+  normalizeSortKey,
+  type BuildOptions,
+  type DataGroup,
+  type DataOffice,
+  type DataPerson,
+  type DataRank,
+  type Entry,
+  type GroupNode,
+  type RawData,
+} from "./build-data";
+
+// All test data below is fictitious.
+
+const ALL_OPTIONS: BuildOptions = { withBirthdays: true, withRanks: true, withMemorial: true };
+const NO_OPTIONS: BuildOptions = { withBirthdays: false, withRanks: false, withMemorial: false };
+
+const RANKS: DataRank[] = [
+  { id: 1, name: "Späher" },
+  { id: 2, name: "Knappe" },
+];
+
+const OFFICES: DataOffice[] = [
+  { id: 1, name: "Bundesvogt", rank: 10 },
+  { id: 2, name: "Kanzlerin des Bundes", rank: 20 },
+  { id: 3, name: "Kämmerer des Bundes", rank: 30 },
+  { id: 4, name: "Gauvogt", rank: 10 },
+  { id: 5, name: "Knappenmeister", rank: 999 },
+  { id: 6, name: "Jungenschaftsführer", rank: 10 },
+  { id: 7, name: "Beisitzer", rank: 50 },
+];
+
+const GROUPS: DataGroup[] = [
+  { id: 1, name: "Bundesführung", parentId: null, section: "bund", sortKey: 10 },
+  { id: 2, name: "Gau Franken", parentId: null, section: "jungenbund", sortKey: 110 },
+  { id: 3, name: "Jungenschaft Hohenlohe", parentId: 2, section: "jungenbund", sortKey: 0 },
+  { id: 4, name: "Bundesgilde", parentId: null, section: "bundesgilde", sortKey: 520 },
+  { id: 5, name: "Kollegium Nord", parentId: 4, section: "bundesgilde", sortKey: 0 },
+];
+
+function person(over: Partial<DataPerson> & { id: number }): DataPerson {
+  return {
+    title: null,
+    firstName: null,
+    lastName: null,
+    scoutName: null,
+    birthDate: null,
+    deathDate: null,
+    rankId: null,
+    street: null,
+    addressExtra: null,
+    postalCode: null,
+    city: null,
+    email: null,
+    phones: [],
+    doNotPrint: false,
+    ...over,
+  };
+}
+
+/** Flatten every entry of the built tree (pre-order) for easy assertions. */
+function allEntries(nodes: GroupNode[]): Entry[] {
+  const out: Entry[] = [];
+  const walk = (n: GroupNode) => {
+    out.push(...n.entries);
+    n.children.forEach(walk);
+  };
+  nodes.forEach(walk);
+  return out;
+}
+
+function findNode(nodes: GroupNode[], name: string): GroupNode | undefined {
+  for (const n of nodes) {
+    if (n.name === name) return n;
+    const hit = findNode(n.children, name);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+describe("normalizeSortKey", () => {
+  it("folds umlauts ae/oe/ue and lower-cases", () => {
+    expect(normalizeSortKey("Öhmann")).toBe("oehmann");
+    expect(normalizeSortKey("Bär")).toBe("baer");
+    expect(normalizeSortKey("Groß")).toBe("gross");
+  });
+});
+
+describe("formatDate", () => {
+  it("reformats ISO to dd.MM.yyyy and rejects garbage", () => {
+    expect(formatDate("1990-02-01")).toBe("01.02.1990");
+    expect(formatDate(null)).toBeNull();
+    expect(formatDate("not-a-date")).toBeNull();
+  });
+});
+
+describe("profile filtering", () => {
+  const raw: RawData = {
+    ranks: RANKS,
+    offices: OFFICES,
+    groups: GROUPS,
+    persons: [
+      person({ id: 1, firstName: "Holger", lastName: "Specht" }),
+      person({ id: 2, firstName: "Gerd", lastName: "Gilde" }),
+    ],
+    assignments: [
+      { id: 1, personId: 1, groupId: 1, officeId: 1 }, // Bundesführung (bund)
+      { id: 2, personId: 2, groupId: 5, officeId: null }, // Kollegium Nord (bundesgilde)
+    ],
+  };
+
+  it("komplett contains both bund and bundesgilde sections", () => {
+    const data = buildProfileData(raw, "komplett", ALL_OPTIONS);
+    expect(findNode(data.sections, "Bundesführung")).toBeDefined();
+    expect(findNode(data.sections, "Bundesgilde")).toBeDefined();
+  });
+
+  it("nurBundesgilde drops the bund section entirely", () => {
+    const data = buildProfileData(raw, "nurBundesgilde", ALL_OPTIONS);
+    expect(findNode(data.sections, "Bundesführung")).toBeUndefined();
+    expect(findNode(data.sections, "Bundesgilde")).toBeDefined();
+    expect(data.subtitle).toBe("Bundesgilde");
+  });
+
+  it("nurBundesaemter keeps bund/jungenbund but not the Gilde", () => {
+    const data = buildProfileData(raw, "nurBundesaemter", ALL_OPTIONS);
+    expect(findNode(data.sections, "Bundesführung")).toBeDefined();
+    expect(findNode(data.sections, "Bundesgilde")).toBeUndefined();
+  });
+});
+
+describe("group tree ordering", () => {
+  it("sorts top-level groups by sort_key then name and nests children", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, firstName: "A", lastName: "A" }),
+        person({ id: 2, firstName: "B", lastName: "B" }),
+      ],
+      assignments: [
+        { id: 1, personId: 1, groupId: 3, officeId: 6 }, // Jungenschaft Hohenlohe (child of Gau Franken)
+        { id: 2, personId: 2, groupId: 1, officeId: 1 }, // Bundesführung
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    expect(data.sections.map((s) => s.name)).toEqual(["Bundesführung", "Gau Franken"]);
+    const franken = findNode(data.sections, "Gau Franken")!;
+    expect(franken.level).toBe(1);
+    expect(franken.children.map((c) => c.name)).toEqual(["Jungenschaft Hohenlohe"]);
+    expect(franken.children[0].level).toBe(2);
+  });
+
+  it("prunes groups without any printable member", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [person({ id: 1, firstName: "A", lastName: "A" })],
+      assignments: [{ id: 1, personId: 1, groupId: 1, officeId: 1 }],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    expect(findNode(data.sections, "Gau Franken")).toBeUndefined();
+    expect(findNode(data.sections, "Bundesgilde")).toBeUndefined();
+  });
+});
+
+describe("office rank ordering inside a group", () => {
+  it("orders Bundesvogt < Kanzlerin < Kämmerer and puts amtslose last", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, firstName: "Kaem", lastName: "Merer" }),
+        person({ id: 2, firstName: "Voll", lastName: "Vogt" }),
+        person({ id: 3, firstName: "Kanz", lastName: "Ler" }),
+        person({ id: 4, firstName: "Ohne", lastName: "Amt" }),
+      ],
+      assignments: [
+        { id: 1, personId: 1, groupId: 1, officeId: 3 }, // Kämmerer (30)
+        { id: 2, personId: 2, groupId: 1, officeId: 1 }, // Bundesvogt (10)
+        { id: 3, personId: 3, groupId: 1, officeId: 2 }, // Kanzlerin (20)
+        { id: 4, personId: 4, groupId: 1, officeId: null }, // amtslos (999)
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    const names = findNode(data.sections, "Bundesführung")!.entries.map((e) => e.name);
+    expect(names).toEqual(["Voll Vogt", "Kanz Ler", "Kaem Merer", "Ohne Amt"]);
+  });
+
+  it("collapses multiple offices of one person into a single entry with a min-rank sort", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [person({ id: 1, firstName: "Multi", lastName: "Amt" })],
+      assignments: [
+        { id: 1, personId: 1, groupId: 1, officeId: 3 }, // Kämmerer
+        { id: 2, personId: 1, groupId: 1, officeId: 2 }, // Kanzlerin
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    const entries = findNode(data.sections, "Bundesführung")!.entries;
+    expect(entries).toHaveLength(1);
+    expect(entries[0].office).toBe("Kanzlerin des Bundes, Kämmerer des Bundes");
+  });
+});
+
+describe("office label suppression", () => {
+  it("shows the office at depth 0 but hides leader offices in subgroups", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, firstName: "Fuehrer", lastName: "Sub" }),
+        person({ id: 2, firstName: "Knappe", lastName: "Sub" }),
+        person({ id: 3, firstName: "Vogt", lastName: "Top" }),
+      ],
+      assignments: [
+        { id: 1, personId: 1, groupId: 3, officeId: 6 }, // Jungenschaftsführer in subgroup
+        { id: 2, personId: 2, groupId: 3, officeId: 5 }, // Knappenmeister in subgroup
+        { id: 3, personId: 3, groupId: 2, officeId: 4 }, // Gauvogt at top level of Gau Franken
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    const sub = findNode(data.sections, "Jungenschaft Hohenlohe")!;
+    const fuehrer = sub.entries.find((e) => e.name === "Fuehrer Sub")!;
+    const knappe = sub.entries.find((e) => e.name === "Knappe Sub")!;
+    expect(fuehrer.office).toBeNull(); // leader office suppressed in subgroup
+    expect(knappe.office).toBe("Knappenmeister"); // non-leader office shown
+
+    const top = findNode(data.sections, "Gau Franken")!;
+    expect(top.entries[0].office).toBe("Gauvogt"); // depth 0 always labels
+  });
+});
+
+describe("do_not_print and deceased handling", () => {
+  const raw: RawData = {
+    ranks: RANKS,
+    offices: OFFICES,
+    groups: GROUPS,
+    persons: [
+      person({ id: 1, firstName: "Hidden", lastName: "Person", doNotPrint: true }),
+      person({ id: 2, firstName: "Living", lastName: "Member" }),
+      person({ id: 3, firstName: "Gone", lastName: "Away", scoutName: "geist", deathDate: "2020-05-01" }),
+    ],
+    assignments: [
+      { id: 1, personId: 1, groupId: 1, officeId: 1 },
+      { id: 2, personId: 2, groupId: 1, officeId: 2 },
+      { id: 3, personId: 3, groupId: 1, officeId: 3 },
+    ],
+  };
+
+  it("omits do_not_print persons from tree, register and memorial", () => {
+    const data = buildProfileData(raw, "komplett", ALL_OPTIONS);
+    expect(allEntries(data.sections).some((e) => e.name === "Hidden Person")).toBe(false);
+    expect(data.register.some((r) => r.rest.includes("Hidden"))).toBe(false);
+    expect(data.memorial.some((m) => m.includes("Hidden"))).toBe(false);
+  });
+
+  it("moves deceased out of the tree/register and into the memorial list", () => {
+    const data = buildProfileData(raw, "komplett", ALL_OPTIONS);
+    expect(allEntries(data.sections).some((e) => e.name === "Gone Away")).toBe(false);
+    expect(data.register.some((r) => r.rest.includes("Gone"))).toBe(false);
+    expect(data.memorial).toContain("Gone Away (geist)");
+  });
+
+  it("omits the memorial list when the option is off", () => {
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    expect(data.memorial).toEqual([]);
+  });
+});
+
+describe("name register", () => {
+  it("sorts by Fahrtenname else Vorname with umlaut folding and formats lead/rest", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, firstName: "Anton", lastName: "Zebra" }), // no scout -> "Anton"
+        person({ id: 2, firstName: "Berta", lastName: "Adler", scoutName: "Örni" }), // scout "Örni" -> oe...
+        person({ id: 3, firstName: "Cäsar", lastName: "Bar" }), // no scout -> "Cäsar" -> cae...
+      ],
+      assignments: [
+        { id: 1, personId: 1, groupId: 1, officeId: 1 },
+        { id: 2, personId: 2, groupId: 1, officeId: 2 },
+        { id: 3, personId: 3, groupId: 1, officeId: 3 },
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    // sort keys: anton, caesar (Cäsar), oerni (Örni) -> Anton, Cäsar, Örni
+    expect(data.register.map((r) => r.lead)).toEqual(["Anton", "Cäsar", "Örni,"]);
+    const oerni = data.register.find((r) => r.lead === "Örni,")!;
+    expect(oerni.rest.startsWith(" Berta Adler")).toBe(true);
+    const anton = data.register.find((r) => r.lead === "Anton")!;
+    expect(anton.rest.startsWith(" Zebra")).toBe(true); // no scout: rest begins with last name
+  });
+
+  it("builds a parent/group/office breadcrumb and skips the Bundesführung group name", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, firstName: "Tobias", lastName: "Hornung", scoutName: "turbo" }),
+        person({ id: 2, firstName: "Holger", lastName: "Specht" }),
+      ],
+      assignments: [
+        { id: 1, personId: 1, groupId: 3, officeId: 5 }, // Knappenmeister, Jungenschaft Hohenlohe < Gau Franken
+        { id: 2, personId: 2, groupId: 1, officeId: 1 }, // Bundesvogt in Bundesführung
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    const turbo = data.register.find((r) => r.lead === "turbo,")!;
+    expect(turbo.rest).toBe(" Tobias Hornung, Gau Franken, Jungenschaft Hohenlohe, Knappenmeister");
+    const holger = data.register.find((r) => r.lead === "Holger")!;
+    // "Bundesführung" group name is suppressed in the breadcrumb, only the office remains
+    expect(holger.rest).toBe(" Specht, Bundesvogt");
+  });
+});
+
+describe("register anchor labels", () => {
+  it("labels a person only on the first printed occurrence and keeps the register label stable", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [person({ id: 7, firstName: "Doppel", lastName: "Amt", scoutName: "duo" })],
+      assignments: [
+        { id: 1, personId: 7, groupId: 1, officeId: 1 }, // Bundesführung (rendered first)
+        { id: 2, personId: 7, groupId: 2, officeId: 4 }, // Gau Franken (rendered later)
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    const labels = allEntries(data.sections).map((e) => e.label);
+    expect(labels).toEqual(["p7", null]); // only the first entry carries the label
+    expect(data.register).toHaveLength(1);
+    expect(data.register[0].label).toBe("p7");
+  });
+});
+
+describe("options: ranks, birthdays, cover", () => {
+  const raw: RawData = {
+    ranks: RANKS,
+    offices: OFFICES,
+    groups: GROUPS,
+    persons: [
+      person({
+        id: 1,
+        firstName: "Rita",
+        lastName: "Rang",
+        scoutName: "rambo",
+        rankId: 1,
+        birthDate: "1985-03-12",
+        phones: [
+          { label: "Festnetz", number: "030 111" },
+          { label: "Mobil", number: "0173 222" },
+        ],
+      }),
+      person({ id: 2, firstName: "Heide", lastName: "Ortner" }),
+    ],
+    assignments: [
+      { id: 1, personId: 1, groupId: 1, officeId: 1 },
+      { id: 2, personId: 2, groupId: 1, officeId: 2 }, // Kanzlerin des Bundes -> cover
+    ],
+  };
+
+  it("appends the rank to the detail and adds birthdate when the options are on", () => {
+    const data = buildProfileData(raw, "komplett", ALL_OPTIONS, new Date(2026, 6, 4));
+    const rita = findNode(data.sections, "Bundesführung")!.entries.find((e) => e.name === "Rita Rang")!;
+    expect(rita.detail).toBe("rambo (Späher)");
+    expect(rita.birth).toBe("12.03.1985");
+    expect(rita.phoneCity).toBe("030 111"); // primary phone on the PLZ/Ort row
+    expect(rita.phoneStreet).toBe("0173 222"); // secondary phone on the street row
+    expect(data.date).toBe("04.07.2026");
+  });
+
+  it("drops rank and birthdate when the options are off", () => {
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    const rita = findNode(data.sections, "Bundesführung")!.entries.find((e) => e.name === "Rita Rang")!;
+    expect(rita.detail).toBe("rambo");
+    expect(rita.birth).toBeNull();
+  });
+
+  it("puts the Bundeskanzlerin on the confidential cover", () => {
+    const data = buildProfileData(raw, "komplett", ALL_OPTIONS);
+    expect(data.kanzlei).toHaveLength(1);
+    expect(data.kanzlei[0].office).toBe("Kanzlerin des Bundes");
+    expect(data.kanzlei[0].name).toBe("Heide Ortner");
+    expect(data.kanzlei[0].detail).toBeNull(); // cover stays clean
+  });
+});

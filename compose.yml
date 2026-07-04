@@ -1,4 +1,5 @@
-# Produktion: nur die App. Postgres läuft separat (DATABASE_URL zeigt darauf).
+# Produktion: nur die App. Postgres läuft separat und selbst verwaltet (nicht in
+# diesem Compose); DATABASE_URL in .env zeigt darauf. Backups siehe README.
 services:
   app:
     image: ghcr.io/deutscher-pfadfinderbund/anschriften2:latest
@@ -9,12 +10,18 @@ services:
       - traefik
     labels:
       - "traefik.enable=true"
-      # TODO: Domain anpassen
+      # TODO(Cutover): finale Domain eintragen.
       - "traefik.http.routers.anschriften.rule=Host(`anschriften.example.org`)"
       - "traefik.http.routers.anschriften.entrypoints=websecure"
       - "traefik.http.routers.anschriften.tls.certresolver=letsencrypt"
       - "traefik.http.services.anschriften.loadbalancer.server.port=3000"
+    # Zum lokalen Testen ohne Traefik: die Blöcke networks/labels auskommentieren
+    # und stattdessen den Port direkt freigeben:
+    # ports:
+    #   - "3000:3000"
 
+# Extern angelegtes Traefik-Netz des Servers (`docker network create traefik`,
+# bzw. der Name, den der Traefik-Stack dort tatsächlich nutzt).
 networks:
   traefik:
     external: true
