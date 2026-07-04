@@ -7,7 +7,8 @@
  * temp dir is always removed afterwards.
  *
  * Deployment note (M6): the template/assets/fonts under `src/pdf` must be present next to the
- * running server; they are resolved relative to `process.cwd()`.
+ * running server; they are resolved relative to `process.cwd()`, or from `PDF_ASSETS_DIR` when
+ * that env var is set (the container points it at `/app/src/pdf`).
  */
 import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
@@ -18,7 +19,7 @@ import type { ProfileData } from "./build-data";
 
 const execFileAsync = promisify(execFile);
 
-const PDF_DIR = path.join(process.cwd(), "src", "pdf");
+const PDF_DIR = process.env.PDF_ASSETS_DIR ?? path.join(process.cwd(), "src", "pdf");
 const TEMPLATE = path.join(PDF_DIR, "templates", "main.typ");
 const ASSETS_DIR = path.join(PDF_DIR, "assets");
 const FONT_DIR = path.join(PDF_DIR, "fonts");
