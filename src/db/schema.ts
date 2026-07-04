@@ -137,6 +137,26 @@ export const distributionListMembers = pgTable(
   (t) => [primaryKey({ columns: [t.listId, t.personId] })],
 );
 
+/**
+ * Office-based membership rules: a list automatically contains whoever currently
+ * holds one of the listed offices. Effective membership = manual members ∪ persons
+ * assigned to a rule office (living only). Rules are maintained by the Kanzlei;
+ * the import only ever writes manual memberships.
+ */
+export const distributionListOfficeRules = pgTable(
+  "distribution_list_office_rules",
+  {
+    listId: integer("list_id")
+      .notNull()
+      .references(() => distributionLists.id, { onDelete: "cascade" }),
+    officeId: integer("office_id")
+      .notNull()
+      .references(() => offices.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.listId, t.officeId] })],
+);
+
 // --- Relations (for query-time joins in later milestones) ---
 
 export const ranksRelations = relations(ranks, ({ many }) => ({
@@ -155,6 +175,7 @@ export const groupsRelations = relations(groups, ({ one, many }) => ({
 
 export const officesRelations = relations(offices, ({ many }) => ({
   assignments: many(assignments),
+  officeRules: many(distributionListOfficeRules),
 }));
 
 export const personsRelations = relations(persons, ({ one, many }) => ({
@@ -171,6 +192,7 @@ export const assignmentsRelations = relations(assignments, ({ one }) => ({
 
 export const distributionListsRelations = relations(distributionLists, ({ many }) => ({
   members: many(distributionListMembers),
+  officeRules: many(distributionListOfficeRules),
 }));
 
 export const distributionListMembersRelations = relations(distributionListMembers, ({ one }) => ({
@@ -183,3 +205,17 @@ export const distributionListMembersRelations = relations(distributionListMember
     references: [persons.id],
   }),
 }));
+
+export const distributionListOfficeRulesRelations = relations(
+  distributionListOfficeRules,
+  ({ one }) => ({
+    list: one(distributionLists, {
+      fields: [distributionListOfficeRules.listId],
+      references: [distributionLists.id],
+    }),
+    office: one(offices, {
+      fields: [distributionListOfficeRules.officeId],
+      references: [offices.id],
+    }),
+  }),
+);
