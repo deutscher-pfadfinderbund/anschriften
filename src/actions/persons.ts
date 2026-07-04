@@ -129,5 +129,7 @@ export async function deletePerson(id: number): Promise<{ ok: true }> {
   await requireSession();
   await db.delete(persons).where(eq(persons.id, id));
   revalidatePath("/");
+  // Memberships cascade with the person, so the list counts change too.
+  revalidatePath("/verteiler");
   return { ok: true };
 }
