@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
@@ -8,6 +8,7 @@ import { assignments, distributionListMembers, persons } from "@/db/schema";
 import { actorName, requireSession } from "@/lib/auth-helpers";
 import {
   parsePersonInput,
+  resolveTenureEnd,
   validateTenure,
   type AssignmentInput,
   type FieldErrors,
@@ -20,6 +21,14 @@ function isUniqueViolation(err: unknown): boolean {
     typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505"
   );
 }
+
+/**
+ * Thrown inside the save transaction to roll everything back with a user-facing German
+ * message (e.g. a holder-warning follow-up whose target vanished). Caught in savePerson.
+ */
+class SaveAbort extends Error {}
+
+const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
 export type SaveResult =
   | { ok: true; id: number }
@@ -113,21 +122,70 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
     updatedAt: new Date(),
   };
 
+  const today = todayIso();
   let id: number;
   try {
     id = await db.transaction(async (tx) => {
       let personId = data.id;
       if (personId) {
         await tx.update(persons).set(fields).where(eq(persons.id, personId));
-        // Delete + recreate only the ACTIVE tenures. Ended tenures (end_date set) are
-        // the office history and are managed separately (see actions/assignments.ts) —
-        // the person form never carries them, so they must survive a normal save.
-        await tx
-          .delete(assignments)
-          .where(and(eq(assignments.personId, personId), isNull(assignments.endDate)));
       } else {
         const [row] = await tx.insert(persons).values(fields).returning({ id: persons.id });
         personId = row.id;
+      }
+
+      // Holder-warning follow-ups (issue #26): end the active tenures of *other* people
+      // the editor chose to close. Runs in THIS transaction and BEFORE we touch this
+      // person's own rows, so cancelling the form writes nothing. Each update is guarded
+      // (still active, foreign person); a vanished or already-ended target rolls the whole
+      // save back with a reload hint — same contract as endAssignment.
+      for (const ep of data.endPrevious) {
+        const [target] = await tx
+          .select({
+            personId: assignments.personId,
+            startDate: assignments.startDate,
+            endDate: assignments.endDate,
+          })
+          .from(assignments)
+          .where(eq(assignments.id, ep.assignmentId))
+          .limit(1);
+        if (!target || target.endDate != null || target.personId === personId)
+          throw new SaveAbort("Ein Amt wurde zwischenzeitlich geändert. Bitte Seite neu laden.");
+        const resolved = resolveTenureEnd({
+          startDate: target.startDate,
+          endDate: ep.endDate,
+          endUnknown: ep.endUnknown,
+          today,
+        });
+        if (!resolved.ok) throw new SaveAbort(resolved.message);
+        const ended = await tx
+          .update(assignments)
+          .set({ endDate: resolved.endDate, endUnknown: resolved.endUnknown, updatedAt: new Date() })
+          .where(
+            and(
+              eq(assignments.id, ep.assignmentId),
+              isNull(assignments.endDate),
+              ne(assignments.personId, personId),
+            ),
+          )
+          .returning({ id: assignments.id });
+        if (ended.length === 0)
+          throw new SaveAbort("Ein Amt wurde zwischenzeitlich geändert. Bitte Seite neu laden.");
+        // Attribute the change on the former holder too, so their audit line reflects it.
+        await tx
+          .update(persons)
+          .set({ updatedBy: by, updatedAt: new Date() })
+          .where(eq(persons.id, target.personId));
+      }
+
+      // Delete + recreate only the ACTIVE tenures. Ended tenures (end_date set) are the
+      // office history and are managed separately (see actions/assignments.ts) — the
+      // person form never carries them, so they must survive a normal save. (No-op for a
+      // freshly inserted person, which has no rows yet.)
+      if (data.id) {
+        await tx
+          .delete(assignments)
+          .where(and(eq(assignments.personId, personId), isNull(assignments.endDate)));
       }
       if (data.assignments.length > 0) {
         // Rows with an end date are stored as finished tenures (history) right away —
@@ -153,6 +211,9 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
       return personId!;
     });
   } catch (err) {
+    // A holder-warning follow-up failed (target vanished / already ended) — the whole
+    // transaction rolled back, so nothing changed; surface the German message.
+    if (err instanceof SaveAbort) return { ok: false, errors: {}, message: err.message };
     // The active-tenure partial unique index rejected a second active (person, group, office).
     if (isUniqueViolation(err))
       return {
