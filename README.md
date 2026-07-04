@@ -16,6 +16,36 @@ npx drizzle-kit migrate                   # Schema anwenden
 npm run dev
 ```
 
+## Mail-Modul (optional)
+
+Die Kanzlei kann Rundmails an einen Verteiler oder eine Tabellen-Auswahl direkt
+aus der App verschicken (Betreff + Text, Empfänger im BCC). Das Modul ist
+**optional** und **provider-agnostisch**: Versand läuft über SMTP (nodemailer),
+kein Provider-SDK. Ein späterer Wechsel (eigener Mailserver, Mailjet, SES,
+Postmark, Brevo …) ist nur eine `.env`-Änderung.
+
+- **Aktivieren:** `SMTP_HOST` **und** `MAIL_FROM` setzen (siehe `.env.example`).
+  Solange eine der beiden fehlt, sind die Mail-Buttons ausgeblendet und die
+  Server Action lehnt ab — kein Feature-Flag-Framework.
+- **Versandmodell:** eine Mail pro Chunk, Empfänger im BCC
+  (`MAIL_BCC_CHUNK_SIZE`, Default 50), `To:` = `MAIL_FROM`. Plaintext, keine
+  Anhänge. Jede Sendung wird in `mail_log` protokolliert (Betreff, Datum,
+  Empfängerzahl, Status) und im Verteiler unter „Zuletzt versendet" angezeigt.
+- **Lokal testen (ohne echten Provider):** [Mailpit](https://mailpit.axllent.org/)
+  aus `compose.dev.yml` starten und die Dev-Env auf den SMTP-Sink zeigen lassen:
+
+  ```bash
+  docker compose -f compose.dev.yml up -d mailpit
+  # .env.local:
+  #   SMTP_HOST=localhost
+  #   SMTP_PORT=1025
+  #   MAIL_FROM="Kanzlei <kanzlei@example.org>"
+  ```
+
+  Gesendete Mails landen im Mailpit-Postfach unter http://localhost:8025
+  (JSON-API: `GET http://localhost:8025/api/v1/messages`). Für Tests nur
+  fiktive Adressen (`@example.org`) verwenden.
+
 ## Deployment
 
 Ein Container (`Dockerfile`, multi-stage): Next im `standalone`-Modus, die gepinnte
