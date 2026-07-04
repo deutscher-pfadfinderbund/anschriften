@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isValidDate, validateTenure } from "./person-schema";
+import { isValidDate, resolveTenureEnd, validateTenure } from "./person-schema";
 
 // Fictional dates only — validation logic for the office-history Amtszeiten (issue #22).
 describe("isValidDate", () => {
@@ -43,5 +43,53 @@ describe("validateTenure", () => {
   it("rejects malformed dates on either bound", () => {
     expect(validateTenure("01.03.2019", null)).toBe("Ungültiges Von-Datum.");
     expect(validateTenure(null, "2019-02-30")).toBe("Ungültiges Bis-Datum.");
+  });
+});
+
+// Ending a tenure with a concrete date OR "Ende unbekannt" (issue #26). `today` is
+// injected so the tests stay deterministic and use only fictional dates.
+describe("resolveTenureEnd", () => {
+  const today = "2026-07-04";
+
+  it("with a valid Bis-Datum: keeps it, endUnknown stays false", () => {
+    expect(resolveTenureEnd({ startDate: "2015-01-01", endDate: "2019-12-31", endUnknown: false, today })).toEqual({
+      ok: true,
+      endDate: "2019-12-31",
+      endUnknown: false,
+    });
+  });
+
+  it('"Ende unbekannt": sets end_date = today and endUnknown = true', () => {
+    expect(resolveTenureEnd({ startDate: "2015-01-01", endDate: null, endUnknown: true, today })).toEqual({
+      ok: true,
+      endDate: today,
+      endUnknown: true,
+    });
+  });
+
+  it('"Ende unbekannt" ignores a supplied Bis-Datum and never validates it against the start', () => {
+    // A start after `today` would fail validateTenure — but the unknown branch skips it.
+    expect(resolveTenureEnd({ startDate: "2099-01-01", endDate: "2000-01-01", endUnknown: true, today })).toEqual({
+      ok: true,
+      endDate: today,
+      endUnknown: true,
+    });
+  });
+
+  it("rejects a missing Bis-Datum when the end is not unknown", () => {
+    const r = resolveTenureEnd({ startDate: "2015-01-01", endDate: null, endUnknown: false, today });
+    expect(r).toEqual({ ok: false, message: "Bitte ein Bis-Datum angeben oder „Datum unbekannt“ wählen." });
+    expect(resolveTenureEnd({ startDate: null, endDate: "   ", endUnknown: false, today })).toMatchObject({ ok: false });
+  });
+
+  it("rejects an invalid or out-of-order Bis-Datum (delegates to validateTenure)", () => {
+    expect(resolveTenureEnd({ startDate: null, endDate: "2019-02-30", endUnknown: false, today })).toEqual({
+      ok: false,
+      message: "Ungültiges Bis-Datum.",
+    });
+    expect(resolveTenureEnd({ startDate: "2019-01-01", endDate: "2015-01-01", endUnknown: false, today })).toEqual({
+      ok: false,
+      message: "Das Bis-Datum darf nicht vor dem Von-Datum liegen.",
+    });
   });
 });

@@ -106,6 +106,12 @@ export const persons = pgTable("persons", {
  * unique index `WHERE end_date IS NULL` (see migration 0003; hand-written because
  * drizzle's uniqueIndex builder cannot emit `NULLS NOT DISTINCT`, needed so two active
  * office-less memberships of the same group still collide).
+ *
+ * `end_unknown` (issue #26): pure display flag for tenures whose end nobody remembers.
+ * When set, `end_date` is filled with the *recording date* (documented upper bound —
+ * "was over by then at the latest") and the UI renders "… – ?"/"Ende unbekannt". The
+ * active marker stays `end_date IS NULL`, so no active filter (PDF, rules, mail, table)
+ * changes: an "Ende unbekannt" row is a finished tenure like any other.
  */
 export const assignments = pgTable(
   "assignments",
@@ -120,6 +126,7 @@ export const assignments = pgTable(
     officeId: integer("office_id").references(() => offices.id),
     startDate: date("start_date"),
     endDate: date("end_date"),
+    endUnknown: boolean("end_unknown").notNull().default(false),
     ...timestamps,
   },
   (t) => [

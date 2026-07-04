@@ -1,0 +1,1 @@
+ALTER TABLE "assignments" ADD COLUMN "end_unknown" boolean DEFAULT false NOT NULL;

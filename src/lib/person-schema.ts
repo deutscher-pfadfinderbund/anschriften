@@ -23,6 +23,18 @@ export const assignmentInputSchema = z.object({
   endDate: shortText.nullable().default(null),
 });
 
+/**
+ * Holder-warning follow-up (issue #26): "end this other person's active tenure when
+ * you save me". Targets a *foreign* active assignment; `savePerson` runs it in the
+ * same transaction and validates ownership/liveness there. `endUnknown = false` means
+ * the `endDate` is mandatory and validated (against the target's start) server-side.
+ */
+export const endPreviousInputSchema = z.object({
+  assignmentId: z.number().int().positive(),
+  endDate: shortText.nullable().default(null),
+  endUnknown: z.boolean().default(false),
+});
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ISO calendar date, e.g. "2019-03-01". The <input type="date"> emits exactly this.
@@ -52,6 +64,37 @@ export function validateTenure(
   return null;
 }
 
+/**
+ * Resolve the end of a tenure being closed ("Amt beenden", "Frühere Ämter", holder
+ * warning), given the user's choice of a concrete Bis-Datum *or* "Ende unbekannt".
+ * Pure so every server action shares it and it can be unit-tested (issue #26).
+ *
+ * "Ende unbekannt" documents an upper bound: the tenure was over by `today` at the
+ * latest, so `end_date` is set to `today` and `endUnknown = true`. The active marker
+ * stays `end_date IS NULL`, so a closed tenure always carries a real end date and is
+ * never mistaken for active. The unknown branch does NOT run `validateTenure`: `today`
+ * is a fixed upper bound, not a user date, and may legitimately precede an unknown
+ * (or even future-dated) start without being an input error.
+ *
+ * Returns the resolved `{ endDate, endUnknown }` or a German error message.
+ */
+export function resolveTenureEnd(input: {
+  startDate: string | null;
+  endDate: string | null;
+  endUnknown: boolean;
+  today: string;
+}): { ok: true; endDate: string; endUnknown: true } | { ok: true; endDate: string; endUnknown: false } | { ok: false; message: string } {
+  if (input.endUnknown) {
+    return { ok: true, endDate: input.today, endUnknown: true };
+  }
+  const end = (input.endDate ?? "").trim();
+  if (end.length === 0)
+    return { ok: false, message: "Bitte ein Bis-Datum angeben oder „Datum unbekannt“ wählen." };
+  const tenureError = validateTenure(input.startDate, end);
+  if (tenureError) return { ok: false, message: tenureError };
+  return { ok: true, endDate: end, endUnknown: false };
+}
+
 export const personInputSchema = z
   .object({
     id: z.number().int().optional(),
@@ -72,6 +115,7 @@ export const personInputSchema = z
     notes: longText.nullable(),
     doNotPrint: z.boolean(),
     assignments: z.array(assignmentInputSchema),
+    endPrevious: z.array(endPreviousInputSchema).max(50).default([]),
     distributionListIds: z.array(z.number().int()).default([]),
   })
   .superRefine((val, ctx) => {
@@ -102,6 +146,7 @@ export const personInputSchema = z
 
 export type PhoneInput = z.infer<typeof phoneInputSchema>;
 export type AssignmentInput = z.infer<typeof assignmentInputSchema>;
+export type EndPreviousInput = z.infer<typeof endPreviousInputSchema>;
 export type PersonInput = z.infer<typeof personInputSchema>;
 
 export type FieldErrors = Record<string, string>;
