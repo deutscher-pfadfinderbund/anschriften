@@ -1,5 +1,8 @@
 // PDF export route handler (issue #5). GET /api/export/pdf?profile=…&birthdays=1&ranks=1&memorial=0
-// Runs on the Node runtime (spawns the Typst CLI) and is never cached.
+// Runs on the Node runtime (spawns the Typst CLI) and is never cached. Session is
+// required (401 otherwise) — the proxy only guards pages, not /api routes, and this
+// endpoint serves the complete confidential directory.
+import { auth } from "@/lib/auth";
 import { buildData, isProfile, type BuildOptions } from "@/pdf/build-data";
 import { compilePdf } from "@/pdf/compile";
 
@@ -7,9 +10,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
-  // TODO(#1): once src/lib/auth.ts exists (parallel M1 merge), require a valid
-  // `auth.api.getSession()` here and return 401 otherwise. Until then access is guarded only
-  // by the (app) layout / proxy that M1 introduces.
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) {
+    return new Response("Nicht angemeldet.", { status: 401 });
+  }
 
   const params = new URL(request.url).searchParams;
   const profile = params.get("profile") ?? "";
