@@ -16,9 +16,11 @@ export const phoneInputSchema = z.object({
 export const assignmentInputSchema = z.object({
   groupId: z.number().int(),
   officeId: z.number().int().nullable(),
-  // Amtszeit "seit" (issue #22). NULL = unknown. Active rows never carry an end date;
-  // ended tenures are managed out of band via the assignment history actions.
+  // Amtszeit "seit" (issue #22). NULL = unknown.
   startDate: shortText.nullable().default(null),
+  // Amtszeit "bis": NULL = active. A row with an end date is stored as a finished
+  // tenure (history), so past offices can be captured directly when creating a person.
+  endDate: shortText.nullable().default(null),
 });
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

@@ -36,14 +36,17 @@ function clean(input: PersonInput): PersonInput {
   const uniqueAssignments: AssignmentInput[] = [];
   for (const a of input.assignments) {
     if (!a.groupId) continue;
-    const key = `${a.groupId}:${a.officeId ?? "null"}`;
+    // The end date is part of the identity: the same combination may appear once
+    // active and once (or repeatedly) as finished tenures — only exact duplicates collapse.
+    const key = `${a.groupId}:${a.officeId ?? "null"}:${trimOrNull(a.endDate) ?? "active"}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    // Keep the "seit" date; blank strings become null (unknown).
+    // Keep the tenure dates; blank strings become null (unknown / active).
     uniqueAssignments.push({
       groupId: a.groupId,
       officeId: a.officeId ?? null,
       startDate: trimOrNull(a.startDate),
+      endDate: trimOrNull(a.endDate),
     });
   }
 
@@ -82,9 +85,9 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
   const revalidated = parsePersonInput(data);
   if (!revalidated.ok) return { ok: false, errors: revalidated.errors };
 
-  // Active tenures carry only a "seit" date; validate its format (end is always null here).
+  // Validate every tenure; a row with an end date is a finished (past) office.
   for (const a of data.assignments) {
-    const err = validateTenure(a.startDate ?? null, null);
+    const err = validateTenure(a.startDate ?? null, a.endDate ?? null);
     if (err) return { ok: false, errors: {}, message: err };
   }
 
@@ -127,13 +130,15 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
         personId = row.id;
       }
       if (data.assignments.length > 0) {
+        // Rows with an end date are stored as finished tenures (history) right away —
+        // this lets past offices be captured directly when creating a person.
         await tx.insert(assignments).values(
           data.assignments.map((a) => ({
             personId: personId!,
             groupId: a.groupId,
             officeId: a.officeId,
             startDate: a.startDate ?? null,
-            endDate: null,
+            endDate: a.endDate ?? null,
           })),
         );
       }
