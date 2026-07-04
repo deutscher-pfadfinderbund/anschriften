@@ -25,6 +25,10 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505";
 }
 
+function isForeignKeyViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23503";
+}
+
 export async function createRank(raw: RankInput): Promise<ActionResult> {
   await requireSession();
   const parsed = rankSchema.safeParse(raw);
@@ -63,7 +67,14 @@ export async function deleteRank(id: number): Promise<ActionResult> {
     .where(eq(persons.rankId, id));
   if (Number(n) > 0)
     return { ok: false, message: "Stand ist noch Personen zugeordnet und kann nicht gelöscht werden." };
-  await db.delete(ranks).where(eq(ranks.id, id));
+  try {
+    await db.delete(ranks).where(eq(ranks.id, id));
+  } catch (err) {
+    // Race: a person got this rank between the check above and the delete.
+    if (isForeignKeyViolation(err))
+      return { ok: false, message: "Stand wird inzwischen verwendet und kann nicht gelöscht werden." };
+    throw err;
+  }
   revalidatePath("/stammdaten");
   revalidatePath("/");
   return { ok: true };

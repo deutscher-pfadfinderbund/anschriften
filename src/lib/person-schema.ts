@@ -3,9 +3,14 @@ import { z } from "zod";
 // Shared input contract for the person editor (client) and the save action (server).
 // German, field-keyed messages so the editor can show them inline.
 
+// Generous upper bounds — real values are far shorter; this only blocks
+// accidental or hostile megabyte-sized payloads.
+const shortText = z.string().max(200, "Eingabe ist zu lang (max. 200 Zeichen).");
+const longText = z.string().max(2000, "Eingabe ist zu lang (max. 2000 Zeichen).");
+
 export const phoneInputSchema = z.object({
-  label: z.string(),
-  number: z.string(),
+  label: shortText,
+  number: shortText,
 });
 
 export const assignmentInputSchema = z.object({
@@ -18,21 +23,21 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const personInputSchema = z
   .object({
     id: z.number().int().optional(),
-    salutation: z.string().nullable(),
-    title: z.string().nullable(),
-    firstName: z.string().nullable(),
-    lastName: z.string().nullable(),
-    scoutName: z.string().nullable(),
-    birthDate: z.string().nullable(),
-    deathDate: z.string().nullable(),
+    salutation: shortText.nullable(),
+    title: shortText.nullable(),
+    firstName: shortText.nullable(),
+    lastName: shortText.nullable(),
+    scoutName: shortText.nullable(),
+    birthDate: shortText.nullable(),
+    deathDate: shortText.nullable(),
     rankId: z.number().int().nullable(),
-    street: z.string().nullable(),
-    addressExtra: z.string().nullable(),
-    postalCode: z.string().nullable(),
-    city: z.string().nullable(),
-    email: z.string().nullable(),
-    phones: z.array(phoneInputSchema),
-    notes: z.string().nullable(),
+    street: shortText.nullable(),
+    addressExtra: shortText.nullable(),
+    postalCode: shortText.nullable(),
+    city: shortText.nullable(),
+    email: shortText.nullable(),
+    phones: z.array(phoneInputSchema).max(20),
+    notes: longText.nullable(),
     doNotPrint: z.boolean(),
     assignments: z.array(assignmentInputSchema),
     distributionListIds: z.array(z.number().int()).default([]),
