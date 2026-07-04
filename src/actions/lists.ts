@@ -12,10 +12,15 @@ export type ActionResult = { ok: true } | { ok: false; message: string };
 export type CreateListResult = { ok: true; id: number } | { ok: false; message: string };
 
 const listSchema = z.object({
-  name: z.string().trim().min(1, "Name ist erforderlich."),
+  name: z
+    .string()
+    .trim()
+    .min(1, "Name ist erforderlich.")
+    .max(200, "Eingabe ist zu lang (max. 200 Zeichen)."),
   description: z
     .string()
     .trim()
+    .max(2000, "Eingabe ist zu lang (max. 2000 Zeichen).")
     .nullish()
     .transform((v) => (v && v.length > 0 ? v : null)),
 });
@@ -32,6 +37,15 @@ function isUniqueViolation(err: unknown): boolean {
     err !== null &&
     "code" in err &&
     (err as { code?: string }).code === "23505"
+  );
+}
+
+function isForeignKeyViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "23503"
   );
 }
 
@@ -81,10 +95,17 @@ export async function addMembers(listId: number, personIds: number[]): Promise<A
   await requireSession();
   const ids = [...new Set(personIds.filter((n) => Number.isInteger(n) && n > 0))];
   if (ids.length === 0) return { ok: true };
-  await db
-    .insert(distributionListMembers)
-    .values(ids.map((personId) => ({ listId, personId })))
-    .onConflictDoNothing();
+  try {
+    await db
+      .insert(distributionListMembers)
+      .values(ids.map((personId) => ({ listId, personId })))
+      .onConflictDoNothing();
+  } catch (err) {
+    // Race: the list or a person was deleted between page load and this call.
+    if (isForeignKeyViolation(err))
+      return { ok: false, message: "Verteiler oder Anschrift existiert nicht mehr. Bitte Seite neu laden." };
+    throw err;
+  }
   revalidatePath("/verteiler");
   return { ok: true };
 }
