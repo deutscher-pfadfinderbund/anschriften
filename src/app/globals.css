@@ -1,9 +1,29 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * Dark mode is driven by the OS preference and an optional explicit override
+ * on <html data-theme>. The `dark:` utility variant is wired to the same two
+ * signals so shadcn's per-component dark tweaks track our design tokens.
+ */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
 
 /*
  * Design-Tokens Anschriftenverzeichnis.
  * Grundton neutral (Papier/Anthrazit), Tannengrün NUR als Akzent
  * (Primär-Buttons, Links, aktive Markierung). Flächen und Hover neutral.
+ * Die shadcn-Semantiktokens (--background, --primary …) sind auf diese
+ * Grundtokens gemappt und flippen deshalb automatisch mit dem Theme.
  */
 :root {
   --paper: #fafaf8;
@@ -22,6 +42,30 @@
   --crit: #a63d2f;
   --crit-tint: #f6e7e4;
   --sel: #f0f1ee;
+  /* Text color on a --fir surface (green flips lightness across themes). */
+  --on-fir: #f6f8f6;
+
+  /* shadcn semantic tokens → design tokens */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--fir);
+  --primary-foreground: var(--on-fir);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--ink);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--ink-soft);
+  --accent: var(--surface-2);
+  --accent-foreground: var(--ink);
+  --destructive: var(--crit);
+  --destructive-foreground: var(--on-fir);
+  --border: var(--line);
+  --input: var(--line-strong);
+  --ring: var(--fir);
+  --radius: 0.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,6 +86,7 @@
     --crit: #d97a6a;
     --crit-tint: #382522;
     --sel: #222623;
+    --on-fir: #14201a;
   }
 }
 
@@ -62,6 +107,7 @@
   --crit: #d97a6a;
   --crit-tint: #382522;
   --sel: #222623;
+  --on-fir: #14201a;
 }
 
 :root[data-theme="light"] {
@@ -81,9 +127,11 @@
   --crit: #a63d2f;
   --crit-tint: #f6e7e4;
   --sel: #f0f1ee;
+  --on-fir: #f6f8f6;
 }
 
 @theme inline {
+  /* Design tokens as Tailwind colors */
   --color-paper: var(--paper);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
@@ -100,14 +148,51 @@
   --color-crit: var(--crit);
   --color-crit-tint: var(--crit-tint);
   --color-sel: var(--sel);
+
+  /* shadcn semantic colors */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
   --font-sans: var(--font-fira-sans), "Fira Sans", "Seravek", "Avenir Next", "Segoe UI", sans-serif;
   --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --font-mono: "Fira Code", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 body {
-  background: var(--paper);
-  color: var(--ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
