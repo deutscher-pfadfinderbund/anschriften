@@ -119,6 +119,7 @@ export const assignments = pgTable(
 export const distributionLists = pgTable("distribution_lists", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull().unique(),
+  description: text("description"),
   ...timestamps,
 });
 

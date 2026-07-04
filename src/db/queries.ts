@@ -1,14 +1,16 @@
-import { asc, count, eq } from "drizzle-orm";
+import { asc, count, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
   assignments,
   distributionListMembers,
+  distributionLists,
   groups,
   offices,
   persons,
   ranks,
 } from "@/db/schema";
+import type { CsvPerson } from "@/lib/export";
 
 export type PhoneEntry = { label: string; number: string };
 
@@ -111,13 +113,14 @@ export type PersonEditData = {
   updatedAt: string | null;
   updatedBy: string | null;
   assignments: { groupId: number; officeId: number | null }[];
+  distributionListIds: number[];
 };
 
 /** One person shaped for the editor, or null if not found. */
 export async function getPersonForEdit(id: number): Promise<PersonEditData | null> {
   const p = await db.query.persons.findFirst({
     where: eq(persons.id, id),
-    with: { assignments: true },
+    with: { assignments: true, distributionListMembers: true },
   });
   if (!p) return null;
   return {
@@ -141,6 +144,7 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
     updatedAt: p.updatedAt ? p.updatedAt.toISOString() : null,
     updatedBy: p.updatedBy,
     assignments: p.assignments.map((a) => ({ groupId: a.groupId, officeId: a.officeId })),
+    distributionListIds: p.distributionListMembers.map((m) => m.listId),
   };
 }
 
@@ -221,8 +225,146 @@ export async function rankUsage(): Promise<Map<number, number>> {
   return map;
 }
 
-/** Distribution-list membership counts — placeholder use in M4; kept for parity. */
-export async function distributionMemberCount(): Promise<number> {
-  const [row] = await db.select({ n: count() }).from(distributionListMembers);
-  return Number(row?.n ?? 0);
+// --- distribution lists (M4) ---
+
+export type ListMemberRow = {
+  personId: number;
+  firstName: string | null;
+  lastName: string | null;
+  scoutName: string | null;
+  email: string | null;
+  /** The member's senior office (lowest office rank across their assignments), or null. */
+  mainOffice: string | null;
+};
+
+export type DistributionListWithMembers = {
+  id: number;
+  name: string;
+  description: string | null;
+  members: ListMemberRow[];
+};
+
+/** Sort members like the directory: by last name, else scout name. */
+function memberSortKey(m: ListMemberRow): string {
+  return (m.lastName || m.scoutName || "").toLowerCase();
+}
+
+/** Every distribution list with its members (incl. senior office + e-mail) — one shot for /verteiler. */
+export async function listDistributionLists(): Promise<DistributionListWithMembers[]> {
+  const rows = await db.query.distributionLists.findMany({
+    orderBy: (dl, { asc }) => [asc(dl.name)],
+    with: {
+      members: {
+        with: {
+          person: { with: { assignments: { with: { office: true } } } },
+        },
+      },
+    },
+  });
+
+  return rows.map((dl) => {
+    const members = dl.members.map((m) => {
+      const withOffice = m.person.assignments
+        .filter((a) => a.office)
+        .sort((a, b) => (a.office!.rank ?? 999) - (b.office!.rank ?? 999));
+      return {
+        personId: m.person.id,
+        firstName: m.person.firstName,
+        lastName: m.person.lastName,
+        scoutName: m.person.scoutName,
+        email: m.person.email,
+        mainOffice: withOffice[0]?.office?.name ?? null,
+      };
+    });
+    members.sort((a, b) => memberSortKey(a).localeCompare(memberSortKey(b), "de"));
+    return { id: dl.id, name: dl.name, description: dl.description, members };
+  });
+}
+
+export type DistributionListSummary = {
+  id: number;
+  name: string;
+  description: string | null;
+  memberCount: number;
+};
+
+/** Lightweight list of all distribution lists with member counts (editor + table dialog). */
+export async function listDistributionListSummaries(): Promise<DistributionListSummary[]> {
+  const rows = await db
+    .select({
+      id: distributionLists.id,
+      name: distributionLists.name,
+      description: distributionLists.description,
+      memberCount: count(distributionListMembers.personId),
+    })
+    .from(distributionLists)
+    .leftJoin(distributionListMembers, eq(distributionListMembers.listId, distributionLists.id))
+    .groupBy(distributionLists.id)
+    .orderBy(asc(distributionLists.name));
+  return rows.map((r) => ({ ...r, memberCount: Number(r.memberCount) }));
+}
+
+export type PersonOption = {
+  id: number;
+  firstName: string | null;
+  lastName: string | null;
+  scoutName: string | null;
+  email: string | null;
+};
+
+/** Minimal person list for the "add members" combobox. */
+export async function listPersonOptions(): Promise<PersonOption[]> {
+  return db
+    .select({
+      id: persons.id,
+      firstName: persons.firstName,
+      lastName: persons.lastName,
+      scoutName: persons.scoutName,
+      email: persons.email,
+    })
+    .from(persons)
+    .orderBy(asc(persons.lastName), asc(persons.firstName), asc(persons.scoutName));
+}
+
+/** Name of a single distribution list (for the CSV download filename), or null. */
+export async function getListName(id: number): Promise<string | null> {
+  const [row] = await db
+    .select({ name: distributionLists.name })
+    .from(distributionLists)
+    .where(eq(distributionLists.id, id))
+    .limit(1);
+  return row?.name ?? null;
+}
+
+const csvColumns = {
+  salutation: persons.salutation,
+  title: persons.title,
+  firstName: persons.firstName,
+  lastName: persons.lastName,
+  scoutName: persons.scoutName,
+  street: persons.street,
+  addressExtra: persons.addressExtra,
+  postalCode: persons.postalCode,
+  city: persons.city,
+  email: persons.email,
+};
+
+/** CSV export rows for a whole distribution list, ordered like the directory. */
+export async function personsForCsvByList(listId: number): Promise<CsvPerson[]> {
+  return db
+    .select(csvColumns)
+    .from(distributionListMembers)
+    .innerJoin(persons, eq(persons.id, distributionListMembers.personId))
+    .where(eq(distributionListMembers.listId, listId))
+    .orderBy(asc(persons.lastName), asc(persons.firstName), asc(persons.scoutName));
+}
+
+/** CSV export rows for an explicit selection of person ids. */
+export async function personsForCsvByIds(ids: number[]): Promise<CsvPerson[]> {
+  if (ids.length === 0) return [];
+  return db
+    .select(csvColumns)
+    .from(persons)
+    .where(inArray(persons.id, ids))
+    .orderBy(asc(persons.lastName), asc(persons.firstName), asc(persons.scoutName));
 }

@@ -1,6 +1,12 @@
 import { notFound } from "next/navigation";
 
-import { getPersonForEdit, listGroups, listOffices, listRanks } from "@/db/queries";
+import {
+  getPersonForEdit,
+  listDistributionListSummaries,
+  listGroups,
+  listOffices,
+  listRanks,
+} from "@/db/queries";
 
 import { PersonForm } from "../_components/person-form";
 
@@ -13,13 +19,23 @@ export default async function EditPersonPage({
   const personId = Number(id);
   if (!Number.isInteger(personId) || personId <= 0) notFound();
 
-  const [person, groups, offices, ranks] = await Promise.all([
+  const [person, groups, offices, ranks, distributionLists] = await Promise.all([
     getPersonForEdit(personId),
     listGroups(),
     listOffices(),
     listRanks(),
+    listDistributionListSummaries(),
   ]);
   if (!person) notFound();
 
-  return <PersonForm mode="edit" person={person} groups={groups} offices={offices} ranks={ranks} />;
+  return (
+    <PersonForm
+      mode="edit"
+      person={person}
+      groups={groups}
+      offices={offices}
+      ranks={ranks}
+      distributionLists={distributionLists}
+    />
+  );
 }

@@ -40,6 +40,7 @@ export const personInputSchema = z
     notes: longText.nullable(),
     doNotPrint: z.boolean(),
     assignments: z.array(assignmentInputSchema),
+    distributionListIds: z.array(z.number().int()).default([]),
   })
   .superRefine((val, ctx) => {
     const hasLast = !!val.lastName && val.lastName.trim().length > 0;
