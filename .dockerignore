@@ -1,0 +1,28 @@
+# Dependencies + build output are reproduced inside the image (npm ci + next build).
+node_modules
+.next
+out
+build
+coverage
+
+# VCS + local tooling
+.git
+.gitignore
+.claude
+.vscode
+.idea
+
+# Secrets / local env — never bake into the image.
+.env
+.env.*
+
+# Docs and repo meta (not needed at build or runtime).
+docs
+*.md
+
+# Compose files (deployment config, not part of the image build context needs).
+compose.yml
+compose.dev.yml
+
+# OS cruft
+.DS_Store
