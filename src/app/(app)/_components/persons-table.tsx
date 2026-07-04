@@ -2,20 +2,34 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   type ColumnDef,
+  type RowSelectionState,
   type SortingState,
   flexRender,
   getCoreRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ChevronsUpDown, Plus, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown, Copy, Download, Plus, Search, UserPlus, X } from "lucide-react";
+import { toast } from "sonner";
 
+import { addMembers } from "@/actions/lists";
+import { Combobox } from "@/components/combobox";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -34,7 +48,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { GroupRow, OfficeRow, PersonListRow } from "@/db/queries";
+import type { DistributionListSummary, GroupRow, OfficeRow, PersonListRow } from "@/db/queries";
+import { buildBcc } from "@/lib/export";
 import { SECTION_LABELS, birthYear, fold, formatName } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 
@@ -50,16 +65,22 @@ export function PersonsTable({
   persons,
   groups,
   offices,
+  distributionLists,
 }: {
   persons: PersonListRow[];
   groups: GroupRow[];
   offices: OfficeRow[];
+  distributionLists: DistributionListSummary[];
 }) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>(ALL);
   const [officeFilter, setOfficeFilter] = useState<string>(ALL);
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [addToListOpen, setAddToListOpen] = useState(false);
+  const [targetListId, setTargetListId] = useState<string | null>(null);
 
   const orderedGroups = useMemo(() => orderGroups(groups), [groups]);
 
@@ -88,6 +109,34 @@ export function PersonsTable({
 
   const columns = useMemo<ColumnDef<Indexed>[]>(
     () => [
+      {
+        id: "select",
+        enableSorting: false,
+        header: ({ table }) => (
+          <div onClick={(e) => e.stopPropagation()} className="flex items-center">
+            <Checkbox
+              aria-label="Alle auswählen"
+              checked={
+                table.getIsAllRowsSelected()
+                  ? true
+                  : table.getIsSomeRowsSelected()
+                    ? "indeterminate"
+                    : false
+              }
+              onCheckedChange={(v) => table.toggleAllRowsSelected(v === true)}
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div onClick={(e) => e.stopPropagation()} className="flex items-center">
+            <Checkbox
+              aria-label="Zeile auswählen"
+              checked={row.getIsSelected()}
+              onCheckedChange={(v) => row.toggleSelected(v === true)}
+            />
+          </div>
+        ),
+      },
       {
         id: "name",
         accessorFn: (p) => fold(p.lastName || p.scoutName || ""),
@@ -211,13 +260,62 @@ export function PersonsTable({
   const table = useReactTable({
     data: filtered,
     columns,
-    state: { sorting },
+    state: { sorting, rowSelection },
+    getRowId: (row) => String(row.id),
+    enableRowSelection: true,
     onSortingChange: setSorting,
+    onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
 
   const rows = table.getRowModel().rows;
+
+  // Selected persons, resolved by id (selection persists across filter changes).
+  const selectedPersons = useMemo(
+    () => persons.filter((p) => rowSelection[String(p.id)]),
+    [persons, rowSelection],
+  );
+  const selectedCount = selectedPersons.length;
+
+  function copySelectedEmails() {
+    const { text, count, skipped } = buildBcc(
+      selectedPersons.map((p) => p.email),
+      "; ",
+    );
+    if (text.length === 0) {
+      toast.error("Keine E-Mail-Adressen in der Auswahl.");
+      return;
+    }
+    navigator.clipboard.writeText(text).then(
+      () =>
+        toast.success(
+          `${count} Adressen kopiert${skipped > 0 ? ` (${skipped} ohne E-Mail übersprungen)` : ""}.`,
+        ),
+      () => toast.error("Kopieren nicht möglich."),
+    );
+  }
+
+  function downloadSelectedCsv() {
+    if (selectedCount === 0) return;
+    const ids = selectedPersons.map((p) => p.id).join(",");
+    window.location.href = `/api/export/csv?ids=${ids}`;
+  }
+
+  function submitAddToList() {
+    if (targetListId == null || selectedCount === 0) return;
+    const listId = Number(targetListId);
+    const ids = selectedPersons.map((p) => p.id);
+    startTransition(async () => {
+      const res = await addMembers(listId, ids);
+      if (!res.ok) return void toast.error(res.message);
+      const listName = distributionLists.find((l) => l.id === listId)?.name ?? "Verteiler";
+      toast.success(`${ids.length} zu „${listName}“ hinzugefügt.`);
+      setAddToListOpen(false);
+      setTargetListId(null);
+      router.refresh();
+    });
+  }
 
   return (
     <>
@@ -270,6 +368,38 @@ export function PersonsTable({
             </Link>
           </Button>
         </div>
+
+        {selectedCount > 0 ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-fir/40 bg-fir-tint px-3 py-2 text-[13px]">
+            <span className="font-medium text-ink">{selectedCount} ausgewählt</span>
+            <span className="text-ink-faint">—</span>
+            <Button size="sm" onClick={copySelectedEmails}>
+              <Copy className="size-3.5" />
+              E-Mails kopieren
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAddToListOpen(true)}
+              disabled={distributionLists.length === 0}
+            >
+              <UserPlus className="size-3.5" />
+              Zu Verteiler hinzufügen …
+            </Button>
+            <Button size="sm" variant="outline" onClick={downloadSelectedCsv}>
+              <Download className="size-3.5" />
+              CSV
+            </Button>
+            <button
+              type="button"
+              onClick={() => setRowSelection({})}
+              className="ml-auto inline-flex items-center gap-1 text-[12.5px] text-ink-faint transition-colors hover:text-ink"
+            >
+              <X className="size-3.5" />
+              Auswahl aufheben
+            </button>
+          </div>
+        ) : null}
 
         <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
           <Table className="min-w-[880px]">
@@ -336,10 +466,52 @@ export function PersonsTable({
           <div className="flex items-center justify-between border-t border-line px-4 py-2.5 text-[12.5px] tabular-nums text-ink-faint">
             <span>
               {persons.length} Anschriften · {rows.length} gefiltert
+              {selectedCount > 0 ? ` · ${selectedCount} ausgewählt` : ""}
             </span>
           </div>
         </div>
       </div>
+
+      {/* Add selection to a distribution list */}
+      <Dialog
+        open={addToListOpen}
+        onOpenChange={(o) => {
+          setAddToListOpen(o);
+          if (!o) setTargetListId(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Zu Verteiler hinzufügen</DialogTitle>
+            <DialogDescription>
+              {selectedCount} {selectedCount === 1 ? "Anschrift wird" : "Anschriften werden"} zum
+              gewählten Verteiler hinzugefügt. Bereits enthaltene Mitglieder werden übersprungen.
+            </DialogDescription>
+          </DialogHeader>
+          <Combobox
+            aria-label="Verteiler wählen"
+            options={distributionLists.map((l) => ({
+              value: String(l.id),
+              label: `${l.name} (${l.memberCount})`,
+            }))}
+            value={targetListId}
+            onChange={setTargetListId}
+            placeholder="Verteiler wählen"
+            searchPlaceholder="Verteiler suchen …"
+            emptyText="Kein Verteiler gefunden."
+          />
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isPending}>
+                Abbrechen
+              </Button>
+            </DialogClose>
+            <Button onClick={submitAddToList} disabled={isPending || targetListId == null}>
+              {isPending ? "Hinzufügen …" : "Hinzufügen"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
