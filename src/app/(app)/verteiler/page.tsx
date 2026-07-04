@@ -1,4 +1,4 @@
-import { listDistributionLists, listPersonOptions } from "@/db/queries";
+import { listDistributionLists, listOffices, listPersonOptions } from "@/db/queries";
 
 import { VerteilerManager } from "./verteiler-manager";
 
@@ -10,9 +10,10 @@ export default async function VerteilerPage({
 }: {
   searchParams: Promise<{ list?: string }>;
 }) {
-  const [lists, personOptions, { list }] = await Promise.all([
+  const [lists, personOptions, offices, { list }] = await Promise.all([
     listDistributionLists(),
     listPersonOptions(),
+    listOffices(),
     searchParams,
   ]);
   const initialListId = list != null && /^\d+$/.test(list) ? Number(list) : null;
@@ -21,6 +22,7 @@ export default async function VerteilerPage({
     <VerteilerManager
       lists={lists}
       personOptions={personOptions}
+      offices={offices}
       initialListId={initialListId}
     />
   );

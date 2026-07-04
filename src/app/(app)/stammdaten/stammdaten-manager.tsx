@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { OfficeRow, RankRow } from "@/db/queries";
+import type { OfficeListRule, OfficeRow, RankRow } from "@/db/queries";
 
 type OfficeForm = { id: number | null; name: string; rank: string };
 type RankForm = { id: number | null; name: string; sortOrder: string };
@@ -69,11 +69,13 @@ function MonoBadge({ children }: { children: React.ReactNode }) {
 export function StammdatenManager({
   offices,
   officeUsage,
+  officeListRules,
   ranks,
   rankUsage,
 }: {
   offices: OfficeRow[];
   officeUsage: Record<number, number>;
+  officeListRules: Record<number, OfficeListRule[]>;
   ranks: RankRow[];
   rankUsage: Record<number, number>;
 }) {
@@ -156,6 +158,21 @@ export function StammdatenManager({
                   >
                     <MonoBadge>{o.rank}</MonoBadge>
                     <span className="text-ink">{o.name}</span>
+                    {(officeListRules[o.id] ?? []).length > 0 ? (
+                      <span
+                        className="flex flex-wrap items-center gap-1"
+                        title="Inhaber dieses Amts sind automatisch in diesen Verteilern."
+                      >
+                        {officeListRules[o.id].map((r) => (
+                          <span
+                            key={r.listId}
+                            className="rounded-[4px] border border-brass/40 bg-brass-tint px-1.5 py-px text-[10.5px] text-ink-soft"
+                          >
+                            {r.listName}
+                          </span>
+                        ))}
+                      </span>
+                    ) : null}
                     <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
                       <Button
                         variant="ghost"

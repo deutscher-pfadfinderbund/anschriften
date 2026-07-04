@@ -77,6 +77,7 @@ export function PersonsTable({
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>(ALL);
   const [officeFilter, setOfficeFilter] = useState<string>(ALL);
+  const [listFilter, setListFilter] = useState<string>(ALL);
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [addToListOpen, setAddToListOpen] = useState(false);
@@ -99,13 +100,16 @@ export function PersonsTable({
     const q = fold(search);
     const groupId = groupFilter === ALL ? null : Number(groupFilter);
     const officeId = officeFilter === ALL ? null : Number(officeFilter);
+    const listId = listFilter === ALL ? null : Number(listFilter);
     return indexed.filter((p) => {
       if (q && !p._search.includes(q)) return false;
       if (groupId != null && !p.assignments.some((a) => a.groupId === groupId)) return false;
       if (officeId != null && !p.assignments.some((a) => a.officeId === officeId)) return false;
+      // Effective membership (manual ∪ office rule), matching the Verteiler detail.
+      if (listId != null && !p.effectiveListIds.includes(listId)) return false;
       return true;
     });
-  }, [indexed, search, groupFilter, officeFilter]);
+  }, [indexed, search, groupFilter, officeFilter, listFilter]);
 
   const columns = useMemo<ColumnDef<Indexed>[]>(
     () => [
@@ -360,6 +364,22 @@ export function PersonsTable({
               ))}
             </SelectContent>
           </Select>
+
+          {distributionLists.length > 0 ? (
+            <Select value={listFilter} onValueChange={setListFilter}>
+              <SelectTrigger className="w-[190px]" aria-label="Verteiler filtern">
+                <SelectValue placeholder="Alle Verteiler" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[360px]">
+                <SelectItem value={ALL}>Alle Verteiler</SelectItem>
+                {distributionLists.map((l) => (
+                  <SelectItem key={l.id} value={String(l.id)}>
+                    {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
 
           <Button asChild className="ml-auto">
             <Link href="/personen/neu">
