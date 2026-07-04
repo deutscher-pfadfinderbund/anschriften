@@ -163,6 +163,20 @@ export type HistoricalAssignment = {
   officeName: string | null;
   startDate: string | null;
   endDate: string | null;
+  /** True when the real end is unknown: `endDate` is only the recording-date upper bound. */
+  endUnknown: boolean;
+};
+
+/**
+ * Active holder of a given (office, group) combination — for the "Amtsinhaber-Warnung"
+ * in the person editor (issue #26). Lives here (not in the "use server" action module)
+ * so both the server action and the client form import it as a plain type.
+ */
+export type ActiveHolder = {
+  assignmentId: number;
+  personId: number;
+  name: string;
+  startDate: string | null;
 };
 
 /** One person shaped for the editor, or null if not found. */
@@ -199,6 +213,7 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
       officeName: a.office?.name ?? null,
       startDate: a.startDate,
       endDate: a.endDate,
+      endUnknown: a.endUnknown,
     }));
 
   // Which lists this person is auto-included in. Same union/dedupe semantics as
