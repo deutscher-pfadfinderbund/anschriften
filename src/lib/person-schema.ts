@@ -16,9 +16,39 @@ export const phoneInputSchema = z.object({
 export const assignmentInputSchema = z.object({
   groupId: z.number().int(),
   officeId: z.number().int().nullable(),
+  // Amtszeit "seit" (issue #22). NULL = unknown. Active rows never carry an end date;
+  // ended tenures are managed out of band via the assignment history actions.
+  startDate: shortText.nullable().default(null),
 });
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// ISO calendar date, e.g. "2019-03-01". The <input type="date"> emits exactly this.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** True for a real ISO calendar date. Rejects malformed strings and impossible days (02-30). */
+export function isValidDate(value: string): boolean {
+  if (!DATE_RE.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+/**
+ * Validate an Amtszeit (von/bis) for the office history. Pure so it can be unit-tested
+ * and reused by every server action. Returns a German error message, or null when valid.
+ * Either bound may be null (unknown); when both are set, end must not precede start.
+ */
+export function validateTenure(
+  startDate: string | null,
+  endDate: string | null,
+): string | null {
+  if (startDate != null && !isValidDate(startDate)) return "Ungültiges Von-Datum.";
+  if (endDate != null && !isValidDate(endDate)) return "Ungültiges Bis-Datum.";
+  // ISO date strings compare lexicographically in chronological order.
+  if (startDate != null && endDate != null && endDate < startDate)
+    return "Das Bis-Datum darf nicht vor dem Von-Datum liegen.";
+  return null;
+}
 
 export const personInputSchema = z
   .object({

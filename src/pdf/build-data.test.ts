@@ -107,8 +107,8 @@ describe("profile filtering", () => {
       person({ id: 2, firstName: "Gerd", lastName: "Gilde" }),
     ],
     assignments: [
-      { id: 1, personId: 1, groupId: 1, officeId: 1 }, // Bundesführung (bund)
-      { id: 2, personId: 2, groupId: 5, officeId: null }, // Kollegium Nord (bundesgilde)
+      { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: null }, // Bundesführung (bund)
+      { id: 2, personId: 2, groupId: 5, officeId: null, endDate: null }, // Kollegium Nord (bundesgilde)
     ],
   };
 
@@ -132,6 +132,63 @@ describe("profile filtering", () => {
   });
 });
 
+describe("office history — only active tenures are printed (issue #22)", () => {
+  it("omits an ended tenure from the group tree and the register", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [person({ id: 1, firstName: "Holger", lastName: "Specht", scoutName: "Falke" })],
+      assignments: [
+        // Active current office in Bundesführung.
+        { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: null },
+        // Ended tenure in a jungenbund subgroup — must NOT be printed anywhere.
+        { id: 2, personId: 1, groupId: 3, officeId: 6, endDate: "2019-02-28" },
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", ALL_OPTIONS);
+    // The active office renders; the ended-tenure group is pruned (no active member).
+    expect(findNode(data.sections, "Bundesführung")).toBeDefined();
+    expect(findNode(data.sections, "Jungenschaft Hohenlohe")).toBeUndefined();
+    // The register breadcrumb reflects only the active office, not the historic one.
+    expect(data.register).toHaveLength(1);
+    expect(data.register[0].rest).not.toContain("Jungenschaft Hohenlohe");
+  });
+
+  it("drops a person entirely when their only tenure has ended", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [person({ id: 1, firstName: "Ehe", lastName: "Malig" })],
+      assignments: [{ id: 1, personId: 1, groupId: 1, officeId: 1, endDate: "2014-12-31" }],
+    };
+    const data = buildProfileData(raw, "komplett", ALL_OPTIONS);
+    expect(data.sections).toHaveLength(0);
+    expect(data.register).toHaveLength(0);
+  });
+
+  it("excludes an ended Kanzler tenure from the confidential cover", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, firstName: "Alt", lastName: "Kanzler" }),
+        person({ id: 2, firstName: "Neu", lastName: "Kanzler" }),
+      ],
+      assignments: [
+        // office 2 = "Kanzlerin des Bundes"
+        { id: 1, personId: 1, groupId: 1, officeId: 2, endDate: "2022-12-31" },
+        { id: 2, personId: 2, groupId: 1, officeId: 2, endDate: null },
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    const kanzleiNames = data.kanzlei.map((e) => e.name);
+    expect(kanzleiNames).toEqual(["Neu Kanzler"]);
+  });
+});
+
 describe("group tree ordering", () => {
   it("sorts top-level groups by sort_key then name and nests children", () => {
     const raw: RawData = {
@@ -143,8 +200,8 @@ describe("group tree ordering", () => {
         person({ id: 2, firstName: "B", lastName: "B" }),
       ],
       assignments: [
-        { id: 1, personId: 1, groupId: 3, officeId: 6 }, // Jungenschaft Hohenlohe (child of Gau Franken)
-        { id: 2, personId: 2, groupId: 1, officeId: 1 }, // Bundesführung
+        { id: 1, personId: 1, groupId: 3, officeId: 6, endDate: null }, // Jungenschaft Hohenlohe (child of Gau Franken)
+        { id: 2, personId: 2, groupId: 1, officeId: 1, endDate: null }, // Bundesführung
       ],
     };
     const data = buildProfileData(raw, "komplett", NO_OPTIONS);
@@ -161,7 +218,7 @@ describe("group tree ordering", () => {
       offices: OFFICES,
       groups: GROUPS,
       persons: [person({ id: 1, firstName: "A", lastName: "A" })],
-      assignments: [{ id: 1, personId: 1, groupId: 1, officeId: 1 }],
+      assignments: [{ id: 1, personId: 1, groupId: 1, officeId: 1, endDate: null }],
     };
     const data = buildProfileData(raw, "komplett", NO_OPTIONS);
     expect(findNode(data.sections, "Gau Franken")).toBeUndefined();
@@ -182,10 +239,10 @@ describe("office rank ordering inside a group", () => {
         person({ id: 4, firstName: "Ohne", lastName: "Amt" }),
       ],
       assignments: [
-        { id: 1, personId: 1, groupId: 1, officeId: 3 }, // Kämmerer (30)
-        { id: 2, personId: 2, groupId: 1, officeId: 1 }, // Bundesvogt (10)
-        { id: 3, personId: 3, groupId: 1, officeId: 2 }, // Kanzlerin (20)
-        { id: 4, personId: 4, groupId: 1, officeId: null }, // amtslos (999)
+        { id: 1, personId: 1, groupId: 1, officeId: 3, endDate: null }, // Kämmerer (30)
+        { id: 2, personId: 2, groupId: 1, officeId: 1, endDate: null }, // Bundesvogt (10)
+        { id: 3, personId: 3, groupId: 1, officeId: 2, endDate: null }, // Kanzlerin (20)
+        { id: 4, personId: 4, groupId: 1, officeId: null, endDate: null }, // amtslos (999)
       ],
     };
     const data = buildProfileData(raw, "komplett", NO_OPTIONS);
@@ -200,8 +257,8 @@ describe("office rank ordering inside a group", () => {
       groups: GROUPS,
       persons: [person({ id: 1, firstName: "Multi", lastName: "Amt" })],
       assignments: [
-        { id: 1, personId: 1, groupId: 1, officeId: 3 }, // Kämmerer
-        { id: 2, personId: 1, groupId: 1, officeId: 2 }, // Kanzlerin
+        { id: 1, personId: 1, groupId: 1, officeId: 3, endDate: null }, // Kämmerer
+        { id: 2, personId: 1, groupId: 1, officeId: 2, endDate: null }, // Kanzlerin
       ],
     };
     const data = buildProfileData(raw, "komplett", NO_OPTIONS);
@@ -223,9 +280,9 @@ describe("office label suppression", () => {
         person({ id: 3, firstName: "Vogt", lastName: "Top" }),
       ],
       assignments: [
-        { id: 1, personId: 1, groupId: 3, officeId: 6 }, // Jungenschaftsführer in subgroup
-        { id: 2, personId: 2, groupId: 3, officeId: 5 }, // Knappenmeister in subgroup
-        { id: 3, personId: 3, groupId: 2, officeId: 4 }, // Gauvogt at top level of Gau Franken
+        { id: 1, personId: 1, groupId: 3, officeId: 6, endDate: null }, // Jungenschaftsführer in subgroup
+        { id: 2, personId: 2, groupId: 3, officeId: 5, endDate: null }, // Knappenmeister in subgroup
+        { id: 3, personId: 3, groupId: 2, officeId: 4, endDate: null }, // Gauvogt at top level of Gau Franken
       ],
     };
     const data = buildProfileData(raw, "komplett", NO_OPTIONS);
@@ -251,9 +308,9 @@ describe("do_not_print and deceased handling", () => {
       person({ id: 3, firstName: "Gone", lastName: "Away", scoutName: "geist", deathDate: "2020-05-01" }),
     ],
     assignments: [
-      { id: 1, personId: 1, groupId: 1, officeId: 1 },
-      { id: 2, personId: 2, groupId: 1, officeId: 2 },
-      { id: 3, personId: 3, groupId: 1, officeId: 3 },
+      { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: null },
+      { id: 2, personId: 2, groupId: 1, officeId: 2, endDate: null },
+      { id: 3, personId: 3, groupId: 1, officeId: 3, endDate: null },
     ],
   };
 
@@ -289,9 +346,9 @@ describe("name register", () => {
         person({ id: 3, firstName: "Cäsar", lastName: "Bar" }), // no scout -> "Cäsar" -> cae...
       ],
       assignments: [
-        { id: 1, personId: 1, groupId: 1, officeId: 1 },
-        { id: 2, personId: 2, groupId: 1, officeId: 2 },
-        { id: 3, personId: 3, groupId: 1, officeId: 3 },
+        { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: null },
+        { id: 2, personId: 2, groupId: 1, officeId: 2, endDate: null },
+        { id: 3, personId: 3, groupId: 1, officeId: 3, endDate: null },
       ],
     };
     const data = buildProfileData(raw, "komplett", NO_OPTIONS);
@@ -313,8 +370,8 @@ describe("name register", () => {
         person({ id: 2, firstName: "Holger", lastName: "Specht" }),
       ],
       assignments: [
-        { id: 1, personId: 1, groupId: 3, officeId: 5 }, // Knappenmeister, Jungenschaft Hohenlohe < Gau Franken
-        { id: 2, personId: 2, groupId: 1, officeId: 1 }, // Bundesvogt in Bundesführung
+        { id: 1, personId: 1, groupId: 3, officeId: 5, endDate: null }, // Knappenmeister, Jungenschaft Hohenlohe < Gau Franken
+        { id: 2, personId: 2, groupId: 1, officeId: 1, endDate: null }, // Bundesvogt in Bundesführung
       ],
     };
     const data = buildProfileData(raw, "komplett", NO_OPTIONS);
@@ -334,8 +391,8 @@ describe("register anchor labels", () => {
       groups: GROUPS,
       persons: [person({ id: 7, firstName: "Doppel", lastName: "Amt", scoutName: "duo" })],
       assignments: [
-        { id: 1, personId: 7, groupId: 1, officeId: 1 }, // Bundesführung (rendered first)
-        { id: 2, personId: 7, groupId: 2, officeId: 4 }, // Gau Franken (rendered later)
+        { id: 1, personId: 7, groupId: 1, officeId: 1, endDate: null }, // Bundesführung (rendered first)
+        { id: 2, personId: 7, groupId: 2, officeId: 4, endDate: null }, // Gau Franken (rendered later)
       ],
     };
     const data = buildProfileData(raw, "komplett", NO_OPTIONS);
@@ -367,8 +424,8 @@ describe("options: ranks, birthdays, cover", () => {
       person({ id: 2, firstName: "Heide", lastName: "Ortner" }),
     ],
     assignments: [
-      { id: 1, personId: 1, groupId: 1, officeId: 1 },
-      { id: 2, personId: 2, groupId: 1, officeId: 2 }, // Kanzlerin des Bundes -> cover
+      { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: null },
+      { id: 2, personId: 2, groupId: 1, officeId: 2, endDate: null }, // Kanzlerin des Bundes -> cover
     ],
   };
 

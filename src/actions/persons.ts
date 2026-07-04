@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
@@ -8,10 +8,18 @@ import { assignments, distributionListMembers, persons } from "@/db/schema";
 import { actorName, requireSession } from "@/lib/auth-helpers";
 import {
   parsePersonInput,
+  validateTenure,
   type AssignmentInput,
   type FieldErrors,
   type PersonInput,
 } from "@/lib/person-schema";
+
+/** Postgres unique-violation SQLSTATE — the active-tenure partial unique index. */
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505"
+  );
+}
 
 export type SaveResult =
   | { ok: true; id: number }
@@ -31,7 +39,12 @@ function clean(input: PersonInput): PersonInput {
     const key = `${a.groupId}:${a.officeId ?? "null"}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    uniqueAssignments.push({ groupId: a.groupId, officeId: a.officeId ?? null });
+    // Keep the "seit" date; blank strings become null (unknown).
+    uniqueAssignments.push({
+      groupId: a.groupId,
+      officeId: a.officeId ?? null,
+      startDate: trimOrNull(a.startDate),
+    });
   }
 
   return {
@@ -69,6 +82,12 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
   const revalidated = parsePersonInput(data);
   if (!revalidated.ok) return { ok: false, errors: revalidated.errors };
 
+  // Active tenures carry only a "seit" date; validate its format (end is always null here).
+  for (const a of data.assignments) {
+    const err = validateTenure(a.startDate ?? null, null);
+    if (err) return { ok: false, errors: {}, message: err };
+  }
+
   const by = actorName(session);
   const fields = {
     salutation: data.salutation,
@@ -91,34 +110,53 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
     updatedAt: new Date(),
   };
 
-  const id = await db.transaction(async (tx) => {
-    let personId = data.id;
-    if (personId) {
-      await tx.update(persons).set(fields).where(eq(persons.id, personId));
-      await tx.delete(assignments).where(eq(assignments.personId, personId));
-    } else {
-      const [row] = await tx.insert(persons).values(fields).returning({ id: persons.id });
-      personId = row.id;
-    }
-    if (data.assignments.length > 0) {
-      await tx.insert(assignments).values(
-        data.assignments.map((a) => ({
-          personId: personId!,
-          groupId: a.groupId,
-          officeId: a.officeId,
-        })),
-      );
-    }
+  let id: number;
+  try {
+    id = await db.transaction(async (tx) => {
+      let personId = data.id;
+      if (personId) {
+        await tx.update(persons).set(fields).where(eq(persons.id, personId));
+        // Delete + recreate only the ACTIVE tenures. Ended tenures (end_date set) are
+        // the office history and are managed separately (see actions/assignments.ts) —
+        // the person form never carries them, so they must survive a normal save.
+        await tx
+          .delete(assignments)
+          .where(and(eq(assignments.personId, personId), isNull(assignments.endDate)));
+      } else {
+        const [row] = await tx.insert(persons).values(fields).returning({ id: persons.id });
+        personId = row.id;
+      }
+      if (data.assignments.length > 0) {
+        await tx.insert(assignments).values(
+          data.assignments.map((a) => ({
+            personId: personId!,
+            groupId: a.groupId,
+            officeId: a.officeId,
+            startDate: a.startDate ?? null,
+            endDate: null,
+          })),
+        );
+      }
 
-    // Distribution-list memberships: delete + recreate, same as assignments.
-    await tx.delete(distributionListMembers).where(eq(distributionListMembers.personId, personId!));
-    if (data.distributionListIds.length > 0) {
-      await tx.insert(distributionListMembers).values(
-        data.distributionListIds.map((listId) => ({ listId, personId: personId! })),
-      );
-    }
-    return personId!;
-  });
+      // Distribution-list memberships: delete + recreate, same as assignments.
+      await tx.delete(distributionListMembers).where(eq(distributionListMembers.personId, personId!));
+      if (data.distributionListIds.length > 0) {
+        await tx.insert(distributionListMembers).values(
+          data.distributionListIds.map((listId) => ({ listId, personId: personId! })),
+        );
+      }
+      return personId!;
+    });
+  } catch (err) {
+    // The active-tenure partial unique index rejected a second active (person, group, office).
+    if (isUniqueViolation(err))
+      return {
+        ok: false,
+        errors: {},
+        message: "Diese Amt-Gliederungs-Kombination ist bereits aktiv zugeordnet.",
+      };
+    throw err;
+  }
 
   revalidatePath("/");
   revalidatePath("/verteiler");

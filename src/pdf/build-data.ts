@@ -92,6 +92,8 @@ export interface DataAssignment {
   personId: number;
   groupId: number;
   officeId: number | null;
+  /** Amtszeit end (issue #22): NULL = active, set = ended. Only active rows are printed. */
+  endDate: string | null;
 }
 export interface RawData {
   persons: DataPerson[];
@@ -245,10 +247,15 @@ export function buildProfileData(
     childrenByParent.get(key)!.push(g);
   }
 
+  // Amtszeiten (issue #22): the printed directory only ever shows currently held
+  // offices. Filter to active tenures once, here, and feed every downstream consumer
+  // (group tree, register, memorial, confidential cover) from this single array.
+  const activeAssignments = raw.assignments.filter((a) => a.endDate == null);
+
   // assignments per group, filtered to printable + living persons
   const assignmentsByGroup = new Map<number, DataAssignment[]>();
   const assignmentsByPerson = new Map<number, DataAssignment[]>();
-  for (const a of raw.assignments) {
+  for (const a of activeAssignments) {
     const p = personById.get(a.personId);
     if (!p || p.doNotPrint) continue;
     if (!assignmentsByPerson.has(a.personId)) assignmentsByPerson.set(a.personId, []);
@@ -389,7 +396,7 @@ export function buildProfileData(
   }
 
   // ---- confidential cover: the Bundeskanzler/in entries ----
-  const kanzlei = buildKanzlei(raw, personById, officeById);
+  const kanzlei = buildKanzlei(activeAssignments, personById, officeById);
 
   return {
     profile,
@@ -494,19 +501,22 @@ function registerBreadcrumb(
 }
 
 function buildKanzlei(
-  raw: RawData,
+  activeAssignments: DataAssignment[],
   personById: Map<number, DataPerson>,
   officeById: Map<number, DataOffice>,
 ): Entry[] {
-  const kanzlerOffices = raw.offices.filter((o) => {
-    const s = o.name.toLowerCase();
-    return s.includes("kanzler") && s.includes("des bundes");
-  });
-  const kanzlerOfficeIds = new Set(kanzlerOffices.map((o) => o.id));
+  const kanzlerOfficeIds = new Set(
+    [...officeById.values()]
+      .filter((o) => {
+        const s = o.name.toLowerCase();
+        return s.includes("kanzler") && s.includes("des bundes");
+      })
+      .map((o) => o.id),
+  );
 
   const seen = new Set<number>();
   const result: { office: string; entry: Entry }[] = [];
-  for (const a of raw.assignments) {
+  for (const a of activeAssignments) {
     if (a.officeId == null || !kanzlerOfficeIds.has(a.officeId)) continue;
     const p = personById.get(a.personId);
     if (!p || p.doNotPrint || seen.has(p.id)) continue;
@@ -579,6 +589,7 @@ export async function buildData(profile: Profile, options: BuildOptions): Promis
       personId: a.personId,
       groupId: a.groupId,
       officeId: a.officeId,
+      endDate: a.endDate,
     })),
   };
 
