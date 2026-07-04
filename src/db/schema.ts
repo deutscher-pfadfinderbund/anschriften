@@ -13,7 +13,7 @@ import {
   primaryKey,
   text,
   timestamp,
-  unique,
+  uniqueIndex,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
@@ -97,6 +97,15 @@ export const persons = pgTable("persons", {
  * Person ↔ Gliederung ↔ Amt. `office_id` NULL means membership without an office
  * (e.g. plain Bundesgilde member). Replaces the old comma-separated `Amt` free-text
  * field and the Älterengemeinschaft/Ordensgruppe/Ordensamt triple.
+ *
+ * Amtszeiten (issue #22): `start_date` = "seit" (NULL = unknown); `end_date` NULL =
+ * currently active, set = ended tenure kept for the office history. All consumers
+ * (table, PDF, distribution rules, mail) only ever see active rows; the delete guard
+ * counts all rows so the FK never breaks. The same (person, group, office) may recur
+ * across history, but only one row may be active at a time — enforced by a PARTIAL
+ * unique index `WHERE end_date IS NULL` (see migration 0003; hand-written because
+ * drizzle's uniqueIndex builder cannot emit `NULLS NOT DISTINCT`, needed so two active
+ * office-less memberships of the same group still collide).
  */
 export const assignments = pgTable(
   "assignments",
@@ -109,12 +118,14 @@ export const assignments = pgTable(
       .notNull()
       .references(() => groups.id),
     officeId: integer("office_id").references(() => offices.id),
+    startDate: date("start_date"),
+    endDate: date("end_date"),
     ...timestamps,
   },
   (t) => [
-    unique("assignments_person_group_office_key")
+    uniqueIndex("assignments_active_person_group_office_key")
       .on(t.personId, t.groupId, t.officeId)
-      .nullsNotDistinct(),
+      .where(sql`${t.endDate} is null`),
   ],
 );
 
