@@ -16,9 +16,12 @@ coverage
 .env
 .env.*
 
-# Docs and repo meta (not needed at build or runtime).
+# Docs, dev-only setup (local Keycloak realm) and repo meta.
 docs
+dev
 *.md
+*.png
+!src/pdf/assets/*.png
 
 # Compose files (deployment config, not part of the image build context needs).
 compose.yml

@@ -22,14 +22,19 @@ ARG TYPST_VERSION=0.15.0
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates wget xz-utils \
   && rm -rf /var/lib/apt/lists/*
+# SHA256 of the official v0.15.0 release tarballs (verified 2026-07-04).
+# Bump these together with TYPST_VERSION.
+ARG TYPST_SHA256_AMD64=59b207df01be2dab9f13e80f73d04d7ff8273ffd46b3dd1b9eef5c60f3eeabea
+ARG TYPST_SHA256_ARM64=cdf50ffc7b8ba759ed02200632eda3d78eb8b99aacb6611f4f75684990647620
 RUN set -eux; \
   case "${TARGETARCH}" in \
-    amd64) TYPST_ARCH=x86_64 ;; \
-    arm64) TYPST_ARCH=aarch64 ;; \
+    amd64) TYPST_ARCH=x86_64; TYPST_SHA256="${TYPST_SHA256_AMD64}" ;; \
+    arm64) TYPST_ARCH=aarch64; TYPST_SHA256="${TYPST_SHA256_ARM64}" ;; \
     *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
   esac; \
   target="typst-${TYPST_ARCH}-unknown-linux-musl"; \
   wget -q "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/${target}.tar.xz"; \
+  echo "${TYPST_SHA256}  ${target}.tar.xz" | sha256sum -c -; \
   tar -xf "${target}.tar.xz"; \
   install -m 0755 "${target}/typst" /usr/local/bin/typst; \
   /usr/local/bin/typst --version
@@ -42,7 +47,8 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
-    TYPST_FONT_PATHS=/app/src/pdf/fonts
+    TYPST_FONT_PATHS=/app/src/pdf/fonts \
+    PDF_ASSETS_DIR=/app/src/pdf
 
 # Pinned Typst CLI used by the PDF export route.
 COPY --from=typst /usr/local/bin/typst /usr/local/bin/typst
