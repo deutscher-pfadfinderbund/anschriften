@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarOff, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-react";
+import { CalendarOff, ChevronDown, ChevronRight, Pencil, Plus, TriangleAlert, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   addHistoricalAssignment,
   deleteAssignment,
   endAssignment,
+  getActiveHolders,
   updateHistoricalAssignment,
 } from "@/actions/assignments";
 import { deletePerson, savePerson } from "@/actions/persons";
@@ -36,7 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { GroupRow, HistoricalAssignment, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
+import type { ActiveHolder, GroupRow, HistoricalAssignment, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
 import { PHONE_LABELS, SALUTATIONS, formatDate, formatDateTime, formatName } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 import type { FieldErrors, PersonInput } from "@/lib/person-schema";
@@ -107,6 +108,42 @@ function Panel({
       </div>
       <div className="p-[18px]">{children}</div>
     </section>
+  );
+}
+
+/**
+ * "Bis"-Datum plus a "Datum unbekannt" checkbox (issue #26). Ticking it disables the
+ * date field; the server then records end_date = today and end_unknown = true.
+ */
+function EndDateChoice({
+  idPrefix,
+  endDate,
+  endUnknown,
+  onDate,
+  onUnknown,
+}: {
+  idPrefix: string;
+  endDate: string;
+  endUnknown: boolean;
+  onDate: (v: string) => void;
+  onUnknown: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Field label="Bis" htmlFor={`${idPrefix}-date`}>
+        <Input
+          id={`${idPrefix}-date`}
+          type="date"
+          value={endUnknown ? "" : endDate}
+          disabled={endUnknown}
+          onChange={(e) => onDate(e.target.value)}
+        />
+      </Field>
+      <label className="flex items-center gap-2 text-[13px] text-ink-soft">
+        <Checkbox checked={endUnknown} onCheckedChange={(v) => onUnknown(v === true)} />
+        Datum unbekannt
+      </label>
+    </div>
   );
 }
 
@@ -193,9 +230,13 @@ export function PersonForm({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isHistoryPending, startHistory] = useTransition();
   // Active row being ended via the "Amt beenden…" dialog (only persisted rows).
-  const [endTarget, setEndTarget] = useState<{ key: string; id: number; endDate: string } | null>(
-    null,
-  );
+  // `endUnknown` toggles "Datum unbekannt" (disables the date field).
+  const [endTarget, setEndTarget] = useState<{
+    key: string;
+    id: number;
+    endDate: string;
+    endUnknown: boolean;
+  } | null>(null);
   // Add/edit dialog for a past tenure. `id` null = new entry.
   type HistForm = {
     id: number | null;
@@ -203,8 +244,63 @@ export function PersonForm({
     officeId: number | null;
     startDate: string;
     endDate: string;
+    endUnknown: boolean;
   };
   const [histForm, setHistForm] = useState<HistForm | null>(null);
+
+  // --- Amtsinhaber-Warnung (issue #26) -------------------------------------------
+  // On-demand cache of active holders per "officeId:groupId" combination (no polling).
+  const [holdersCache, setHoldersCache] = useState<Map<string, ActiveHolder[]>>(new Map());
+  // Buffered "end this foreign tenure on save" orders, keyed by the target assignmentId.
+  // Nothing is written until savePerson runs them in its transaction.
+  type EndPreviousOrder = {
+    assignmentId: number;
+    personId: number;
+    name: string;
+    endDate: string;
+    endUnknown: boolean;
+  };
+  const [endPrevious, setEndPrevious] = useState<Map<number, EndPreviousOrder>>(new Map());
+  // The "Amtszeit von {Name} beenden…" dialog before an order is buffered.
+  const [holderDialog, setHolderDialog] = useState<
+    { assignmentId: number; personId: number; name: string; endDate: string; endUnknown: boolean } | null
+  >(null);
+
+  // The active office+group combinations to check for existing holders: a row needs an
+  // office AND a group AND no "bis" date (an ended row is history, not a new assignment).
+  const activeComboKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const a of assignments) {
+      if (a.groupId != null && a.officeId != null && !a.endDate) keys.add(`${a.officeId}:${a.groupId}`);
+    }
+    return [...keys];
+  }, [assignments]);
+
+  // Fetch holders for any combination not cached yet. Re-runs when the set of active
+  // combinations changes (or the cache updates — guarded by the empty-missing early
+  // return, so no loop and no dependency lint warning).
+  useEffect(() => {
+    const missing = activeComboKeys.filter((k) => !holdersCache.has(k));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const entries = await Promise.all(
+        missing.map(async (k) => {
+          const [officeId, groupId] = k.split(":").map(Number);
+          return [k, await getActiveHolders(officeId, groupId)] as const;
+        }),
+      );
+      if (cancelled) return;
+      setHoldersCache((prev) => {
+        const next = new Map(prev);
+        for (const [k, v] of entries) next.set(k, v);
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeComboKeys, holdersCache]);
 
   const groupOptions: ComboOption[] = useMemo(
     () =>
@@ -263,6 +359,19 @@ export function PersonForm({
       toast.error("Dieselbe Amt-Gliederungs-Kombination ist doppelt zugeordnet.");
       return;
     }
+    // Only send buffered orders that still map to a visible warning: if the user changed
+    // or removed the row after buffering, the order is stale and must not fire silently.
+    const liveOrders: EndPreviousOrder[] = [];
+    const seenOrders = new Set<number>();
+    for (const a of assignments) {
+      for (const h of otherHolders(a)) {
+        const order = endPrevious.get(h.assignmentId);
+        if (order && !seenOrders.has(order.assignmentId)) {
+          seenOrders.add(order.assignmentId);
+          liveOrders.push(order);
+        }
+      }
+    }
     const payload: PersonInput = {
       id: person?.id,
       salutation: salutation === NONE ? null : salutation,
@@ -291,6 +400,13 @@ export function PersonForm({
           startDate: a.startDate || null,
           endDate: a.endDate || null,
         })),
+      // Buffered holder-warning follow-ups: end these foreign tenures in the same save.
+      // "Ende unbekannt" carries no date — the server sets end_date = today.
+      endPrevious: liveOrders.map((o) => ({
+        assignmentId: o.assignmentId,
+        endDate: o.endUnknown ? null : o.endDate || null,
+        endUnknown: o.endUnknown,
+      })),
       distributionListIds: [...listIds],
     };
 
@@ -324,7 +440,11 @@ export function PersonForm({
   function confirmEnd() {
     if (!endTarget) return;
     startHistory(async () => {
-      const res = await endAssignment({ assignmentId: endTarget.id, endDate: endTarget.endDate });
+      const res = await endAssignment({
+        assignmentId: endTarget.id,
+        endDate: endTarget.endUnknown ? null : endTarget.endDate,
+        endUnknown: endTarget.endUnknown,
+      });
       if (!res.ok) return void toast.error(res.message);
       // Row is now history: remove it from the active buffer so a later save cannot
       // recreate it, and refresh so it appears under "Frühere Ämter".
@@ -339,13 +459,15 @@ export function PersonForm({
   function submitHistForm() {
     if (!histForm || !person) return;
     if (histForm.groupId == null) return void toast.error("Bitte eine Gliederung wählen.");
-    if (!histForm.endDate) return void toast.error("Bitte ein Bis-Datum angeben.");
+    if (!histForm.endUnknown && !histForm.endDate)
+      return void toast.error("Bitte ein Bis-Datum angeben oder „Datum unbekannt“ wählen.");
     startHistory(async () => {
       const common = {
         groupId: histForm.groupId as number,
         officeId: histForm.officeId,
         startDate: histForm.startDate || null,
-        endDate: histForm.endDate,
+        endDate: histForm.endUnknown ? null : histForm.endDate,
+        endUnknown: histForm.endUnknown,
       };
       const res =
         histForm.id != null
@@ -368,11 +490,51 @@ export function PersonForm({
     });
   }
 
-  /** "Amt · Gliederung · 01.01.2015 – 31.12.2019", or "… · bis 31.12.2019" when start unknown. */
+  /**
+   * "01.01.2015 – 31.12.2019", "… – ?" when the end is unknown, "bis 31.12.2019" when
+   * only the end is known, or "Ende unbekannt" when neither start nor a real end exists.
+   */
   function historyRange(h: HistoricalAssignment): string {
     const from = formatDate(h.startDate);
-    const to = formatDate(h.endDate);
-    return from ? `${from} – ${to}` : `bis ${to}`;
+    const to = h.endUnknown ? "?" : formatDate(h.endDate);
+    if (from) return `${from} – ${to}`;
+    return h.endUnknown ? "Ende unbekannt" : `bis ${to}`;
+  }
+
+  /**
+   * Active holders of this row's office+group that are NOT the person being edited —
+   * the ones the warning is about. Empty until the on-demand fetch resolves.
+   */
+  function otherHolders(a: AssignmentRow): ActiveHolder[] {
+    if (a.groupId == null || a.officeId == null || a.endDate) return [];
+    const holders = holdersCache.get(`${a.officeId}:${a.groupId}`) ?? [];
+    return holders.filter((h) => h.personId !== person?.id);
+  }
+
+  /** Confirm the holder dialog: buffer an "end previous tenure" order (no write yet). */
+  function confirmHolderDialog() {
+    if (!holderDialog) return;
+    setEndPrevious((prev) => {
+      const next = new Map(prev);
+      next.set(holderDialog.assignmentId, {
+        assignmentId: holderDialog.assignmentId,
+        personId: holderDialog.personId,
+        name: holderDialog.name,
+        endDate: holderDialog.endDate,
+        endUnknown: holderDialog.endUnknown,
+      });
+      return next;
+    });
+    setHolderDialog(null);
+  }
+
+  /** Undo a buffered "end previous tenure" order. */
+  function cancelEndPrevious(assignmentId: number) {
+    setEndPrevious((prev) => {
+      const next = new Map(prev);
+      next.delete(assignmentId);
+      return next;
+    });
   }
 
   return (
@@ -587,7 +749,9 @@ export function PersonForm({
                               size="icon"
                               aria-label="Amt beenden"
                               title="Amt beenden – verschiebt es in die Historie"
-                              onClick={() => setEndTarget({ key: a.key, id: a.id!, endDate: todayIso() })}
+                              onClick={() =>
+                                setEndTarget({ key: a.key, id: a.id!, endDate: todayIso(), endUnknown: false })
+                              }
                               className="text-ink-faint hover:text-fir"
                             >
                               <CalendarOff className="size-4" />
@@ -612,6 +776,61 @@ export function PersonForm({
                       {isDup ? (
                         <p className="mt-1 text-xs text-crit">Diese Kombination ist bereits zugeordnet.</p>
                       ) : null}
+                      {otherHolders(a).map((h) => {
+                        const order = endPrevious.get(h.assignmentId);
+                        if (order) {
+                          // A follow-up is buffered: show a chip with an undo, no more warning.
+                          return (
+                            <div
+                              key={h.assignmentId}
+                              className="mt-1.5 flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2.5 py-1.5 text-xs text-ink-soft"
+                            >
+                              <span className="min-w-0">
+                                Amtszeit von <span className="font-medium text-ink">{order.name}</span> wird beendet
+                                <span className="text-ink-faint">
+                                  {" · "}
+                                  {order.endUnknown ? "Ende unbekannt" : formatDate(order.endDate)}
+                                </span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => cancelEndPrevious(h.assignmentId)}
+                                className="ml-auto inline-flex shrink-0 items-center gap-1 text-ink-faint transition-colors hover:text-ink"
+                              >
+                                <Undo2 className="size-3.5" />
+                                Rückgängig
+                              </button>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div
+                            key={h.assignmentId}
+                            className="mt-1.5 flex items-center gap-2 rounded-md border border-brass/40 bg-brass/5 px-2.5 py-1.5 text-xs text-ink-soft"
+                          >
+                            <TriangleAlert className="size-3.5 shrink-0 text-brass" />
+                            <span className="min-w-0">
+                              <span className="font-medium text-ink">{h.name}</span> hat dieses Amt aktuell inne
+                              {h.startDate ? ` (seit ${formatDate(h.startDate)})` : ""}.
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setHolderDialog({
+                                  assignmentId: h.assignmentId,
+                                  personId: h.personId,
+                                  name: h.name,
+                                  endDate: todayIso(),
+                                  endUnknown: false,
+                                })
+                              }
+                              className="ml-auto shrink-0 whitespace-nowrap font-medium text-fir transition-colors hover:underline"
+                            >
+                              Amtszeit von {h.name} beenden…
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })}
@@ -635,7 +854,14 @@ export function PersonForm({
                   open={historyOpen}
                   onToggle={() => setHistoryOpen((o) => !o)}
                   onAdd={() =>
-                    setHistForm({ id: null, groupId: null, officeId: null, startDate: "", endDate: "" })
+                    setHistForm({
+                      id: null,
+                      groupId: null,
+                      officeId: null,
+                      startDate: "",
+                      endDate: "",
+                      endUnknown: false,
+                    })
                   }
                   onEdit={(h) =>
                     setHistForm({
@@ -643,7 +869,10 @@ export function PersonForm({
                       groupId: h.groupId,
                       officeId: h.officeId,
                       startDate: h.startDate ?? "",
-                      endDate: h.endDate ?? "",
+                      // An "Ende unbekannt" entry has a synthetic end_date (today); don't
+                      // prefill it into the date input — the checkbox represents it instead.
+                      endDate: h.endUnknown ? "" : h.endDate ?? "",
+                      endUnknown: h.endUnknown,
                     })
                   }
                   onDelete={removeHistorical}
@@ -784,20 +1013,22 @@ export function PersonForm({
             </DialogDescription>
           </DialogHeader>
           {endTarget ? (
-            <Field label="Bis" htmlFor="f-end-date">
-              <Input
-                id="f-end-date"
-                type="date"
-                value={endTarget.endDate}
-                onChange={(e) => setEndTarget({ ...endTarget, endDate: e.target.value })}
-              />
-            </Field>
+            <EndDateChoice
+              idPrefix="f-end"
+              endDate={endTarget.endDate}
+              endUnknown={endTarget.endUnknown}
+              onDate={(v) => setEndTarget({ ...endTarget, endDate: v })}
+              onUnknown={(v) => setEndTarget({ ...endTarget, endUnknown: v })}
+            />
           ) : null}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEndTarget(null)} disabled={isHistoryPending}>
               Abbrechen
             </Button>
-            <Button onClick={confirmEnd} disabled={isHistoryPending || !endTarget?.endDate}>
+            <Button
+              onClick={confirmEnd}
+              disabled={isHistoryPending || (!endTarget?.endUnknown && !endTarget?.endDate)}
+            >
               {isHistoryPending ? "Beenden …" : "Amt beenden"}
             </Button>
           </DialogFooter>
@@ -812,8 +1043,8 @@ export function PersonForm({
               {histForm?.id != null ? "Früheres Amt bearbeiten" : "Früheres Amt hinzufügen"}
             </DialogTitle>
             <DialogDescription>
-              Ein bereits beendetes Amt für die rückwirkende Erfassung. Das Bis-Datum ist
-              erforderlich, das Von-Datum optional.
+              Ein bereits beendetes Amt für die rückwirkende Erfassung. Bis-Datum angeben
+              oder „Datum unbekannt“ wählen; das Von-Datum ist optional.
             </DialogDescription>
           </DialogHeader>
           {histForm ? (
@@ -855,11 +1086,19 @@ export function PersonForm({
                   <Input
                     id="f-hist-to"
                     type="date"
-                    value={histForm.endDate}
+                    value={histForm.endUnknown ? "" : histForm.endDate}
+                    disabled={histForm.endUnknown}
                     onChange={(e) => setHistForm({ ...histForm, endDate: e.target.value })}
                   />
                 </Field>
               </div>
+              <label className="flex items-center gap-2 text-[13px] text-ink-soft">
+                <Checkbox
+                  checked={histForm.endUnknown}
+                  onCheckedChange={(v) => setHistForm({ ...histForm, endUnknown: v === true })}
+                />
+                Ende unbekannt
+              </label>
             </div>
           ) : null}
           <DialogFooter>
@@ -868,6 +1107,40 @@ export function PersonForm({
             </Button>
             <Button onClick={submitHistForm} disabled={isHistoryPending}>
               {isHistoryPending ? "Speichern …" : "Speichern"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Holder warning: buffer an "end previous tenure" order — written only on save */}
+      <Dialog open={holderDialog != null} onOpenChange={(o) => !o && setHolderDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Amtszeit von {holderDialog?.name} beenden</DialogTitle>
+            <DialogDescription>
+              Die Amtszeit wird erst beim <strong>Speichern</strong> beendet. Bis dahin lässt sich
+              die Entscheidung rückgängig machen; brichst du das Formular ab, bleibt alles
+              unverändert. „Datum unbekannt“ wählen, wenn das Ende nicht mehr bekannt ist.
+            </DialogDescription>
+          </DialogHeader>
+          {holderDialog ? (
+            <EndDateChoice
+              idPrefix="f-holder"
+              endDate={holderDialog.endDate}
+              endUnknown={holderDialog.endUnknown}
+              onDate={(v) => setHolderDialog({ ...holderDialog, endDate: v })}
+              onUnknown={(v) => setHolderDialog({ ...holderDialog, endUnknown: v })}
+            />
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHolderDialog(null)}>
+              Abbrechen
+            </Button>
+            <Button
+              onClick={confirmHolderDialog}
+              disabled={!holderDialog?.endUnknown && !holderDialog?.endDate}
+            >
+              Übernehmen
             </Button>
           </DialogFooter>
         </DialogContent>
