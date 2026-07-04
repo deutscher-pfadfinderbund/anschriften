@@ -160,24 +160,23 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
   ]);
   if (!p) return null;
 
-  // Which lists this person is auto-included in: match their held offices against
-  // the rules. Deceased persons are excluded from rule-based membership entirely.
-  const heldOfficeIds = new Set(
-    p.assignments.map((a) => a.officeId).filter((o): o is number => o != null),
-  );
-  const ruleByList = new Map<number, Set<string>>();
-  if (!p.deathDate) {
-    for (const r of ruleRows) {
-      if (!heldOfficeIds.has(r.officeId)) continue;
-      const names = ruleByList.get(r.listId) ?? new Set<string>();
-      names.add(r.officeName);
-      ruleByList.set(r.listId, names);
-    }
-  }
-  const ruleMemberships = [...ruleByList.entries()].map(([listId, names]) => ({
-    listId,
-    officeNames: [...names],
-  }));
+  // Which lists this person is auto-included in. Same union/dedupe semantics as
+  // everywhere else (incl. the deceased exclusion) via computeEffectiveMembership,
+  // fed with just this person's assignments.
+  const membership = computeEffectiveMembership({
+    manualMembers: [],
+    officeRules: ruleRows.map((r) => ({ listId: r.listId, officeId: r.officeId })),
+    officeAssignments: p.assignments
+      .filter((a): a is typeof a & { officeId: number } => a.officeId != null)
+      .map((a) => ({ personId: p.id, officeId: a.officeId })),
+    deceasedPersonIds: p.deathDate ? [p.id] : [],
+  });
+  const officeNameById = new Map(ruleRows.map((r) => [r.officeId, r.officeName]));
+  const ruleMemberships = [...membership.entries()].flatMap(([listId, members]) => {
+    const origin = members.get(p.id);
+    if (!origin || origin.viaOfficeIds.length === 0) return [];
+    return [{ listId, officeNames: origin.viaOfficeIds.map((id) => officeNameById.get(id)!) }];
+  });
 
   return {
     id: p.id,

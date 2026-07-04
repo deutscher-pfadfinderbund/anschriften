@@ -141,6 +141,8 @@ function revalidateEffectiveMembership() {
 /** Bind an office to a list: whoever holds it is then an automatic member. Idempotent. */
 export async function addOfficeRule(listId: number, officeId: number): Promise<ActionResult> {
   await requireSession();
+  if (!Number.isInteger(listId) || listId <= 0)
+    return { ok: false, message: "Ungültiger Verteiler." };
   if (!Number.isInteger(officeId) || officeId <= 0)
     return { ok: false, message: "Ungültiges Amt." };
   try {
@@ -161,6 +163,8 @@ export async function addOfficeRule(listId: number, officeId: number): Promise<A
 /** Remove an office rule from a list. The office holders are no longer auto-included. */
 export async function removeOfficeRule(listId: number, officeId: number): Promise<ActionResult> {
   await requireSession();
+  if (!Number.isInteger(listId) || listId <= 0 || !Number.isInteger(officeId) || officeId <= 0)
+    return { ok: false, message: "Ungültige Auswahl." };
   await db
     .delete(distributionListOfficeRules)
     .where(
