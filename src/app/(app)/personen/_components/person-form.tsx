@@ -2,9 +2,15 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, X } from "lucide-react";
+import { CalendarOff, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  addHistoricalAssignment,
+  deleteAssignment,
+  endAssignment,
+  updateHistoricalAssignment,
+} from "@/actions/assignments";
 import { deletePerson, savePerson } from "@/actions/persons";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { PageHeader } from "@/components/page-header";
@@ -30,8 +36,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { GroupRow, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
-import { PHONE_LABELS, SALUTATIONS, formatDateTime, formatName } from "@/lib/format";
+import type { GroupRow, HistoricalAssignment, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
+import { PHONE_LABELS, SALUTATIONS, formatDate, formatDateTime, formatName } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 import type { FieldErrors, PersonInput } from "@/lib/person-schema";
 import { cn } from "@/lib/utils";
@@ -40,7 +46,17 @@ const NONE = "none";
 const OFFICE_NONE = "none";
 
 type PhoneRow = { key: string; label: string; number: string };
-type AssignmentRow = { key: string; groupId: number | null; officeId: number | null };
+// `id` is the persisted assignment id (null for a freshly added row). Only persisted
+// active rows can be "ended" (they need a DB row to move into the history).
+type AssignmentRow = {
+  key: string;
+  id: number | null;
+  groupId: number | null;
+  officeId: number | null;
+  startDate: string;
+};
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
 
 // --- small presentational helpers -----------------------------------------
 
@@ -138,8 +154,15 @@ export function PersonForm({
 
   const [assignments, setAssignments] = useState<AssignmentRow[]>(() => {
     const existing = person?.assignments ?? [];
-    if (existing.length === 0) return [{ key: "a0", groupId: null, officeId: null }];
-    return existing.map((a, i) => ({ key: `a${i}`, groupId: a.groupId, officeId: a.officeId }));
+    if (existing.length === 0)
+      return [{ key: "a0", id: null, groupId: null, officeId: null, startDate: "" }];
+    return existing.map((a, i) => ({
+      key: `a${i}`,
+      id: a.id,
+      groupId: a.groupId,
+      officeId: a.officeId,
+      startDate: a.startDate ?? "",
+    }));
   });
 
   const [listIds, setListIds] = useState<Set<number>>(
@@ -158,6 +181,26 @@ export function PersonForm({
   }, [person?.ruleMemberships]);
 
   const [errors, setErrors] = useState<FieldErrors>({});
+
+  // Office history (issue #22). Ended tenures are read straight from the server props
+  // and refreshed via router.refresh() after each history mutation, so unsaved edits to
+  // the active rows above survive. `startHistory` runs the immediate history actions.
+  const historical = person?.historicalAssignments ?? [];
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [isHistoryPending, startHistory] = useTransition();
+  // Active row being ended via the "Amt beenden…" dialog (only persisted rows).
+  const [endTarget, setEndTarget] = useState<{ key: string; id: number; endDate: string } | null>(
+    null,
+  );
+  // Add/edit dialog for a past tenure. `id` null = new entry.
+  type HistForm = {
+    id: number | null;
+    groupId: number | null;
+    officeId: number | null;
+    startDate: string;
+    endDate: string;
+  };
+  const [histForm, setHistForm] = useState<HistForm | null>(null);
 
   const groupOptions: ComboOption[] = useMemo(
     () =>
@@ -236,7 +279,11 @@ export function PersonForm({
       doNotPrint,
       assignments: assignments
         .filter((a) => a.groupId != null)
-        .map((a) => ({ groupId: a.groupId as number, officeId: a.officeId })),
+        .map((a) => ({
+          groupId: a.groupId as number,
+          officeId: a.officeId,
+          startDate: a.startDate || null,
+        })),
       distributionListIds: [...listIds],
     };
 
@@ -262,6 +309,63 @@ export function PersonForm({
       router.push("/");
       router.refresh();
     });
+  }
+
+  // --- office history: immediate server actions + router.refresh() ---------------
+
+  /** Confirm the "Amt beenden…" dialog: end the active tenure and drop it from the buffer. */
+  function confirmEnd() {
+    if (!endTarget) return;
+    startHistory(async () => {
+      const res = await endAssignment({ assignmentId: endTarget.id, endDate: endTarget.endDate });
+      if (!res.ok) return void toast.error(res.message);
+      // Row is now history: remove it from the active buffer so a later save cannot
+      // recreate it, and refresh so it appears under "Frühere Ämter".
+      setAssignments((rows) => rows.filter((r) => r.key !== endTarget.key));
+      setEndTarget(null);
+      toast.success("Amt beendet und in die Historie verschoben.");
+      router.refresh();
+    });
+  }
+
+  /** Save the add/edit history dialog. */
+  function submitHistForm() {
+    if (!histForm || !person) return;
+    if (histForm.groupId == null) return void toast.error("Bitte eine Gliederung wählen.");
+    if (!histForm.endDate) return void toast.error("Bitte ein Bis-Datum angeben.");
+    startHistory(async () => {
+      const common = {
+        groupId: histForm.groupId as number,
+        officeId: histForm.officeId,
+        startDate: histForm.startDate || null,
+        endDate: histForm.endDate,
+      };
+      const res =
+        histForm.id != null
+          ? await updateHistoricalAssignment({ assignmentId: histForm.id, ...common })
+          : await addHistoricalAssignment({ personId: person.id, ...common });
+      if (!res.ok) return void toast.error(res.message);
+      setHistForm(null);
+      toast.success(histForm.id != null ? "Früheres Amt gespeichert." : "Früheres Amt hinzugefügt.");
+      router.refresh();
+    });
+  }
+
+  /** Delete a history entry ("Eintrag löschen"). */
+  function removeHistorical(id: number) {
+    startHistory(async () => {
+      const res = await deleteAssignment({ assignmentId: id });
+      if (!res.ok) return void toast.error(res.message);
+      toast.success("Eintrag gelöscht.");
+      router.refresh();
+    });
+  }
+
+  /** "Amt · Gliederung · 01.01.2015 – 31.12.2019", or "… · bis 31.12.2019" when start unknown. */
+  function historyRange(h: HistoricalAssignment): string {
+    const from = formatDate(h.startDate);
+    const to = formatDate(h.endDate);
+    return from ? `${from} – ${to}` : `bis ${to}`;
   }
 
   return (
@@ -418,13 +522,13 @@ export function PersonForm({
               </button>
             </Panel>
 
-            <Panel title="Ämter & Gliederung" hint="mehrere möglich · Amt optional">
+            <Panel title="Ämter & Gliederung" hint="aktuell · Amt optional · „seit“ optional">
               <div className="flex flex-col gap-2.5">
                 {assignments.map((a) => {
                   const isDup = duplicateKeys.has(a.key);
                   return (
                     <div key={a.key}>
-                      <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2.5">
+                      <div className="grid grid-cols-[1fr_1fr_128px_auto] items-end gap-2.5">
                         <Field label="Amt">
                           <Combobox
                             aria-label="Amt"
@@ -449,16 +553,40 @@ export function PersonForm({
                             emptyText="Keine Gliederung gefunden."
                           />
                         </Field>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label="Zuordnung entfernen"
-                          onClick={() => setAssignments((rows) => rows.filter((r) => r.key !== a.key))}
-                          className="text-ink-faint hover:text-crit"
-                        >
-                          <X className="size-4" />
-                        </Button>
+                        <Field label="seit">
+                          <Input
+                            type="date"
+                            aria-label="Amt seit"
+                            value={a.startDate}
+                            onChange={(e) => updateAssignment(a.key, { startDate: e.target.value })}
+                          />
+                        </Field>
+                        <div className="flex items-center">
+                          {a.id != null ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Amt beenden"
+                              title="Amt beenden – verschiebt es in die Historie"
+                              onClick={() => setEndTarget({ key: a.key, id: a.id!, endDate: todayIso() })}
+                              className="text-ink-faint hover:text-fir"
+                            >
+                              <CalendarOff className="size-4" />
+                            </Button>
+                          ) : null}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Eintrag löschen"
+                            title="Eintrag löschen (Fehleingabe)"
+                            onClick={() => setAssignments((rows) => rows.filter((r) => r.key !== a.key))}
+                            className="text-ink-faint hover:text-crit"
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </div>
                       </div>
                       {a.officeId != null && a.groupId == null ? (
                         <p className="mt-1 text-xs text-ink-faint">Bitte eine Gliederung wählen.</p>
@@ -472,11 +600,39 @@ export function PersonForm({
               </div>
               <button
                 type="button"
-                onClick={() => setAssignments((rows) => [...rows, { key: nextKey(), groupId: null, officeId: null }])}
+                onClick={() =>
+                  setAssignments((rows) => [
+                    ...rows,
+                    { key: nextKey(), id: null, groupId: null, officeId: null, startDate: "" },
+                  ])
+                }
                 className="mt-2.5 w-full rounded-md border border-dashed border-line-strong py-2 text-[13px] text-ink-soft transition-colors hover:border-fir hover:text-fir"
               >
                 + Amt hinzufügen
               </button>
+
+              {mode === "edit" && person ? (
+                <HistorySection
+                  historical={historical}
+                  open={historyOpen}
+                  onToggle={() => setHistoryOpen((o) => !o)}
+                  onAdd={() =>
+                    setHistForm({ id: null, groupId: null, officeId: null, startDate: "", endDate: "" })
+                  }
+                  onEdit={(h) =>
+                    setHistForm({
+                      id: h.id,
+                      groupId: h.groupId,
+                      officeId: h.officeId,
+                      startDate: h.startDate ?? "",
+                      endDate: h.endDate ?? "",
+                    })
+                  }
+                  onDelete={removeHistorical}
+                  range={historyRange}
+                  busy={isHistoryPending}
+                />
+              ) : null}
             </Panel>
           </div>
 
@@ -598,6 +754,200 @@ export function PersonForm({
           ) : null}
         </div>
       </div>
+
+      {/* End an active tenure → moves it into the history */}
+      <Dialog open={endTarget != null} onOpenChange={(o) => !o && setEndTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Amt beenden</DialogTitle>
+            <DialogDescription>
+              Das Amt wird zum angegebenen Datum beendet und wandert in „Frühere Ämter“. Der
+              Eintrag bleibt erhalten, zählt aber nicht mehr für Verzeichnis, PDF und Verteiler.
+            </DialogDescription>
+          </DialogHeader>
+          {endTarget ? (
+            <Field label="Bis" htmlFor="f-end-date">
+              <Input
+                id="f-end-date"
+                type="date"
+                value={endTarget.endDate}
+                onChange={(e) => setEndTarget({ ...endTarget, endDate: e.target.value })}
+              />
+            </Field>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEndTarget(null)} disabled={isHistoryPending}>
+              Abbrechen
+            </Button>
+            <Button onClick={confirmEnd} disabled={isHistoryPending || !endTarget?.endDate}>
+              {isHistoryPending ? "Beenden …" : "Amt beenden"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add / edit a past tenure */}
+      <Dialog open={histForm != null} onOpenChange={(o) => !o && setHistForm(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {histForm?.id != null ? "Früheres Amt bearbeiten" : "Früheres Amt hinzufügen"}
+            </DialogTitle>
+            <DialogDescription>
+              Ein bereits beendetes Amt für die rückwirkende Erfassung. Das Bis-Datum ist
+              erforderlich, das Von-Datum optional.
+            </DialogDescription>
+          </DialogHeader>
+          {histForm ? (
+            <div className="flex flex-col gap-3">
+              <Field label="Amt">
+                <Combobox
+                  aria-label="Amt"
+                  options={officeOptions}
+                  value={histForm.officeId != null ? String(histForm.officeId) : null}
+                  onChange={(v) =>
+                    setHistForm({ ...histForm, officeId: v === OFFICE_NONE ? null : Number(v) })
+                  }
+                  placeholder="Amt (optional)"
+                  searchPlaceholder="Amt suchen …"
+                  emptyText="Kein Amt gefunden."
+                />
+              </Field>
+              <Field label="Gliederung">
+                <Combobox
+                  aria-label="Gliederung"
+                  options={groupOptions}
+                  value={histForm.groupId != null ? String(histForm.groupId) : null}
+                  onChange={(v) => setHistForm({ ...histForm, groupId: Number(v) })}
+                  placeholder="Gliederung wählen"
+                  searchPlaceholder="Gliederung suchen …"
+                  emptyText="Keine Gliederung gefunden."
+                />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="von" htmlFor="f-hist-from">
+                  <Input
+                    id="f-hist-from"
+                    type="date"
+                    value={histForm.startDate}
+                    onChange={(e) => setHistForm({ ...histForm, startDate: e.target.value })}
+                  />
+                </Field>
+                <Field label="bis" htmlFor="f-hist-to">
+                  <Input
+                    id="f-hist-to"
+                    type="date"
+                    value={histForm.endDate}
+                    onChange={(e) => setHistForm({ ...histForm, endDate: e.target.value })}
+                  />
+                </Field>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistForm(null)} disabled={isHistoryPending}>
+              Abbrechen
+            </Button>
+            <Button onClick={submitHistForm} disabled={isHistoryPending}>
+              {isHistoryPending ? "Speichern …" : "Speichern"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
+  );
+}
+
+// --- "Frühere Ämter" — dezenter, einklappbarer Historienabschnitt ---------------
+
+function HistorySection({
+  historical,
+  open,
+  onToggle,
+  onAdd,
+  onEdit,
+  onDelete,
+  range,
+  busy,
+}: {
+  historical: HistoricalAssignment[];
+  open: boolean;
+  onToggle: () => void;
+  onAdd: () => void;
+  onEdit: (h: HistoricalAssignment) => void;
+  onDelete: (id: number) => void;
+  range: (h: HistoricalAssignment) => string;
+  busy: boolean;
+}) {
+  return (
+    <div className="mt-4 border-t border-line pt-3">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-1.5 text-[13px] font-semibold text-ink-soft transition-colors hover:text-ink"
+      >
+        {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+        Frühere Ämter
+        {historical.length > 0 ? (
+          <span className="font-normal text-ink-faint">({historical.length})</span>
+        ) : null}
+      </button>
+      {open ? (
+        <div className="mt-2.5 flex flex-col gap-1.5">
+          {historical.length === 0 ? (
+            <p className="text-xs text-ink-faint">Keine früheren Ämter erfasst.</p>
+          ) : (
+            historical.map((h) => (
+              <div
+                key={h.id}
+                className="group/hist flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2.5 py-1.5 text-[13px]"
+              >
+                <span className="min-w-0 text-ink-soft">
+                  {h.officeName ? (
+                    <span className="text-ink">{h.officeName}</span>
+                  ) : (
+                    <span className="italic">ohne Amt</span>
+                  )}
+                  <span className="text-ink-faint"> · {h.groupName} · </span>
+                  <span className="tabular-nums">{range(h)}</span>
+                </span>
+                <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/hist:opacity-100">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Bearbeiten"
+                    disabled={busy}
+                    onClick={() => onEdit(h)}
+                  >
+                    <Pencil className="size-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Eintrag löschen"
+                    disabled={busy}
+                    className="text-ink-faint hover:text-crit"
+                    onClick={() => onDelete(h.id)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </span>
+              </div>
+            ))
+          )}
+          <button
+            type="button"
+            onClick={onAdd}
+            disabled={busy}
+            className="mt-1 inline-flex items-center gap-1 self-start text-[13px] text-ink-soft transition-colors hover:text-fir disabled:opacity-50"
+          >
+            <Plus className="size-3.5" />
+            Früheres Amt hinzufügen
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
