@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
-import { assignments, persons } from "@/db/schema";
+import { assignments, distributionListMembers, persons } from "@/db/schema";
 import { actorName, requireSession } from "@/lib/auth-helpers";
 import {
   parsePersonInput,
@@ -36,6 +36,7 @@ function clean(input: PersonInput): PersonInput {
 
   return {
     ...input,
+    distributionListIds: [...new Set(input.distributionListIds)],
     salutation: trimOrNull(input.salutation),
     title: trimOrNull(input.title),
     firstName: trimOrNull(input.firstName),
@@ -108,10 +109,19 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
         })),
       );
     }
+
+    // Distribution-list memberships: delete + recreate, same as assignments.
+    await tx.delete(distributionListMembers).where(eq(distributionListMembers.personId, personId!));
+    if (data.distributionListIds.length > 0) {
+      await tx.insert(distributionListMembers).values(
+        data.distributionListIds.map((listId) => ({ listId, personId: personId! })),
+      );
+    }
     return personId!;
   });
 
   revalidatePath("/");
+  revalidatePath("/verteiler");
   return { ok: true, id };
 }
 

@@ -98,12 +98,14 @@ export function PersonForm({
   groups,
   offices,
   ranks,
+  distributionLists,
 }: {
   mode: "create" | "edit";
   person?: PersonEditData;
   groups: GroupRow[];
   offices: OfficeRow[];
   ranks: RankRow[];
+  distributionLists: { id: number; name: string }[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -138,6 +140,10 @@ export function PersonForm({
     if (existing.length === 0) return [{ key: "a0", groupId: null, officeId: null }];
     return existing.map((a, i) => ({ key: `a${i}`, groupId: a.groupId, officeId: a.officeId }));
   });
+
+  const [listIds, setListIds] = useState<Set<number>>(
+    () => new Set(person?.distributionListIds ?? []),
+  );
 
   const [errors, setErrors] = useState<FieldErrors>({});
 
@@ -219,6 +225,7 @@ export function PersonForm({
       assignments: assignments
         .filter((a) => a.groupId != null)
         .map((a) => ({ groupId: a.groupId as number, officeId: a.officeId })),
+      distributionListIds: [...listIds],
     };
 
     startTransition(async () => {
@@ -463,10 +470,37 @@ export function PersonForm({
 
           {/* Right column */}
           <div className="flex flex-col gap-[18px]">
-            <Panel title="Verteiler">
-              <p className="text-[13px] text-ink-soft">
-                Die Zuordnung zu Verteilern (Bundesthing, Bundesrat …) folgt mit dem Verteiler-Modul.
-              </p>
+            <Panel
+              title="Verteiler"
+              hint={listIds.size > 0 ? `${listIds.size} zugeordnet` : undefined}
+            >
+              {distributionLists.length === 0 ? (
+                <p className="text-[13px] text-ink-soft">
+                  Noch keine Verteiler angelegt. Unter „Verteiler“ lassen sich welche erstellen.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {distributionLists.map((l) => (
+                    <label
+                      key={l.id}
+                      className="flex cursor-pointer items-center gap-2.5 text-[13.5px] text-ink"
+                    >
+                      <Checkbox
+                        checked={listIds.has(l.id)}
+                        onCheckedChange={(v) =>
+                          setListIds((prev) => {
+                            const next = new Set(prev);
+                            if (v === true) next.add(l.id);
+                            else next.delete(l.id);
+                            return next;
+                          })
+                        }
+                      />
+                      {l.name}
+                    </label>
+                  ))}
+                </div>
+              )}
             </Panel>
             <Panel title="Druck & Gedenken">
               <label className="flex items-start justify-between gap-3">
