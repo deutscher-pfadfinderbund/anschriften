@@ -329,7 +329,11 @@ export function buildProfileData(
   };
 
   // Recursive group node builder; returns null for groups with no printed content (pruned).
+  // `visited` guards against parent_id cycles in the data, which would otherwise recurse forever.
+  const visited = new Set<number>();
   const buildNode = (g: DataGroup, depth: number): GroupNode | null => {
+    if (visited.has(g.id)) return null;
+    visited.add(g.id);
     const entries = entriesForGroup(g.id, depth);
     const kids = (childrenByParent.get(g.id) ?? [])
       .filter((c) => includedSections.has(c.section))

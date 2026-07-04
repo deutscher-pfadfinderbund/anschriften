@@ -474,6 +474,15 @@ async function writeModel(model: Model, databaseUrl: string) {
 }
 
 async function main() {
+  // Pick up DATABASE_URL from the local env files (tsx does not load them itself).
+  for (const envFile of [".env.local", ".env"]) {
+    try {
+      process.loadEnvFile(envFile);
+    } catch {
+      // file does not exist — fine
+    }
+  }
+
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
   const mdbPath = args.find((a) => !a.startsWith("--"));
@@ -489,14 +498,27 @@ async function main() {
   );
 
   // Encoding sanity check: the export must carry German umlauts as valid UTF-8.
+  // The Adressen table always contains umlauts (names, "Straße", group names),
+  // so zero hits means the export is mis-encoded and would silently corrupt data.
   const umlauts = (csv.match(/[äöüßÄÖÜ]/g) ?? []).length;
   console.log(`Encoding check: ${umlauts} umlaut characters found in export (expect > 0).`);
   if (umlauts === 0) {
-    console.error("WARNING: no umlauts detected — the export encoding may be wrong.");
+    console.error("ERROR: no umlauts detected — the export encoding is wrong. Aborting.");
+    process.exit(1);
   }
 
   const rows: Row[] = parse(csv, { columns: true, skip_empty_lines: true, relax_column_count: true });
   console.log(`Parsed ${rows.length} rows from Adressen.`);
+
+  // Structural sanity check: a rename in the Access table would otherwise map
+  // every value to undefined and import empty persons without any error.
+  const requiredColumns = ["ID", "Vorname", "Nachname", "Hilfsgruppe", "Amt", "Email"];
+  const presentColumns = new Set(Object.keys(rows[0] ?? {}));
+  const missingColumns = requiredColumns.filter((c) => !presentColumns.has(c));
+  if (missingColumns.length > 0) {
+    console.error(`ERROR: expected columns missing in export: ${missingColumns.join(", ")}. Aborting.`);
+    process.exit(1);
+  }
 
   const model = buildModel(rows);
 

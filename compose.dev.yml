@@ -15,5 +15,18 @@ services:
       timeout: 3s
       retries: 10
 
+  # Local Keycloak for developing/testing the login flow. Imports the dpb-dev
+  # realm (client "anschriften", role "anschriften", test users kanzler/gast).
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./dev/keycloak:/opt/keycloak/data/import
+
 volumes:
   dev-db:
