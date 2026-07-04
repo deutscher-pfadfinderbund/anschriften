@@ -10,8 +10,7 @@ services:
       - traefik
     labels:
       - "traefik.enable=true"
-      # TODO(Cutover): finale Domain eintragen.
-      - "traefik.http.routers.anschriften.rule=Host(`anschriften.example.org`)"
+      - "traefik.http.routers.anschriften.rule=Host(`anschriften.deutscher-pfadfinderbund.de`)"
       - "traefik.http.routers.anschriften.entrypoints=websecure"
       - "traefik.http.routers.anschriften.tls.certresolver=letsencrypt"
       - "traefik.http.services.anschriften.loadbalancer.server.port=3000"
