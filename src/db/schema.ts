@@ -27,6 +27,9 @@ export const sectionEnum = pgEnum("section", [
   "bundesgilde",
 ]);
 
+/** Outcome of a mail send (optional mail module, issue #19). */
+export const mailStatusEnum = pgEnum("mail_status", ["sent", "failed"]);
+
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -157,6 +160,23 @@ export const distributionListOfficeRules = pgTable(
   (t) => [primaryKey({ columns: [t.listId, t.officeId] })],
 );
 
+/**
+ * Send log for the optional mail module (issue #19). One row per sent mailing
+ * (not per BCC chunk). `list_id` is nullable and SET NULL on delete: a mailing
+ * sent to a table selection has no list, and deleting a list must not erase its
+ * history. Plaintext bodies are intentionally not stored.
+ */
+export const mailLog = pgTable("mail_log", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  sentBy: text("sent_by").notNull(),
+  listId: integer("list_id").references(() => distributionLists.id, { onDelete: "set null" }),
+  subject: text("subject").notNull(),
+  recipientCount: integer("recipient_count").notNull(),
+  status: mailStatusEnum("status").notNull(),
+  error: text("error"),
+});
+
 // --- Relations (for query-time joins in later milestones) ---
 
 export const ranksRelations = relations(ranks, ({ many }) => ({
@@ -193,6 +213,14 @@ export const assignmentsRelations = relations(assignments, ({ one }) => ({
 export const distributionListsRelations = relations(distributionLists, ({ many }) => ({
   members: many(distributionListMembers),
   officeRules: many(distributionListOfficeRules),
+  mailLog: many(mailLog),
+}));
+
+export const mailLogRelations = relations(mailLog, ({ one }) => ({
+  list: one(distributionLists, {
+    fields: [mailLog.listId],
+    references: [distributionLists.id],
+  }),
 }));
 
 export const distributionListMembersRelations = relations(distributionListMembers, ({ one }) => ({

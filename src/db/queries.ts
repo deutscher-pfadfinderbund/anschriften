@@ -1,4 +1,4 @@
-import { asc, count, eq, inArray, isNotNull } from "drizzle-orm";
+import { asc, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -7,6 +7,7 @@ import {
   distributionListOfficeRules,
   distributionLists,
   groups,
+  mailLog,
   offices,
   persons,
   ranks,
@@ -547,4 +548,63 @@ export async function personsForCsvByIds(ids: number[]): Promise<CsvPerson[]> {
     .from(persons)
     .where(inArray(persons.id, ids))
     .orderBy(asc(persons.lastName), asc(persons.firstName), asc(persons.scoutName));
+}
+
+// --- mail module (issue #19) ---
+
+/**
+ * Effective-member person ids for a list: manual members ∪ living holders of a
+ * rule office, deduplicated. Same set the Verteiler detail and CSV export show —
+ * reuses `loadEffectiveMembership` so the mail recipients cannot drift from the UI.
+ */
+export async function effectiveMemberIds(listId: number): Promise<number[]> {
+  const membership = await loadEffectiveMembership();
+  const members = membership.get(listId);
+  return members ? [...members.keys()] : [];
+}
+
+/**
+ * Raw (nullable, unfiltered) e-mails for a set of person ids — the input to
+ * `normalizeRecipients`. Deceased/do-not-print are NOT filtered here: for a
+ * hand-picked selection the caller sends to exactly whom they chose.
+ */
+export async function personEmailsByIds(ids: number[]): Promise<(string | null)[]> {
+  if (ids.length === 0) return [];
+  const rows = await db.select({ email: persons.email }).from(persons).where(inArray(persons.id, ids));
+  return rows.map((r) => r.email);
+}
+
+export type MailLogEntry = {
+  id: number;
+  listId: number | null;
+  sentAt: string;
+  sentBy: string;
+  subject: string;
+  recipientCount: number;
+  status: "sent" | "failed";
+  error: string | null;
+};
+
+/**
+ * List-scoped mail log, newest first, for the "Zuletzt versendet" card. Only
+ * entries still tied to a list (table-selection sends have list_id NULL and no
+ * home in the per-list view). The Verteiler manager slices this per list.
+ */
+export async function mailLogForLists(limit = 200): Promise<MailLogEntry[]> {
+  const rows = await db
+    .select({
+      id: mailLog.id,
+      listId: mailLog.listId,
+      sentAt: mailLog.sentAt,
+      sentBy: mailLog.sentBy,
+      subject: mailLog.subject,
+      recipientCount: mailLog.recipientCount,
+      status: mailLog.status,
+      error: mailLog.error,
+    })
+    .from(mailLog)
+    .where(isNotNull(mailLog.listId))
+    .orderBy(desc(mailLog.sentAt))
+    .limit(limit);
+  return rows.map((r) => ({ ...r, sentAt: r.sentAt.toISOString() }));
 }

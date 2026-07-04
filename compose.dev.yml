@@ -28,5 +28,15 @@ services:
     volumes:
       - ./dev/keycloak:/opt/keycloak/data/import
 
+  # Local SMTP sink for the optional mail module (issue #19). Catches every mail
+  # so the send flow is end-to-end testable without a real provider.
+  #   SMTP:   localhost:1025  (set SMTP_HOST=localhost, SMTP_PORT=1025, no auth)
+  #   Web UI: http://localhost:8025  (also serves the JSON API at /api/v1/messages)
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
 volumes:
   dev-db:

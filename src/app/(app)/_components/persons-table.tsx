@@ -12,11 +12,12 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ChevronsUpDown, Copy, Download, Plus, Search, UserPlus, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronsUpDown, Copy, Download, Plus, Search, Send, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { addMembers } from "@/actions/lists";
 import { Combobox } from "@/components/combobox";
+import { ComposeMailDialog } from "@/components/compose-mail-dialog";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -66,11 +67,14 @@ export function PersonsTable({
   groups,
   offices,
   distributionLists,
+  mailEnabled = false,
 }: {
   persons: PersonListRow[];
   groups: GroupRow[];
   offices: OfficeRow[];
   distributionLists: DistributionListSummary[];
+  /** True when the optional mail module is configured (see isMailEnabled). */
+  mailEnabled?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -82,6 +86,7 @@ export function PersonsTable({
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [addToListOpen, setAddToListOpen] = useState(false);
   const [targetListId, setTargetListId] = useState<string | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
 
   const orderedGroups = useMemo(() => orderGroups(groups), [groups]);
 
@@ -282,6 +287,12 @@ export function PersonsTable({
   );
   const selectedCount = selectedPersons.length;
 
+  // Recipient preview for the compose dialog (server recomputes on send).
+  const selectedBcc = useMemo(
+    () => buildBcc(selectedPersons.map((p) => p.email), "; "),
+    [selectedPersons],
+  );
+
   function copySelectedEmails() {
     const { text, count, skipped } = buildBcc(
       selectedPersons.map((p) => p.email),
@@ -393,7 +404,13 @@ export function PersonsTable({
           <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-fir/40 bg-fir-tint px-3 py-2 text-[13px]">
             <span className="font-medium text-ink">{selectedCount} ausgewählt</span>
             <span className="text-ink-faint">—</span>
-            <Button size="sm" onClick={copySelectedEmails}>
+            {mailEnabled ? (
+              <Button size="sm" onClick={() => setComposeOpen(true)}>
+                <Send className="size-3.5" />
+                E-Mail an Auswahl …
+              </Button>
+            ) : null}
+            <Button size="sm" variant={mailEnabled ? "outline" : "default"} onClick={copySelectedEmails}>
               <Copy className="size-3.5" />
               E-Mails kopieren
             </Button>
@@ -532,6 +549,19 @@ export function PersonsTable({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Compose mail to the current selection (optional mail module) */}
+      {mailEnabled ? (
+        <ComposeMailDialog
+          open={composeOpen}
+          onOpenChange={setComposeOpen}
+          target={{ kind: "selection", personIds: selectedPersons.map((p) => p.id) }}
+          contextName={`die Auswahl (${selectedCount} ${selectedCount === 1 ? "Anschrift" : "Anschriften"})`}
+          recipientCount={selectedBcc.count}
+          skippedCount={selectedBcc.skipped}
+          onSent={() => setRowSelection({})}
+        />
+      ) : null}
     </>
   );
 }
