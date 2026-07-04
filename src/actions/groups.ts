@@ -41,6 +41,10 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505";
 }
 
+function isForeignKeyViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23503";
+}
+
 export async function createGroup(raw: GroupInput): Promise<ActionResult> {
   await requireSession();
   const parsed = groupSchema.safeParse(raw);
@@ -88,7 +92,14 @@ export async function deleteGroup(id: number): Promise<ActionResult> {
   if (Number(assignmentCount) > 0)
     return { ok: false, message: "Gliederung ist noch Personen zugeordnet und kann nicht gelöscht werden." };
 
-  await db.delete(groups).where(eq(groups.id, id));
+  try {
+    await db.delete(groups).where(eq(groups.id, id));
+  } catch (err) {
+    // Race: something referenced the group between the checks above and the delete.
+    if (isForeignKeyViolation(err))
+      return { ok: false, message: "Gliederung wird inzwischen verwendet und kann nicht gelöscht werden." };
+    throw err;
+  }
   revalidatePath("/gliederungen");
   revalidatePath("/");
   return { ok: true };
