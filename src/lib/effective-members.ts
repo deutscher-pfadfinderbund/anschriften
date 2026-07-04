@@ -2,9 +2,10 @@
 // No DB, no React — imported by the query layer and unit-tested with fictional data.
 //
 // Effective members of a list = manual members (distribution_list_members)
-// ∪ persons holding an office the list has a rule for. The set is deduplicated
-// (a person included several ways appears once) and deceased persons are excluded
-// from the *rule-based* half only — a deceased person kept manually still counts.
+// ∪ persons *actively* holding an office the list has a rule for. The set is
+// deduplicated (a person included several ways appears once); deceased persons and
+// ended office tenures (end_date set) are excluded from the *rule-based* half only —
+// a deceased person kept manually still counts.
 
 /** A manual membership row: person `personId` was added to list `listId` by hand. */
 export type ManualMembership = { listId: number; personId: number };
@@ -12,8 +13,13 @@ export type ManualMembership = { listId: number; personId: number };
 /** An office rule: list `listId` automatically contains the holder(s) of `officeId`. */
 export type OfficeRuleInput = { listId: number; officeId: number };
 
-/** A person's office assignment (only assignments that actually carry an office). */
-export type OfficeAssignment = { personId: number; officeId: number };
+/**
+ * A person's office assignment (only assignments that actually carry an office).
+ * `endDate` is the Amtszeit end (issue #22): NULL = currently active, set = ended.
+ * Required (not optional) so every DB caller must supply it — a forgotten field
+ * would otherwise silently leak past office holders into the mail recipients.
+ */
+export type OfficeAssignment = { personId: number; officeId: number; endDate: string | null };
 
 /**
  * Why a person is an effective member of a list.
@@ -47,6 +53,7 @@ export function computeEffectiveMembership(
   // office id -> person ids currently holding it (living only, deduped).
   const holdersByOffice = new Map<number, Set<number>>();
   for (const a of input.officeAssignments) {
+    if (a.endDate != null) continue; // ended tenure (history) never confers membership
     if (deceased.has(a.personId)) continue;
     let set = holdersByOffice.get(a.officeId);
     if (!set) holdersByOffice.set(a.officeId, (set = new Set()));

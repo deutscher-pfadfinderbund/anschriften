@@ -68,7 +68,10 @@ export async function listPersons(): Promise<PersonListRow[]> {
     db.query.persons.findMany({
       with: {
         rank: true,
+        // Only active tenures (end_date IS NULL) drive the Ämter badges and the
+        // Amt/Gliederung filters; ended offices live in the editor's history section.
         assignments: {
+          where: (a, { isNull }) => isNull(a.endDate),
           with: { group: true, office: true },
         },
       },
@@ -134,7 +137,15 @@ export type PersonEditData = {
   doNotPrint: boolean;
   updatedAt: string | null;
   updatedBy: string | null;
-  assignments: { groupId: number; officeId: number | null }[];
+  /** Active tenures (end_date IS NULL) — the editable "Ämter & Gliederung" rows. */
+  assignments: {
+    id: number;
+    groupId: number;
+    officeId: number | null;
+    startDate: string | null;
+  }[];
+  /** Ended tenures (end_date set) — rendered read-only-ish in the "Frühere Ämter" section. */
+  historicalAssignments: HistoricalAssignment[];
   distributionListIds: number[];
   /**
    * Lists this person belongs to automatically because they hold a rule office
@@ -143,12 +154,26 @@ export type PersonEditData = {
   ruleMemberships: { listId: number; officeNames: string[] }[];
 };
 
+/** One ended office tenure for the editor's "Frühere Ämter" section. */
+export type HistoricalAssignment = {
+  id: number;
+  groupId: number;
+  groupName: string;
+  officeId: number | null;
+  officeName: string | null;
+  startDate: string | null;
+  endDate: string | null;
+};
+
 /** One person shaped for the editor, or null if not found. */
 export async function getPersonForEdit(id: number): Promise<PersonEditData | null> {
   const [p, ruleRows] = await Promise.all([
     db.query.persons.findFirst({
       where: eq(persons.id, id),
-      with: { assignments: true, distributionListMembers: true },
+      with: {
+        assignments: { with: { group: true, office: true } },
+        distributionListMembers: true,
+      },
     }),
     db
       .select({
@@ -161,15 +186,30 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
   ]);
   if (!p) return null;
 
+  const activeAssignments = p.assignments.filter((a) => a.endDate == null);
+  const historicalAssignments: HistoricalAssignment[] = p.assignments
+    .filter((a) => a.endDate != null)
+    // Newest tenure first; NULL start sorts last within an equal end.
+    .sort((a, b) => (b.endDate ?? "").localeCompare(a.endDate ?? "") || (b.startDate ?? "").localeCompare(a.startDate ?? ""))
+    .map((a) => ({
+      id: a.id,
+      groupId: a.groupId,
+      groupName: a.group.name,
+      officeId: a.officeId,
+      officeName: a.office?.name ?? null,
+      startDate: a.startDate,
+      endDate: a.endDate,
+    }));
+
   // Which lists this person is auto-included in. Same union/dedupe semantics as
-  // everywhere else (incl. the deceased exclusion) via computeEffectiveMembership,
-  // fed with just this person's assignments.
+  // everywhere else (incl. the deceased and ended-tenure exclusions) via
+  // computeEffectiveMembership, fed with just this person's assignments.
   const membership = computeEffectiveMembership({
     manualMembers: [],
     officeRules: ruleRows.map((r) => ({ listId: r.listId, officeId: r.officeId })),
     officeAssignments: p.assignments
       .filter((a): a is typeof a & { officeId: number } => a.officeId != null)
-      .map((a) => ({ personId: p.id, officeId: a.officeId })),
+      .map((a) => ({ personId: p.id, officeId: a.officeId, endDate: a.endDate })),
     deceasedPersonIds: p.deathDate ? [p.id] : [],
   });
   const officeNameById = new Map(ruleRows.map((r) => [r.officeId, r.officeName]));
@@ -199,7 +239,13 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
     doNotPrint: p.doNotPrint,
     updatedAt: p.updatedAt ? p.updatedAt.toISOString() : null,
     updatedBy: p.updatedBy,
-    assignments: p.assignments.map((a) => ({ groupId: a.groupId, officeId: a.officeId })),
+    assignments: activeAssignments.map((a) => ({
+      id: a.id,
+      groupId: a.groupId,
+      officeId: a.officeId,
+      startDate: a.startDate,
+    })),
+    historicalAssignments,
     distributionListIds: p.distributionListMembers.map((m) => m.listId),
     ruleMemberships,
   };
@@ -333,7 +379,11 @@ async function loadEffectiveMembership(): Promise<Map<number, Map<number, Member
       })
       .from(distributionListOfficeRules),
     db
-      .select({ personId: assignments.personId, officeId: assignments.officeId })
+      .select({
+        personId: assignments.personId,
+        officeId: assignments.officeId,
+        endDate: assignments.endDate,
+      })
       .from(assignments)
       .where(isNotNull(assignments.officeId)),
     db.select({ id: persons.id }).from(persons).where(isNotNull(persons.deathDate)),
@@ -342,7 +392,13 @@ async function loadEffectiveMembership(): Promise<Map<number, Map<number, Member
   return computeEffectiveMembership({
     manualMembers,
     officeRules: ruleRows,
-    officeAssignments: assignmentRows.map((a) => ({ personId: a.personId, officeId: a.officeId! })),
+    // Pass end_date through; computeEffectiveMembership drops ended tenures so only
+    // the current office holder is a rule-based member (issue #22).
+    officeAssignments: assignmentRows.map((a) => ({
+      personId: a.personId,
+      officeId: a.officeId!,
+      endDate: a.endDate,
+    })),
     deceasedPersonIds: deceasedRows.map((r) => r.id),
   });
 }
@@ -379,12 +435,13 @@ export async function listDistributionLists(): Promise<DistributionListWithMembe
   const personById = new Map(personRows.map((p) => [p.id, p]));
   const officeNameById = new Map(ruleRows.map((r) => [r.officeId, r.officeName]));
 
-  const officeAssignments: { personId: number; officeId: number }[] = [];
+  const officeAssignments: { personId: number; officeId: number; endDate: string | null }[] = [];
   const deceasedPersonIds: number[] = [];
   for (const p of personRows) {
     if (p.deathDate) deceasedPersonIds.push(p.id);
     for (const a of p.assignments) {
-      if (a.officeId != null) officeAssignments.push({ personId: p.id, officeId: a.officeId });
+      if (a.officeId != null)
+        officeAssignments.push({ personId: p.id, officeId: a.officeId, endDate: a.endDate });
     }
   }
 
@@ -410,8 +467,10 @@ export async function listDistributionLists(): Promise<DistributionListWithMembe
     const memberMap = membership.get(dl.id) ?? new Map<number, MemberOrigin>();
     const members: ListMemberRow[] = [...memberMap.entries()].map(([personId, origin]) => {
       const p = personById.get(personId)!;
+      // The member's senior office = lowest-ranked *active* office (ended tenures
+      // must not surface as someone's current main office).
       const withOffice = p.assignments
-        .filter((a) => a.office)
+        .filter((a) => a.office && a.endDate == null)
         .sort((a, b) => (a.office!.rank ?? 999) - (b.office!.rank ?? 999));
       const viaOffices = origin.viaOfficeIds
         .map((id) => ({ id, name: officeNameById.get(id) ?? "" }))
