@@ -42,6 +42,17 @@ describe("normalizeRecipients", () => {
   it("handles an all-empty input", () => {
     expect(normalizeRecipients([null, "", "  "])).toEqual({ recipients: [], skipped: 3 });
   });
+
+  it("skips malformed legacy values instead of passing them to SMTP", () => {
+    const res = normalizeRecipients([
+      "a@x.de, b@y.de", // legacy double-address in one field
+      "kein-at-zeichen",
+      "leerzeichen @x.de",
+      "ok@example.org",
+    ]);
+    expect(res.recipients).toEqual(["ok@example.org"]);
+    expect(res.skipped).toBe(3);
+  });
 });
 
 describe("isMailEnabled / bccChunkSize (read env at call time)", () => {

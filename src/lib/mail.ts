@@ -41,9 +41,8 @@ export type NormalizedRecipients = {
 
 /**
  * Turn raw person e-mails (some null/blank, possibly duplicated) into the actual
- * BCC recipient set: trim, drop blanks (counted as `skipped`), dedupe
- * case-insensitively, preserve order. Mirrors `buildBcc` so a sent mail hits
- * exactly the addresses the "Alle E-Mails kopieren" preview shows.
+ * BCC recipient set: trim, drop blanks and malformed addresses (counted as
+ * `skipped`), dedupe case-insensitively, preserve order.
  */
 export function normalizeRecipients(emails: (string | null | undefined)[]): NormalizedRecipients {
   const seen = new Set<string>();
@@ -51,7 +50,10 @@ export function normalizeRecipients(emails: (string | null | undefined)[]): Norm
   let skipped = 0;
   for (const raw of emails) {
     const e = (raw ?? "").trim();
-    if (!e) {
+    // The legacy email column is free text — entries like "a@x.de, b@y.de" or
+    // stray notes exist. Anything that is not a single plausible address is
+    // skipped (counted like "no e-mail") instead of being handed to SMTP.
+    if (!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) {
       skipped += 1;
       continue;
     }
@@ -103,6 +105,10 @@ export async function sendListMail(input: SendListMailInput): Promise<SendListMa
     // Auth-less relays (Mailpit in dev, some internal servers) must get no auth
     // block at all — an empty user/pass pair makes some transports misbehave.
     ...(user ? { auth: { user, pass } } : {}),
+    // Without timeouts a dead SMTP server would hang the server action forever.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
   });
 
   const chunks = chunk(input.recipients, bccChunkSize());

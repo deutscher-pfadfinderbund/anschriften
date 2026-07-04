@@ -16,7 +16,10 @@ const composeSchema = z.object({
     .string()
     .trim()
     .min(1, "Betreff ist erforderlich.")
-    .max(200, "Betreff ist zu lang (max. 200 Zeichen)."),
+    .max(200, "Betreff ist zu lang (max. 200 Zeichen).")
+    // A newline in the subject would end the SMTP header and let the rest of the
+    // value inject arbitrary headers (Bcc:, …) — classic header injection.
+    .refine((s) => !/[\r\n]/.test(s), "Der Betreff darf keine Zeilenumbrüche enthalten."),
   body: z
     .string()
     .trim()
