@@ -38,7 +38,19 @@ docker compose up -d --build
   `certresolver` (in `compose.yml`: `letsencrypt`) für automatisches TLS.
 - Ein **externes Docker-Netz**, an dem Traefik hängt (in `compose.yml`: `traefik`).
   Anlegen bzw. Namen an das Server-Setup anpassen: `docker network create traefik`.
-- Die Router-`Host(...)`-Rule in `compose.yml` auf die finale Domain setzen.
+- Die Domain ist `anschriften.deutscher-pfadfinderbund.de` (Router-Rule in
+  `compose.yml`); der DNS-Eintrag muss auf den Server zeigen.
+
+### Prod-Keycloak-Client (Vorlage: `dev/keycloak/dpb-dev-realm.json`)
+
+- Client `anschriften` (confidential) im Prod-Realm anlegen.
+- Redirect-URI: `https://anschriften.deutscher-pfadfinderbund.de/api/auth/oauth2/callback/keycloak`
+- Post-Logout-Redirect-URI: `https://anschriften.deutscher-pfadfinderbund.de/login`
+- Web Origin: `https://anschriften.deutscher-pfadfinderbund.de`
+- Client-Rolle `anschriften` anlegen und den berechtigten Personen zuweisen.
+- Protocol-Mapper „client roles" mit **Add to ID token: on** (ohne den schlägt
+  jeder Login fehl — das Rollen-Gate liest `resource_access.<client>.roles`
+  aus dem ID-Token).
 
 Ohne Traefik lokal testen: in `compose.yml` die `networks`/`labels` auskommentieren
 und `ports: ["3000:3000"]` freigeben.
