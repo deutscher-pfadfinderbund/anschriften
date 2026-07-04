@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -64,7 +64,15 @@ export async function endAssignment(raw: z.infer<typeof endSchema>): Promise<Act
   const tenureError = validateTenure(row.startDate, endDate);
   if (tenureError) return { ok: false, message: tenureError };
 
-  await db.update(assignments).set({ endDate, updatedAt: new Date() }).where(eq(assignments.id, assignmentId));
+  // Guard the update against a concurrent savePerson (delete+recreate of active
+  // rows): if the row vanished in between, report it instead of silently ending nothing.
+  const updated = await db
+    .update(assignments)
+    .set({ endDate, updatedAt: new Date() })
+    .where(and(eq(assignments.id, assignmentId), isNull(assignments.endDate)))
+    .returning({ id: assignments.id });
+  if (updated.length === 0)
+    return { ok: false, message: "Zuordnung wurde zwischenzeitlich geändert. Bitte Seite neu laden." };
   await touchPerson(row.personId, actorName(session));
   refresh();
   return { ok: true };
@@ -144,18 +152,24 @@ export async function updateHistoricalAssignment(
 
 const deleteSchema = z.object({ assignmentId: z.number().int().positive() });
 
-/** Hard-delete a single assignment row (a wrong entry or an unwanted history record). */
+/**
+ * Hard-delete a HISTORY row ("Eintrag löschen" in Frühere Ämter). Active rows are
+ * managed through the editor buffer + savePerson; refusing them here keeps a crafted
+ * request from deleting a current office through the history action.
+ */
 export async function deleteAssignment(raw: z.infer<typeof deleteSchema>): Promise<ActionResult> {
   const session = await requireSession();
   const parsed = deleteSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
 
   const [row] = await db
-    .select({ personId: assignments.personId })
+    .select({ personId: assignments.personId, endDate: assignments.endDate })
     .from(assignments)
     .where(eq(assignments.id, parsed.data.assignmentId))
     .limit(1);
   if (!row) return { ok: false, message: "Zuordnung nicht gefunden." };
+  if (row.endDate == null)
+    return { ok: false, message: "Aktive Ämter werden über das Formular entfernt oder beendet." };
 
   await db.delete(assignments).where(eq(assignments.id, parsed.data.assignmentId));
   await touchPerson(row.personId, actorName(session));
