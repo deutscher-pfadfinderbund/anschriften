@@ -4,12 +4,14 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Briefcase,
+  Clock,
   Copy,
   Download,
   Lock,
   Mail,
   Pencil,
   Plus,
+  Send,
   Trash2,
   UserPlus,
   Users,
@@ -27,6 +29,7 @@ import {
   updateList,
 } from "@/actions/lists";
 import { Combobox } from "@/components/combobox";
+import { ComposeMailDialog } from "@/components/compose-mail-dialog";
 import { MultiSelectList } from "@/components/multi-select-list";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -45,11 +48,12 @@ import { Textarea } from "@/components/ui/textarea";
 import type {
   DistributionListWithMembers,
   ListMemberRow,
+  MailLogEntry,
   OfficeRow,
   PersonOption,
 } from "@/db/queries";
 import { buildBcc, type BccSeparator } from "@/lib/export";
-import { formatName } from "@/lib/format";
+import { formatDateTime, formatName } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type ListFormState = { id: number | null; name: string; description: string };
@@ -74,11 +78,17 @@ export function VerteilerManager({
   personOptions,
   offices,
   initialListId,
+  mailEnabled = false,
+  mailLog = [],
 }: {
   lists: DistributionListWithMembers[];
   personOptions: PersonOption[];
   offices: OfficeRow[];
   initialListId?: number | null;
+  /** True when the optional mail module is configured (see isMailEnabled). */
+  mailEnabled?: boolean;
+  /** List-scoped send history, newest first (empty when the module is off). */
+  mailLog?: MailLogEntry[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -92,6 +102,7 @@ export function VerteilerManager({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addSelection, setAddSelection] = useState<Set<number>>(new Set());
+  const [composeOpen, setComposeOpen] = useState(false);
 
   // Reconcile the selection with the (possibly refreshed) server data: keep the
   // chosen list if it still exists, otherwise fall back to the first one.
@@ -106,6 +117,12 @@ export function VerteilerManager({
   const bcc = useMemo(
     () => buildBcc(members.map((m) => m.email), separator),
     [members, separator],
+  );
+
+  // Send history for the active list (newest first, capped for the card).
+  const recentMail = useMemo(
+    () => (activeList ? mailLog.filter((e) => e.listId === activeList.id).slice(0, 5) : []),
+    [mailLog, activeList],
   );
 
   const addOptions = useMemo(() => {
@@ -291,7 +308,13 @@ export function VerteilerManager({
                     ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button onClick={copyBcc}>
+                    {mailEnabled ? (
+                      <Button onClick={() => setComposeOpen(true)}>
+                        <Send className="size-4" />
+                        E-Mail schreiben …
+                      </Button>
+                    ) : null}
+                    <Button variant={mailEnabled ? "outline" : "default"} onClick={copyBcc}>
                       <Copy className="size-4" />
                       Alle E-Mails kopieren
                     </Button>
@@ -384,6 +407,45 @@ export function VerteilerManager({
                   </div>
                 </div>
               </section>
+
+              {/* Send history (optional mail module) */}
+              {mailEnabled && recentMail.length > 0 ? (
+                <section className="rounded-lg border border-line bg-surface shadow-sm">
+                  <div className="flex items-center gap-2 border-b border-line px-[18px] py-3">
+                    <Clock className="size-3.5 text-ink-faint" />
+                    <span className="font-display text-[15.5px] font-semibold text-ink">
+                      Zuletzt versendet
+                    </span>
+                  </div>
+                  <ul>
+                    {recentMail.map((e) => (
+                      <li
+                        key={e.id}
+                        className="flex items-start justify-between gap-3 border-b border-line px-[18px] py-2.5 text-[13.5px] last:border-b-0"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-ink">{e.subject}</div>
+                          <div className="mt-0.5 text-[12px] text-ink-faint">
+                            {formatDateTime(e.sentAt)} · {e.sentBy} · {e.recipientCount} Empfänger
+                          </div>
+                        </div>
+                        {e.status === "sent" ? (
+                          <span className="shrink-0 rounded-[4px] border border-fir/40 bg-fir-tint px-1.5 py-px text-[10.5px] font-medium text-fir">
+                            versendet
+                          </span>
+                        ) : (
+                          <span
+                            className="shrink-0 rounded-[4px] bg-crit-tint px-1.5 py-px text-[10.5px] font-semibold text-crit"
+                            title={e.error ?? undefined}
+                          >
+                            fehlgeschlagen
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
 
               {/* Office rules: automatic membership by office */}
               <section className="rounded-lg border border-line bg-surface shadow-sm">
@@ -671,6 +733,19 @@ export function VerteilerManager({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Compose mail (optional mail module) */}
+      {mailEnabled && activeList ? (
+        <ComposeMailDialog
+          open={composeOpen}
+          onOpenChange={setComposeOpen}
+          target={{ kind: "list", listId: activeList.id }}
+          contextName={`den Verteiler „${activeList.name}“`}
+          recipientCount={bcc.count}
+          skippedCount={bcc.skipped}
+          onSent={() => router.refresh()}
+        />
+      ) : null}
     </>
   );
 }

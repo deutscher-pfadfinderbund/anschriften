@@ -4,6 +4,7 @@ import {
   listOffices,
   listPersons,
 } from "@/db/queries";
+import { isMailEnabled } from "@/lib/mail";
 
 import { PersonsTable } from "./_components/persons-table";
 
@@ -23,6 +24,7 @@ export default async function DirectoryPage() {
       groups={groups}
       offices={offices}
       distributionLists={distributionLists}
+      mailEnabled={isMailEnabled()}
     />
   );
 }
