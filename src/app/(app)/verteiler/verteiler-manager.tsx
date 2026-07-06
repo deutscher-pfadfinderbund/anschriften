@@ -18,6 +18,7 @@ import {
   UserPlus,
   Users,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -79,6 +80,89 @@ function memberLabel(m: {
 
 function hasEmail(m: ListMemberRow): boolean {
   return !!m.email && m.email.trim().length > 0;
+}
+
+type RuleRow = { id: number; name: string };
+
+/**
+ * One "Automatisch enthalten (nach …)" card. Identical chrome for Amt, Stand and
+ * Gliederung — only the icon, texts and the id/name rows differ.
+ */
+function RuleSection({
+  icon: Icon,
+  title,
+  description,
+  rows,
+  options,
+  onAdd,
+  onRemove,
+  emptyRules,
+  addAriaLabel,
+  addPlaceholder,
+  searchPlaceholder,
+  comboEmptyText,
+  disabled,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  rows: RuleRow[];
+  options: { value: string; label: string }[];
+  onAdd: (id: number) => void;
+  onRemove: (id: number) => void;
+  emptyRules: string;
+  addAriaLabel: string;
+  addPlaceholder: string;
+  searchPlaceholder: string;
+  comboEmptyText: string;
+  disabled: boolean;
+}) {
+  return (
+    <section className="rounded-lg border border-line bg-surface shadow-sm">
+      <div className="border-b border-line px-[18px] py-3">
+        <span className="font-display text-[15.5px] font-semibold text-ink">{title}</span>
+        <p className="mt-0.5 text-[12.5px] text-ink-faint">{description}</p>
+      </div>
+      <div className="p-[18px]">
+        {rows.length === 0 ? (
+          <p className="mb-3 text-[13px] text-ink-soft">{emptyRules}</p>
+        ) : (
+          <ul className="mb-3 flex flex-col gap-1.5">
+            {rows.map((r) => (
+              <li
+                key={r.id}
+                className="group/rule flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[13.5px]"
+              >
+                <Icon className="size-3.5 shrink-0 text-ink-faint" />
+                <span className="min-w-0 flex-1 truncate text-ink">{r.name}</span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Regel „${r.name}“ entfernen`}
+                  className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100"
+                  disabled={disabled}
+                  onClick={() => onRemove(r.id)}
+                >
+                  <X className="size-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="max-w-sm">
+          <Combobox
+            aria-label={addAriaLabel}
+            options={options}
+            value={null}
+            onChange={(v) => onAdd(Number(v))}
+            placeholder={addPlaceholder}
+            searchPlaceholder={searchPlaceholder}
+            emptyText={comboEmptyText}
+          />
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export function VerteilerManager({
@@ -513,158 +597,54 @@ export function VerteilerManager({
                 </section>
               ) : null}
 
-              {/* Office rules: automatic membership by office */}
-              <section className="rounded-lg border border-line bg-surface shadow-sm">
-                <div className="border-b border-line px-[18px] py-3">
-                  <span className="font-display text-[15.5px] font-semibold text-ink">
-                    Automatisch enthalten (nach Amt)
-                  </span>
-                  <p className="mt-0.5 text-[12.5px] text-ink-faint">
-                    Wer eines dieser Ämter innehat, ist automatisch Mitglied — bei einem Amtswechsel
-                    wandert die Mitgliedschaft mit.
-                  </p>
-                </div>
-                <div className="p-[18px]">
-                  {activeList.officeRules.length === 0 ? (
-                    <p className="mb-3 text-[13px] text-ink-soft">Noch keine Amts-Regel.</p>
-                  ) : (
-                    <ul className="mb-3 flex flex-col gap-1.5">
-                      {activeList.officeRules.map((r) => (
-                        <li
-                          key={r.officeId}
-                          className="group/rule flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[13.5px]"
-                        >
-                          <Briefcase className="size-3.5 shrink-0 text-ink-faint" />
-                          <span className="min-w-0 flex-1 truncate text-ink">{r.officeName}</span>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Regel „${r.officeName}“ entfernen`}
-                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100"
-                            disabled={isPending}
-                            onClick={() => handleRemoveRule(r.officeId)}
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="max-w-sm">
-                    <Combobox
-                      aria-label="Amt als Regel hinzufügen"
-                      options={ruleOfficeOptions}
-                      value={null}
-                      onChange={(v) => handleAddRule(Number(v))}
-                      placeholder="+ Amt hinzufügen"
-                      searchPlaceholder="Amt suchen …"
-                      emptyText="Kein Amt gefunden."
-                    />
-                  </div>
-                </div>
-              </section>
+              {/* Automatic membership rules — same shape for Amt, Stand and Gliederung. */}
+              <RuleSection
+                icon={Briefcase}
+                title="Automatisch enthalten (nach Amt)"
+                description="Wer eines dieser Ämter innehat, ist automatisch Mitglied — bei einem Amtswechsel wandert die Mitgliedschaft mit."
+                rows={activeList.officeRules.map((r) => ({ id: r.officeId, name: r.officeName }))}
+                options={ruleOfficeOptions}
+                onAdd={handleAddRule}
+                onRemove={handleRemoveRule}
+                emptyRules="Noch keine Amts-Regel."
+                addAriaLabel="Amt als Regel hinzufügen"
+                addPlaceholder="+ Amt hinzufügen"
+                searchPlaceholder="Amt suchen …"
+                comboEmptyText="Kein Amt gefunden."
+                disabled={isPending}
+              />
 
-              {/* Rank rules: automatic membership by Stand */}
-              <section className="rounded-lg border border-line bg-surface shadow-sm">
-                <div className="border-b border-line px-[18px] py-3">
-                  <span className="font-display text-[15.5px] font-semibold text-ink">
-                    Automatisch enthalten (nach Stand)
-                  </span>
-                  <p className="mt-0.5 text-[12.5px] text-ink-faint">
-                    Wer einen dieser Stände trägt, ist automatisch Mitglied — z. B. alle
-                    Ordensritter und St.-Georgs-Ritter.
-                  </p>
-                </div>
-                <div className="p-[18px]">
-                  {activeList.rankRules.length === 0 ? (
-                    <p className="mb-3 text-[13px] text-ink-soft">Noch keine Stand-Regel.</p>
-                  ) : (
-                    <ul className="mb-3 flex flex-col gap-1.5">
-                      {activeList.rankRules.map((r) => (
-                        <li
-                          key={r.rankId}
-                          className="group/rule flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[13.5px]"
-                        >
-                          <Award className="size-3.5 shrink-0 text-ink-faint" />
-                          <span className="min-w-0 flex-1 truncate text-ink">{r.rankName}</span>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Regel „${r.rankName}“ entfernen`}
-                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100"
-                            disabled={isPending}
-                            onClick={() => handleRemoveRankRule(r.rankId)}
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="max-w-sm">
-                    <Combobox
-                      aria-label="Stand als Regel hinzufügen"
-                      options={ruleRankOptions}
-                      value={null}
-                      onChange={(v) => handleAddRankRule(Number(v))}
-                      placeholder="+ Stand hinzufügen"
-                      searchPlaceholder="Stand suchen …"
-                      emptyText="Kein Stand gefunden."
-                    />
-                  </div>
-                </div>
-              </section>
+              <RuleSection
+                icon={Award}
+                title="Automatisch enthalten (nach Stand)"
+                description="Wer einen dieser Stände trägt, ist automatisch Mitglied — z. B. alle Ordensritter und St.-Georgs-Ritter."
+                rows={activeList.rankRules.map((r) => ({ id: r.rankId, name: r.rankName }))}
+                options={ruleRankOptions}
+                onAdd={handleAddRankRule}
+                onRemove={handleRemoveRankRule}
+                emptyRules="Noch keine Stand-Regel."
+                addAriaLabel="Stand als Regel hinzufügen"
+                addPlaceholder="+ Stand hinzufügen"
+                searchPlaceholder="Stand suchen …"
+                comboEmptyText="Kein Stand gefunden."
+                disabled={isPending}
+              />
 
-              {/* Group rules: automatic membership by Gliederung */}
-              <section className="rounded-lg border border-line bg-surface shadow-sm">
-                <div className="border-b border-line px-[18px] py-3">
-                  <span className="font-display text-[15.5px] font-semibold text-ink">
-                    Automatisch enthalten (nach Gliederung)
-                  </span>
-                  <p className="mt-0.5 text-[12.5px] text-ink-faint">
-                    Wer aktiv einer dieser Gliederungen zugeordnet ist, ist automatisch Mitglied —
-                    z. B. die ganze Bundesführung.
-                  </p>
-                </div>
-                <div className="p-[18px]">
-                  {activeList.groupRules.length === 0 ? (
-                    <p className="mb-3 text-[13px] text-ink-soft">Noch keine Gliederungs-Regel.</p>
-                  ) : (
-                    <ul className="mb-3 flex flex-col gap-1.5">
-                      {activeList.groupRules.map((r) => (
-                        <li
-                          key={r.groupId}
-                          className="group/rule flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[13.5px]"
-                        >
-                          <Layers className="size-3.5 shrink-0 text-ink-faint" />
-                          <span className="min-w-0 flex-1 truncate text-ink">{r.groupName}</span>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Regel „${r.groupName}“ entfernen`}
-                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100"
-                            disabled={isPending}
-                            onClick={() => handleRemoveGroupRule(r.groupId)}
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="max-w-sm">
-                    <Combobox
-                      aria-label="Gliederung als Regel hinzufügen"
-                      options={ruleGroupOptions}
-                      value={null}
-                      onChange={(v) => handleAddGroupRule(Number(v))}
-                      placeholder="+ Gliederung hinzufügen"
-                      searchPlaceholder="Gliederung suchen …"
-                      emptyText="Keine Gliederung gefunden."
-                    />
-                  </div>
-                </div>
-              </section>
+              <RuleSection
+                icon={Layers}
+                title="Automatisch enthalten (nach Gliederung)"
+                description="Wer aktiv einer dieser Gliederungen zugeordnet ist, ist automatisch Mitglied — z. B. die ganze Bundesführung."
+                rows={activeList.groupRules.map((r) => ({ id: r.groupId, name: r.groupName }))}
+                options={ruleGroupOptions}
+                onAdd={handleAddGroupRule}
+                onRemove={handleRemoveGroupRule}
+                emptyRules="Noch keine Gliederungs-Regel."
+                addAriaLabel="Gliederung als Regel hinzufügen"
+                addPlaceholder="+ Gliederung hinzufügen"
+                searchPlaceholder="Gliederung suchen …"
+                comboEmptyText="Keine Gliederung gefunden."
+                disabled={isPending}
+              />
 
               {/* Members */}
               <section className="rounded-lg border border-line bg-surface shadow-sm">

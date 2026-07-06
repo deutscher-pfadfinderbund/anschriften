@@ -418,6 +418,16 @@ function memberSortKey(m: ListMemberRow): string {
   return (m.lastName || m.scoutName || "").toLowerCase();
 }
 
+/** Resolve rule-target ids to `{ id, name }` refs, sorted by name (German collation). */
+function ruleRefs(
+  ids: number[],
+  nameById: Map<number, string>,
+): { id: number; name: string }[] {
+  return ids
+    .map((id) => ({ id, name: nameById.get(id) ?? "" }))
+    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+}
+
 /**
  * Load the raw membership inputs and compute effective membership for every list.
  * Reused by the table filter and the CSV export; the pure union/dedupe logic lives
@@ -601,15 +611,9 @@ export async function listDistributionLists(): Promise<DistributionListWithMembe
       const withOffice = p.assignments
         .filter((a) => a.office && a.endDate == null)
         .sort((a, b) => (a.office!.rank ?? 999) - (b.office!.rank ?? 999));
-      const viaOffices = origin.viaOfficeIds
-        .map((id) => ({ id, name: officeNameById.get(id) ?? "" }))
-        .sort((a, b) => a.name.localeCompare(b.name, "de"));
-      const viaRanks = origin.viaRankIds
-        .map((id) => ({ id, name: rankNameById.get(id) ?? "" }))
-        .sort((a, b) => a.name.localeCompare(b.name, "de"));
-      const viaGroups = origin.viaGroupIds
-        .map((id) => ({ id, name: groupNameById.get(id) ?? "" }))
-        .sort((a, b) => a.name.localeCompare(b.name, "de"));
+      const viaOffices = ruleRefs(origin.viaOfficeIds, officeNameById);
+      const viaRanks = ruleRefs(origin.viaRankIds, rankNameById);
+      const viaGroups = ruleRefs(origin.viaGroupIds, groupNameById);
       return {
         personId,
         firstName: p.firstName,
@@ -751,9 +755,10 @@ export async function personsForCsvByIds(ids: number[]): Promise<CsvPerson[]> {
 // --- mail module (issue #19) ---
 
 /**
- * Effective-member person ids for a list: manual members ∪ living holders of a
- * rule office, deduplicated. Same set the Verteiler detail and CSV export show —
- * reuses `loadEffectiveMembership` so the mail recipients cannot drift from the UI.
+ * Effective-member person ids for a list: manual members ∪ living persons matched by
+ * any rule (held office, Stand or Gliederung), deduplicated. Same set the Verteiler
+ * detail and CSV export show — reuses `loadEffectiveMembership` so the mail recipients
+ * cannot drift from the UI.
  */
 export async function effectiveMemberIds(listId: number): Promise<number[]> {
   const membership = await loadEffectiveMembership();
