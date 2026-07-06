@@ -1,9 +1,9 @@
-# Anschriftenverzeichnis (anschriften2)
+# Anschriftenverzeichnis (anschriften)
 
 Bundesanschriftenverzeichnis des Deutschen Pfadfinderbundes als Webanwendung. Ersetzt die bisherige MS-Access-Datenbank.
 
 - **Stack:** Next.js 16, Postgres 17 + Drizzle, better-auth (Keycloak-SSO), Typst (PDF-Export)
-- **Roadmap & Architektur:** Issue [#7](https://github.com/deutscher-pfadfinderbund/anschriften2/issues/7)
+- **Roadmap & Architektur:** Issue [#7](https://github.com/deutscher-pfadfinderbund/anschriften/issues/7)
 - **Konventionen für Entwicklung & Agenten:** [AGENTS.md](AGENTS.md)
 
 ## Entwicklung

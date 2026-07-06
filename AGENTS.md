@@ -1,12 +1,14 @@
 <!-- BEGIN:nextjs-agent-rules -->
+
 # This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+
 <!-- END:nextjs-agent-rules -->
 
-# Bundesanschriftenverzeichnis (anschriften2)
+# Bundesanschriftenverzeichnis (anschriften)
 
-Webanwendung für das Anschriftenverzeichnis des Deutschen Pfadfinderbundes (DPB). Ersetzt eine MS-Access-Datenbank. Nutzerkreis: kleiner Kreis Kanzler*innen — **muss ohne Schulung bedienbar sein. Simplicity matters: im Zweifel die einfachere Lösung.**
+Webanwendung für das Anschriftenverzeichnis des Deutschen Pfadfinderbundes (DPB). Ersetzt eine MS-Access-Datenbank. Nutzerkreis: kleiner Kreis Kanzler\*innen — **muss ohne Schulung bedienbar sein. Simplicity matters: im Zweifel die einfachere Lösung.**
 
 Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenstein ist ein Issue (#1–#6) mit Checkliste und Abnahmekriterien.
 

@@ -3,7 +3,7 @@
 # DATABASE_URL in .env muss auf `db:5432` zeigen. Backups siehe README.
 services:
   app:
-    image: ghcr.io/deutscher-pfadfinderbund/anschriften2:latest
+    image: ghcr.io/deutscher-pfadfinderbund/anschriften:latest
     build: .
     restart: unless-stopped
     env_file: .env

@@ -64,7 +64,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const org = "deutscher-pfadfinderbund";
-            const packageName = "anschriften2";
+            const packageName = "anschriften";
             const keep = 15;
 
             const versions = await github.paginate(
