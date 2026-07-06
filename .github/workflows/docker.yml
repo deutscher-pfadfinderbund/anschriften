@@ -1,0 +1,96 @@
+name: "🐳 Docker Build and Push"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+    # Publish `v1.2.3` tags as releases.
+    tags:
+      - v*
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ghcr.io
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
+
+      - name: Build and push Docker images
+        uses: docker/build-push-action@v7
+        with:
+          platforms: linux/amd64
+          file: Dockerfile
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          pull: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # Housekeeping: keep the 15 newest ghcr.io versions, never touch `latest`.
+      # Uses the REST API directly instead of actions/delete-package-versions,
+      # which bundles an unmaintained os-name that crashes on recent macOS
+      # runners (macosRelease() cannot map the Darwin version → build fails).
+      # Best-effort: cleanup must never block a successful publish.
+      - name: Delete old container versions
+        uses: actions/github-script@v9
+        continue-on-error: true
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const org = "deutscher-pfadfinderbund";
+            const packageName = "anschriften2";
+            const keep = 15;
+
+            const versions = await github.paginate(
+              github.rest.packages.getAllPackageVersionsForPackageOwnedByOrg,
+              { org, package_type: "container", package_name: packageName, per_page: 100 },
+            );
+
+            versions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            const isProtected = (v) =>
+              (v.metadata?.container?.tags ?? []).includes("latest");
+            const deletable = versions.filter((v) => !isProtected(v));
+            const toDelete = deletable.slice(keep);
+
+            core.info(
+              `total=${versions.length} protected=${versions.length - deletable.length} ` +
+                `keeping=${Math.min(keep, deletable.length)} deleting=${toDelete.length}`,
+            );
+
+            for (const v of toDelete) {
+              const tags = (v.metadata?.container?.tags ?? []).join(",") || "untagged";
+              await github.rest.packages.deletePackageVersionForOrg({
+                org,
+                package_type: "container",
+                package_name: packageName,
+                package_version_id: v.id,
+              });
+              core.info(`deleted ${v.id} (${tags})`);
+            }

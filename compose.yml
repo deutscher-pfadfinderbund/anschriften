@@ -1,13 +1,18 @@
-# Produktion: nur die App. Postgres läuft separat und selbst verwaltet (nicht in
-# diesem Compose); DATABASE_URL in .env zeigt darauf. Backups siehe README.
+# Produktion: App + Postgres. Der db-Service läuft nur im internen Netz (kein
+# Traefik, kein Host-Port); die App erreicht ihn unter dem Hostnamen `db`.
+# DATABASE_URL in .env muss auf `db:5432` zeigen. Backups siehe README.
 services:
   app:
     image: ghcr.io/deutscher-pfadfinderbund/anschriften2:latest
     build: .
     restart: unless-stopped
     env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - traefik
+      - internal
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.anschriften.rule=Host(`anschriften.deutscher-pfadfinderbund.de`)"
@@ -19,8 +24,32 @@ services:
     # ports:
     #   - "3000:3000"
 
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    # Nur POSTGRES_* statt env_file: .env — sonst lägen Auth-/SMTP-Secrets auch
+    # im DB-Container. Compose lädt .env automatisch für die ${…}-Interpolation.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-anschriften}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD muss in .env gesetzt sein}
+      POSTGRES_DB: ${POSTGRES_DB:-anschriften}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-anschriften}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 # Extern angelegtes Traefik-Netz des Servers (`docker network create traefik`,
-# bzw. der Name, den der Traefik-Stack dort tatsächlich nutzt).
+# bzw. der Name, den der Traefik-Stack dort tatsächlich nutzt). `internal` ist
+# ein privates Netz nur zwischen App und db.
 networks:
   traefik:
     external: true
+  internal:
+
+volumes:
+  db-data:
