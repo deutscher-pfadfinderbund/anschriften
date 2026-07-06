@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# legacy Access import source — contains personal data, never commit
+*.mdb
+
 # debug
 npm-debug.log*
 yarn-debug.log*
