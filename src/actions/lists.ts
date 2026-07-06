@@ -6,8 +6,10 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import {
+  distributionListGroupRules,
   distributionListMembers,
   distributionListOfficeRules,
+  distributionListRankRules,
   distributionLists,
 } from "@/db/schema";
 import { requireSession } from "@/lib/auth-helpers";
@@ -129,8 +131,8 @@ export async function removeMember(listId: number, personId: number): Promise<Ac
 }
 
 /**
- * Office rules change the effective membership of a list, so they affect the
- * Verteiler detail, the directory table filter and the Ämter page alike.
+ * Rules (office/rank/group) change the effective membership of a list, so they
+ * affect the Verteiler detail, the directory table filter and the Ämter page alike.
  */
 function revalidateEffectiveMembership() {
   revalidatePath("/verteiler");
@@ -171,6 +173,82 @@ export async function removeOfficeRule(listId: number, officeId: number): Promis
       and(
         eq(distributionListOfficeRules.listId, listId),
         eq(distributionListOfficeRules.officeId, officeId),
+      ),
+    );
+  revalidateEffectiveMembership();
+  return { ok: true };
+}
+
+/** Bind a Stand to a list: everyone carrying it is then an automatic member. Idempotent. */
+export async function addRankRule(listId: number, rankId: number): Promise<ActionResult> {
+  await requireSession();
+  if (!Number.isInteger(listId) || listId <= 0)
+    return { ok: false, message: "Ungültiger Verteiler." };
+  if (!Number.isInteger(rankId) || rankId <= 0)
+    return { ok: false, message: "Ungültiger Stand." };
+  try {
+    await db.insert(distributionListRankRules).values({ listId, rankId }).onConflictDoNothing();
+  } catch (err) {
+    if (isForeignKeyViolation(err))
+      return {
+        ok: false,
+        message: "Verteiler oder Stand existiert nicht mehr. Bitte Seite neu laden.",
+      };
+    throw err;
+  }
+  revalidateEffectiveMembership();
+  return { ok: true };
+}
+
+/** Remove a rank rule from a list. Persons carrying that Stand are no longer auto-included. */
+export async function removeRankRule(listId: number, rankId: number): Promise<ActionResult> {
+  await requireSession();
+  if (!Number.isInteger(listId) || listId <= 0 || !Number.isInteger(rankId) || rankId <= 0)
+    return { ok: false, message: "Ungültige Auswahl." };
+  await db
+    .delete(distributionListRankRules)
+    .where(
+      and(
+        eq(distributionListRankRules.listId, listId),
+        eq(distributionListRankRules.rankId, rankId),
+      ),
+    );
+  revalidateEffectiveMembership();
+  return { ok: true };
+}
+
+/** Bind a Gliederung to a list: everyone actively assigned to it is an automatic member. Idempotent. */
+export async function addGroupRule(listId: number, groupId: number): Promise<ActionResult> {
+  await requireSession();
+  if (!Number.isInteger(listId) || listId <= 0)
+    return { ok: false, message: "Ungültiger Verteiler." };
+  if (!Number.isInteger(groupId) || groupId <= 0)
+    return { ok: false, message: "Ungültige Gliederung." };
+  try {
+    await db.insert(distributionListGroupRules).values({ listId, groupId }).onConflictDoNothing();
+  } catch (err) {
+    if (isForeignKeyViolation(err))
+      return {
+        ok: false,
+        message: "Verteiler oder Gliederung existiert nicht mehr. Bitte Seite neu laden.",
+      };
+    throw err;
+  }
+  revalidateEffectiveMembership();
+  return { ok: true };
+}
+
+/** Remove a group rule from a list. Members of that Gliederung are no longer auto-included. */
+export async function removeGroupRule(listId: number, groupId: number): Promise<ActionResult> {
+  await requireSession();
+  if (!Number.isInteger(listId) || listId <= 0 || !Number.isInteger(groupId) || groupId <= 0)
+    return { ok: false, message: "Ungültige Auswahl." };
+  await db
+    .delete(distributionListGroupRules)
+    .where(
+      and(
+        eq(distributionListGroupRules.listId, listId),
+        eq(distributionListGroupRules.groupId, groupId),
       ),
     );
   revalidateEffectiveMembership();

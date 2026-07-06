@@ -1,4 +1,11 @@
-import { listDistributionLists, listOffices, listPersonOptions, mailLogForLists } from "@/db/queries";
+import {
+  listDistributionLists,
+  listGroups,
+  listOffices,
+  listPersonOptions,
+  listRanks,
+  mailLogForLists,
+} from "@/db/queries";
 import { isMailEnabled } from "@/lib/mail";
 
 import { VerteilerManager } from "./verteiler-manager";
@@ -13,10 +20,12 @@ export default async function VerteilerPage({
   searchParams: Promise<{ list?: string }>;
 }) {
   const mailEnabled = isMailEnabled();
-  const [lists, personOptions, offices, mailLog, { list }] = await Promise.all([
+  const [lists, personOptions, offices, ranks, groups, mailLog, { list }] = await Promise.all([
     listDistributionLists(),
     listPersonOptions(),
     listOffices(),
+    listRanks(),
+    listGroups(),
     mailEnabled ? mailLogForLists() : Promise.resolve([]),
     searchParams,
   ]);
@@ -27,6 +36,8 @@ export default async function VerteilerPage({
       lists={lists}
       personOptions={personOptions}
       offices={offices}
+      ranks={ranks}
+      groups={groups}
       initialListId={initialListId}
       mailEnabled={mailEnabled}
       mailLog={mailLog}

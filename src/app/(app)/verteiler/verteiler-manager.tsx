@@ -3,10 +3,12 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Award,
   Briefcase,
   Clock,
   Copy,
   Download,
+  Layers,
   Lock,
   Mail,
   Pencil,
@@ -20,12 +22,16 @@ import {
 import { toast } from "sonner";
 
 import {
+  addGroupRule,
   addMembers,
   addOfficeRule,
+  addRankRule,
   createList,
   deleteList,
+  removeGroupRule,
   removeMember,
   removeOfficeRule,
+  removeRankRule,
   updateList,
 } from "@/actions/lists";
 import { Combobox } from "@/components/combobox";
@@ -47,10 +53,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   DistributionListWithMembers,
+  GroupRow,
   ListMemberRow,
   MailLogEntry,
   OfficeRow,
   PersonOption,
+  RankRow,
 } from "@/db/queries";
 import { buildBcc, type BccSeparator } from "@/lib/export";
 import { formatDateTime, formatName } from "@/lib/format";
@@ -77,6 +85,8 @@ export function VerteilerManager({
   lists,
   personOptions,
   offices,
+  ranks,
+  groups,
   initialListId,
   mailEnabled = false,
   mailLog = [],
@@ -84,6 +94,8 @@ export function VerteilerManager({
   lists: DistributionListWithMembers[];
   personOptions: PersonOption[];
   offices: OfficeRow[];
+  ranks: RankRow[];
+  groups: GroupRow[];
   initialListId?: number | null;
   /** True when the optional mail module is configured (see isMailEnabled). */
   mailEnabled?: boolean;
@@ -231,6 +243,60 @@ export function VerteilerManager({
     if (!activeList) return;
     startTransition(async () => {
       const res = await removeOfficeRule(activeList.id, officeId);
+      if (!res.ok) return void toast.error(res.message);
+      router.refresh();
+    });
+  }
+
+  // Stände not yet a rule on the active list — the "+ Stand hinzufügen" combobox.
+  const ruleRankOptions = useMemo(() => {
+    if (!activeList) return [];
+    const existing = new Set(activeList.rankRules.map((r) => r.rankId));
+    return ranks.filter((r) => !existing.has(r.id)).map((r) => ({ value: String(r.id), label: r.name }));
+  }, [activeList, ranks]);
+
+  function handleAddRankRule(rankId: number) {
+    if (!activeList || !Number.isInteger(rankId)) return;
+    startTransition(async () => {
+      const res = await addRankRule(activeList.id, rankId);
+      if (!res.ok) return void toast.error(res.message);
+      const name = ranks.find((r) => r.id === rankId)?.name ?? "Stand";
+      toast.success(`Regel „${name}“ hinzugefügt.`);
+      router.refresh();
+    });
+  }
+
+  function handleRemoveRankRule(rankId: number) {
+    if (!activeList) return;
+    startTransition(async () => {
+      const res = await removeRankRule(activeList.id, rankId);
+      if (!res.ok) return void toast.error(res.message);
+      router.refresh();
+    });
+  }
+
+  // Gliederungen not yet a rule on the active list — the "+ Gliederung hinzufügen" combobox.
+  const ruleGroupOptions = useMemo(() => {
+    if (!activeList) return [];
+    const existing = new Set(activeList.groupRules.map((r) => r.groupId));
+    return groups.filter((g) => !existing.has(g.id)).map((g) => ({ value: String(g.id), label: g.name }));
+  }, [activeList, groups]);
+
+  function handleAddGroupRule(groupId: number) {
+    if (!activeList || !Number.isInteger(groupId)) return;
+    startTransition(async () => {
+      const res = await addGroupRule(activeList.id, groupId);
+      if (!res.ok) return void toast.error(res.message);
+      const name = groups.find((g) => g.id === groupId)?.name ?? "Gliederung";
+      toast.success(`Regel „${name}“ hinzugefügt.`);
+      router.refresh();
+    });
+  }
+
+  function handleRemoveGroupRule(groupId: number) {
+    if (!activeList) return;
+    startTransition(async () => {
+      const res = await removeGroupRule(activeList.id, groupId);
       if (!res.ok) return void toast.error(res.message);
       router.refresh();
     });
@@ -498,6 +564,108 @@ export function VerteilerManager({
                 </div>
               </section>
 
+              {/* Rank rules: automatic membership by Stand */}
+              <section className="rounded-lg border border-line bg-surface shadow-sm">
+                <div className="border-b border-line px-[18px] py-3">
+                  <span className="font-display text-[15.5px] font-semibold text-ink">
+                    Automatisch enthalten (nach Stand)
+                  </span>
+                  <p className="mt-0.5 text-[12.5px] text-ink-faint">
+                    Wer einen dieser Stände trägt, ist automatisch Mitglied — z. B. alle
+                    Ordensritter und St.-Georgs-Ritter.
+                  </p>
+                </div>
+                <div className="p-[18px]">
+                  {activeList.rankRules.length === 0 ? (
+                    <p className="mb-3 text-[13px] text-ink-soft">Noch keine Stand-Regel.</p>
+                  ) : (
+                    <ul className="mb-3 flex flex-col gap-1.5">
+                      {activeList.rankRules.map((r) => (
+                        <li
+                          key={r.rankId}
+                          className="group/rule flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[13.5px]"
+                        >
+                          <Award className="size-3.5 shrink-0 text-ink-faint" />
+                          <span className="min-w-0 flex-1 truncate text-ink">{r.rankName}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Regel „${r.rankName}“ entfernen`}
+                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100"
+                            disabled={isPending}
+                            onClick={() => handleRemoveRankRule(r.rankId)}
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="max-w-sm">
+                    <Combobox
+                      aria-label="Stand als Regel hinzufügen"
+                      options={ruleRankOptions}
+                      value={null}
+                      onChange={(v) => handleAddRankRule(Number(v))}
+                      placeholder="+ Stand hinzufügen"
+                      searchPlaceholder="Stand suchen …"
+                      emptyText="Kein Stand gefunden."
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* Group rules: automatic membership by Gliederung */}
+              <section className="rounded-lg border border-line bg-surface shadow-sm">
+                <div className="border-b border-line px-[18px] py-3">
+                  <span className="font-display text-[15.5px] font-semibold text-ink">
+                    Automatisch enthalten (nach Gliederung)
+                  </span>
+                  <p className="mt-0.5 text-[12.5px] text-ink-faint">
+                    Wer aktiv einer dieser Gliederungen zugeordnet ist, ist automatisch Mitglied —
+                    z. B. die ganze Bundesführung.
+                  </p>
+                </div>
+                <div className="p-[18px]">
+                  {activeList.groupRules.length === 0 ? (
+                    <p className="mb-3 text-[13px] text-ink-soft">Noch keine Gliederungs-Regel.</p>
+                  ) : (
+                    <ul className="mb-3 flex flex-col gap-1.5">
+                      {activeList.groupRules.map((r) => (
+                        <li
+                          key={r.groupId}
+                          className="group/rule flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[13.5px]"
+                        >
+                          <Layers className="size-3.5 shrink-0 text-ink-faint" />
+                          <span className="min-w-0 flex-1 truncate text-ink">{r.groupName}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Regel „${r.groupName}“ entfernen`}
+                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100"
+                            disabled={isPending}
+                            onClick={() => handleRemoveGroupRule(r.groupId)}
+                          >
+                            <X className="size-4" />
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="max-w-sm">
+                    <Combobox
+                      aria-label="Gliederung als Regel hinzufügen"
+                      options={ruleGroupOptions}
+                      value={null}
+                      onChange={(v) => handleAddGroupRule(Number(v))}
+                      placeholder="+ Gliederung hinzufügen"
+                      searchPlaceholder="Gliederung suchen …"
+                      emptyText="Keine Gliederung gefunden."
+                    />
+                  </div>
+                </div>
+              </section>
+
               {/* Members */}
               <section className="rounded-lg border border-line bg-surface shadow-sm">
                 <div className="flex items-center justify-between border-b border-line px-[18px] py-3">
@@ -536,13 +704,32 @@ export function VerteilerManager({
                             ) : null}
                             {m.viaOffices.map((o) => (
                               <span
-                                key={o.id}
+                                key={`o${o.id}`}
                                 className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
                               >
                                 über Amt: {o.name}
                               </span>
                             ))}
-                            {m.mainOffice && m.viaOffices.length === 0 ? (
+                            {m.viaRanks.map((r) => (
+                              <span
+                                key={`r${r.id}`}
+                                className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
+                              >
+                                über Stand: {r.name}
+                              </span>
+                            ))}
+                            {m.viaGroups.map((g) => (
+                              <span
+                                key={`g${g.id}`}
+                                className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
+                              >
+                                über Gliederung: {g.name}
+                              </span>
+                            ))}
+                            {m.mainOffice &&
+                            m.viaOffices.length === 0 &&
+                            m.viaRanks.length === 0 &&
+                            m.viaGroups.length === 0 ? (
                               <span className="text-xs text-ink-faint">{m.mainOffice}</span>
                             ) : null}
                           </div>
