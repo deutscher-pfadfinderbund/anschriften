@@ -143,6 +143,7 @@
   --color-fir: var(--fir);
   --color-fir-deep: var(--fir-deep);
   --color-fir-tint: var(--fir-tint);
+  --color-on-fir: var(--on-fir);
   --color-brass: var(--brass);
   --color-brass-tint: var(--brass-tint);
   --color-crit: var(--crit);
