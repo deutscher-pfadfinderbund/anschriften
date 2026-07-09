@@ -7,6 +7,8 @@ import { toast } from "sonner";
 
 import { createGroup, deleteGroup, updateGroup } from "@/actions/groups";
 import { Combobox, type ComboOption } from "@/components/combobox";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { FormLabel } from "@/components/form-label";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +20,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -75,7 +76,6 @@ export function GliederungenManager({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const ordered = useMemo(() => orderGroups(groups), [groups]);
-  const byId = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -209,16 +209,12 @@ export function GliederungenManager({
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div>
-              <Label htmlFor="g-name" className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint">
-                Name
-              </Label>
+              <FormLabel htmlFor="g-name">Name</FormLabel>
               <Input id="g-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="g-section" className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint">
-                  Bereich
-                </Label>
+                <FormLabel htmlFor="g-section">Bereich</FormLabel>
                 <Select value={form.section} onValueChange={(v) => setForm((f) => ({ ...f, section: v }))}>
                   <SelectTrigger id="g-section" className="w-full">
                     <SelectValue />
@@ -233,9 +229,7 @@ export function GliederungenManager({
                 </Select>
               </div>
               <div>
-                <Label htmlFor="g-sort" className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint">
-                  Sortierschlüssel
-                </Label>
+                <FormLabel htmlFor="g-sort">Sortierschlüssel</FormLabel>
                 <Input
                   id="g-sort"
                   type="number"
@@ -247,15 +241,11 @@ export function GliederungenManager({
               </div>
             </div>
             <div>
-              <Label htmlFor="g-kind" className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint">
-                Art (Gau, Stamm, Konvent …)
-              </Label>
+              <FormLabel htmlFor="g-kind">Art (Gau, Stamm, Konvent …)</FormLabel>
               <Input id="g-kind" value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))} placeholder="optional" />
             </div>
             <div>
-              <Label className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint">
-                Übergeordnete Gliederung
-              </Label>
+              <FormLabel>Übergeordnete Gliederung</FormLabel>
               <Combobox
                 options={parentOptions}
                 value={form.parentId != null ? String(form.parentId) : PARENT_NONE}
@@ -278,26 +268,19 @@ export function GliederungenManager({
       </Dialog>
 
       {/* Delete dialog */}
-      <Dialog open={deleteTarget != null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Gliederung löschen?</DialogTitle>
-            <DialogDescription>
-              {targetBlocked
-                ? "Diese Gliederung kann nicht gelöscht werden, solange ihr Untergliederungen oder Personen zugeordnet sind."
-                : `„${deleteTarget?.name}“ wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isPending}>
-              Abbrechen
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete} disabled={isPending || targetBlocked}>
-              {isPending ? "Löschen …" : "Löschen"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDeleteDialog
+        open={deleteTarget != null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="Gliederung löschen?"
+        description={`„${deleteTarget?.name}“ wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
+        blockedMessage={
+          targetBlocked
+            ? "Diese Gliederung kann nicht gelöscht werden, solange ihr Untergliederungen oder Personen zugeordnet sind."
+            : undefined
+        }
+        pending={isPending}
+        onConfirm={confirmDelete}
+      />
     </>
   );
 }

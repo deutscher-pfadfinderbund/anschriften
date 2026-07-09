@@ -401,7 +401,7 @@ export function PersonsTable({
         </div>
 
         {selectedCount > 0 ? (
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-fir/40 bg-fir-tint px-3 py-2 text-[13px]">
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-[13px]">
             <span className="font-medium text-ink">{selectedCount} ausgewählt</span>
             <span className="text-ink-faint">—</span>
             {mailEnabled ? (

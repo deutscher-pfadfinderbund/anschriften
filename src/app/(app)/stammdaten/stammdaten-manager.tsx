@@ -7,6 +7,8 @@ import { toast } from "sonner";
 
 import { createOffice, deleteOffice, updateOffice } from "@/actions/offices";
 import { createRank, deleteRank, updateRank } from "@/actions/ranks";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { FormLabel } from "@/components/form-label";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +20,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { OfficeListRule, OfficeRow, RankRow } from "@/db/queries";
 
@@ -43,9 +44,7 @@ function LabeledInput({
 }) {
   return (
     <div>
-      <Label htmlFor={id} className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint">
-        {label}
-      </Label>
+      <FormLabel htmlFor={id}>{label}</FormLabel>
       <Input
         id={id}
         type={type}
@@ -305,26 +304,19 @@ export function StammdatenManager({
       </Dialog>
 
       {/* Delete dialog */}
-      <Dialog open={deleteTarget != null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{deleteTarget?.type === "office" ? "Amt löschen?" : "Stand löschen?"}</DialogTitle>
-            <DialogDescription>
-              {deleteTarget?.blocked
-                ? "Dieser Eintrag ist noch Personen zugeordnet und kann nicht gelöscht werden."
-                : `„${deleteTarget?.name}“ wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isPending}>
-              Abbrechen
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete} disabled={isPending || deleteTarget?.blocked}>
-              {isPending ? "Löschen …" : "Löschen"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDeleteDialog
+        open={deleteTarget != null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={deleteTarget?.type === "office" ? "Amt löschen?" : "Stand löschen?"}
+        description={`„${deleteTarget?.name}“ wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
+        blockedMessage={
+          deleteTarget?.blocked
+            ? "Dieser Eintrag ist noch Personen zugeordnet und kann nicht gelöscht werden."
+            : undefined
+        }
+        pending={isPending}
+        onConfirm={confirmDelete}
+      />
     </>
   );
 }

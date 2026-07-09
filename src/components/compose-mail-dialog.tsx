@@ -5,6 +5,7 @@ import { Send } from "lucide-react";
 import { toast } from "sonner";
 
 import { sendMail } from "@/actions/mail";
+import { FormLabel } from "@/components/form-label";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,7 +16,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 const SUBJECT_MAX = 200;
@@ -97,12 +97,7 @@ export function ComposeMailDialog({
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div>
-            <Label
-              htmlFor="mail-subject"
-              className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint"
-            >
-              Betreff
-            </Label>
+            <FormLabel htmlFor="mail-subject">Betreff</FormLabel>
             <Input
               id="mail-subject"
               autoFocus
@@ -113,12 +108,7 @@ export function ComposeMailDialog({
             />
           </div>
           <div>
-            <Label
-              htmlFor="mail-body"
-              className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint"
-            >
-              Nachricht
-            </Label>
+            <FormLabel htmlFor="mail-body">Nachricht</FormLabel>
             <Textarea
               id="mail-body"
               maxLength={BODY_MAX}

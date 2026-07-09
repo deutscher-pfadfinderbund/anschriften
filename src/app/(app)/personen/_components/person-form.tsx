@@ -14,21 +14,20 @@ import {
 } from "@/actions/assignments";
 import { deletePerson, savePerson } from "@/actions/persons";
 import { Combobox, type ComboOption } from "@/components/combobox";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { FormLabel } from "@/components/form-label";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -79,12 +78,7 @@ function Field({
 }) {
   return (
     <div className={className}>
-      <Label
-        htmlFor={htmlFor}
-        className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint"
-      >
-        {label}
-      </Label>
+      <FormLabel htmlFor={htmlFor}>{label}</FormLabel>
       {children}
       {error ? <p className="mt-1 text-xs text-crit">{error}</p> : null}
     </div>
@@ -167,6 +161,7 @@ export function PersonForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isDeleting, startDelete] = useTransition();
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const keyCounter = useRef(0);
   const nextKey = () => `k${keyCounter.current++}`;
 
@@ -644,9 +639,7 @@ export function PersonForm({
                 />
               </Field>
 
-              <Label className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint">
-                Telefon
-              </Label>
+              <FormLabel>Telefon</FormLabel>
               <div className="flex flex-col gap-2">
                 {phones.map((p) => (
                   <div key={p.key} className="grid grid-cols-[130px_1fr_auto] items-center gap-2">
@@ -806,9 +799,9 @@ export function PersonForm({
                         return (
                           <div
                             key={h.assignmentId}
-                            className="mt-1.5 flex items-center gap-2 rounded-md border border-brass/40 bg-brass/5 px-2.5 py-1.5 text-xs text-ink-soft"
+                            className="mt-1.5 flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2.5 py-1.5 text-xs text-ink-soft"
                           >
-                            <TriangleAlert className="size-3.5 shrink-0 text-brass" />
+                            <TriangleAlert className="size-3.5 shrink-0 text-ink-faint" />
                             <span className="min-w-0">
                               <span className="font-medium text-ink">{h.name}</span> hat dieses Amt aktuell inne
                               {h.startDate ? ` (seit ${formatDate(h.startDate)})` : ""}.
@@ -968,30 +961,10 @@ export function PersonForm({
             Abbrechen
           </Button>
           {mode === "edit" && person ? (
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="destructive" disabled={isDeleting}>
-                  <Trash2 className="size-4" />
-                  Löschen
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Anschrift löschen?</DialogTitle>
-                  <DialogDescription>
-                    {formatName(person)} wird endgültig aus dem Verzeichnis entfernt. Diese Aktion kann nicht rückgängig gemacht werden.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button variant="outline">Abbrechen</Button>
-                  </DialogClose>
-                  <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
-                    {isDeleting ? "Löschen …" : "Endgültig löschen"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button variant="destructive" onClick={() => setDeleteOpen(true)} disabled={isDeleting}>
+              <Trash2 className="size-4" />
+              Löschen
+            </Button>
           ) : null}
           {mode === "edit" && person?.updatedAt ? (
             <span className="ml-auto text-xs text-ink-faint">
@@ -1145,6 +1118,24 @@ export function PersonForm({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete this person */}
+      {mode === "edit" && person ? (
+        <ConfirmDeleteDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          title="Anschrift löschen?"
+          description={
+            <>
+              {formatName(person)} wird endgültig aus dem Verzeichnis entfernt. Diese Aktion kann
+              nicht rückgängig gemacht werden.
+            </>
+          }
+          confirmLabel="Endgültig löschen"
+          pending={isDeleting}
+          onConfirm={handleDelete}
+        />
+      ) : null}
     </>
   );
 }
