@@ -1,6 +1,8 @@
 // Pure parsing/mapping helpers for the Access import (issue #2).
 // Kept free of DB and I/O so they can be unit-tested with fictitious data.
 
+import { RANK_UNRANKED } from "../src/lib/rank";
+
 export type Section =
   | "bund"
   | "jungenbund"
@@ -67,7 +69,7 @@ export function splitOffices(value: string): string[] {
 /**
  * Rank an office name for PDF ordering via case-insensitive substring matching.
  * Order matters: the more specific "ersatzbeisitzer" wins over "beisitzer".
- * Unknown offices return 999 (caller logs them for manual cleanup).
+ * Unknown offices return RANK_UNRANKED (caller logs them for manual cleanup).
  */
 export function rankForOffice(name: string): number {
   const s = name.toLowerCase();
@@ -83,12 +85,12 @@ export function rankForOffice(name: string): number {
     s.includes("vorsitzende")
   )
     return 10;
-  return 999;
+  return RANK_UNRANKED;
 }
 
 /** True if a rank lookup produced the fallback (unknown) rank. */
 export function isUnknownRank(rank: number): boolean {
-  return rank === 999;
+  return rank === RANK_UNRANKED;
 }
 
 export interface PhoneInput {

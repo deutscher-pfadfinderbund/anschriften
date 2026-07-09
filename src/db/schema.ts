@@ -6,6 +6,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   boolean,
   date,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -16,6 +17,10 @@ import {
   uniqueIndex,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+
+// Relative import (not the `@/` alias): drizzle-kit bundles this schema file directly
+// and does not resolve tsconfig path aliases.
+import { RANK_UNRANKED } from "../lib/rank";
 
 /** Top-level organisational branch. Drives PDF ordering and grouping. */
 export const sectionEnum = pgEnum("section", [
@@ -40,6 +45,8 @@ export const ranks = pgTable("ranks", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull().unique(),
   sortOrder: integer("sort_order").notNull().default(0),
+  // Last-mutation attribution, free text (see persons.updated_by).
+  updatedBy: text("updated_by"),
   ...timestamps,
 });
 
@@ -48,50 +55,66 @@ export const ranks = pgTable("ranks", {
  * Konvente/Kollegien. Self-referencing tree via `parent_id`. `sort_key` replaces the old
  * "NNN" prefix of the Access `Hilfsgruppe` column and steers PDF ordering.
  */
-export const groups = pgTable("groups", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  name: text("name").notNull().unique(),
-  parentId: integer("parent_id").references((): AnyPgColumn => groups.id),
-  section: sectionEnum("section").notNull(),
-  kind: text("kind"),
-  sortKey: integer("sort_key").notNull().default(0),
-  ...timestamps,
-});
+export const groups = pgTable(
+  "groups",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    name: text("name").notNull().unique(),
+    parentId: integer("parent_id").references((): AnyPgColumn => groups.id),
+    section: sectionEnum("section").notNull(),
+    kind: text("kind"),
+    sortKey: integer("sort_key").notNull().default(0),
+    // Last-mutation attribution, free text (see persons.updated_by).
+    updatedBy: text("updated_by"),
+    ...timestamps,
+  },
+  // Indexed so the delete guard's child-count query (WHERE parent_id = ?) does not seq-scan.
+  (t) => [index("groups_parentId_idx").on(t.parentId)],
+);
 
 /** Ämter lookup. m/w variants are separate rows. `rank` orders offices within a group in the PDF. */
 export const offices = pgTable("offices", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull().unique(),
-  rank: integer("rank").notNull().default(999),
+  rank: integer("rank").notNull().default(RANK_UNRANKED),
+  // Last-mutation attribution, free text (see persons.updated_by).
+  updatedBy: text("updated_by"),
   ...timestamps,
 });
 
 /** Flat person record. `legacy_id` keeps import idempotent against the Access source. */
-export const persons = pgTable("persons", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  legacyId: text("legacy_id").unique(),
-  salutation: text("salutation"),
-  title: text("title"),
-  firstName: text("first_name"),
-  lastName: text("last_name"),
-  scoutName: text("scout_name"),
-  birthDate: date("birth_date"),
-  deathDate: date("death_date"),
-  rankId: integer("rank_id").references(() => ranks.id),
-  street: text("street"),
-  addressExtra: text("address_extra"),
-  postalCode: text("postal_code"),
-  city: text("city"),
-  email: text("email"),
-  phones: jsonb("phones")
-    .$type<{ label: string; number: string }[]>()
-    .notNull()
-    .default(sql`'[]'::jsonb`),
-  notes: text("notes"),
-  doNotPrint: boolean("do_not_print").notNull().default(false),
-  updatedBy: text("updated_by"),
-  ...timestamps,
-});
+export const persons = pgTable(
+  "persons",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    legacyId: text("legacy_id").unique(),
+    salutation: text("salutation"),
+    title: text("title"),
+    firstName: text("first_name"),
+    lastName: text("last_name"),
+    scoutName: text("scout_name"),
+    birthDate: date("birth_date"),
+    deathDate: date("death_date"),
+    rankId: integer("rank_id").references(() => ranks.id),
+    street: text("street"),
+    addressExtra: text("address_extra"),
+    postalCode: text("postal_code"),
+    city: text("city"),
+    email: text("email"),
+    phones: jsonb("phones")
+      .$type<{ label: string; number: string }[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    notes: text("notes"),
+    doNotPrint: boolean("do_not_print").notNull().default(false),
+    // Attribution of the last mutation (AGENTS.md). Free text (session name/e-mail), not a
+    // FK to a user table: editors are federated via Keycloak and we keep no local user rows.
+    updatedBy: text("updated_by"),
+    ...timestamps,
+  },
+  // Indexed so the delete guard's usage query (WHERE rank_id = ?) does not seq-scan persons.
+  (t) => [index("persons_rankId_idx").on(t.rankId)],
+);
 
 /**
  * Person ↔ Gliederung ↔ Amt. `office_id` NULL means membership without an office
@@ -133,6 +156,10 @@ export const assignments = pgTable(
     uniqueIndex("assignments_active_person_group_office_key")
       .on(t.personId, t.groupId, t.officeId)
       .where(sql`${t.endDate} is null`),
+    // Indexed so the group/office delete guards' count queries (WHERE group_id/office_id = ?)
+    // do not seq-scan assignments.
+    index("assignments_groupId_idx").on(t.groupId),
+    index("assignments_officeId_idx").on(t.officeId),
   ],
 );
 
@@ -141,6 +168,8 @@ export const distributionLists = pgTable("distribution_lists", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull().unique(),
   description: text("description"),
+  // Last-mutation attribution, free text (see persons.updated_by).
+  updatedBy: text("updated_by"),
   ...timestamps,
 });
 

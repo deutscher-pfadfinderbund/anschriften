@@ -16,7 +16,7 @@ import {
   isUniqueViolation,
   type ActionResult,
 } from "@/lib/action-helpers";
-import { requireSession } from "@/lib/auth-helpers";
+import { actorName, requireSession } from "@/lib/auth-helpers";
 
 export type CreateListResult = { ok: true; id: number } | { ok: false; message: string };
 
@@ -37,13 +37,14 @@ const listSchema = z.object({
 export type ListInput = z.infer<typeof listSchema>;
 
 export async function createList(raw: ListInput): Promise<CreateListResult> {
-  await requireSession();
+  const session = await requireSession();
+  const by = actorName(session);
   const parsed = listSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
   try {
     const [row] = await db
       .insert(distributionLists)
-      .values(parsed.data)
+      .values({ ...parsed.data, updatedBy: by })
       .returning({ id: distributionLists.id });
     revalidatePath("/verteiler");
     // Manual memberships also drive the Verteiler badges and list filter on "/".
@@ -57,11 +58,15 @@ export async function createList(raw: ListInput): Promise<CreateListResult> {
 }
 
 export async function updateList(id: number, raw: ListInput): Promise<ActionResult> {
-  await requireSession();
+  const session = await requireSession();
+  const by = actorName(session);
   const parsed = listSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
   try {
-    await db.update(distributionLists).set(parsed.data).where(eq(distributionLists.id, id));
+    await db
+      .update(distributionLists)
+      .set({ ...parsed.data, updatedBy: by, updatedAt: new Date() })
+      .where(eq(distributionLists.id, id));
   } catch (err) {
     if (isUniqueViolation(err))
       return { ok: false, message: "Ein Verteiler mit diesem Namen existiert bereits." };
