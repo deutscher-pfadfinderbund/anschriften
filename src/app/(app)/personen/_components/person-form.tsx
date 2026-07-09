@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarOff, ChevronDown, ChevronRight, Pencil, Plus, TriangleAlert, Trash2, Undo2, X } from "lucide-react";
+import { CalendarOff, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   addHistoricalAssignment,
   deleteAssignment,
   endAssignment,
-  getActiveHolders,
   updateHistoricalAssignment,
 } from "@/actions/assignments";
 import { deletePerson, savePerson } from "@/actions/persons";
@@ -19,14 +18,6 @@ import { FormLabel } from "@/components/form-label";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -36,110 +27,31 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { ActiveHolder, GroupRow, HistoricalAssignment, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
+import type { GroupRow, HistoricalAssignment, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
 import { PHONE_LABELS, SALUTATIONS, formatDate, formatDateTime, formatName } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 import type { FieldErrors, PersonInput } from "@/lib/person-schema";
 import { cn } from "@/lib/utils";
 
-const NONE = "none";
-const OFFICE_NONE = "none";
-
-type PhoneRow = { key: string; label: string; number: string };
-// `id` is the persisted assignment id (null for a freshly added row). Only persisted
-// active rows can be "ended" (they need a DB row to move into the history).
-type AssignmentRow = {
-  key: string;
-  id: number | null;
-  groupId: number | null;
-  officeId: number | null;
-  startDate: string;
-  // Optional "bis": a row with an end date is saved as a finished tenure (history),
-  // so past offices can be captured directly — also when creating a new person.
-  endDate: string;
-};
-
-const todayIso = () => new Date().toISOString().slice(0, 10);
-
-// --- small presentational helpers -----------------------------------------
-
-function Field({
-  label,
-  htmlFor,
-  error,
-  className,
-  children,
-}: {
-  label: string;
-  htmlFor?: string;
-  error?: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={className}>
-      <FormLabel htmlFor={htmlFor}>{label}</FormLabel>
-      {children}
-      {error ? <p className="mt-1 text-xs text-crit">{error}</p> : null}
-    </div>
-  );
-}
-
-function Panel({
-  title,
-  hint,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-lg border border-line bg-surface shadow-sm">
-      <div className="flex items-center justify-between border-b border-line px-[18px] py-3 font-display text-[15.5px] font-semibold text-ink">
-        <span>{title}</span>
-        {hint ? <span className="font-sans text-xs font-normal text-ink-faint">{hint}</span> : null}
-      </div>
-      <div className="p-[18px]">{children}</div>
-    </section>
-  );
-}
-
-/**
- * "Bis"-Datum plus a "Datum unbekannt" checkbox (issue #26). Ticking it disables the
- * date field; the server then records end_date = today and end_unknown = true.
- */
-function EndDateChoice({
-  idPrefix,
-  endDate,
-  endUnknown,
-  onDate,
-  onUnknown,
-}: {
-  idPrefix: string;
-  endDate: string;
-  endUnknown: boolean;
-  onDate: (v: string) => void;
-  onUnknown: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <Field label="Bis" htmlFor={`${idPrefix}-date`}>
-        <Input
-          id={`${idPrefix}-date`}
-          type="date"
-          value={endUnknown ? "" : endDate}
-          disabled={endUnknown}
-          onChange={(e) => onDate(e.target.value)}
-        />
-      </Field>
-      <label className="flex items-center gap-2 text-[13px] text-ink-soft">
-        <Checkbox checked={endUnknown} onCheckedChange={(v) => onUnknown(v === true)} />
-        Datum unbekannt
-      </label>
-    </div>
-  );
-}
+import { EndTenureDialog, type EndTarget } from "./end-tenure-dialog";
+import {
+  Field,
+  NONE,
+  OFFICE_NONE,
+  Panel,
+  todayIso,
+  type AssignmentRow,
+  type PhoneRow,
+} from "./form-primitives";
+import { HistoryDialog, type HistForm } from "./history-dialog";
+import { HistorySection } from "./history-section";
+import {
+  HolderDialog,
+  HolderWarning,
+  useActiveHolders,
+  type EndPreviousOrder,
+  type HolderDialogState,
+} from "./holder-warning";
 
 // --- form -------------------------------------------------------------------
 
@@ -224,78 +136,16 @@ export function PersonForm({
   const historical = person?.historicalAssignments ?? [];
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isHistoryPending, startHistory] = useTransition();
-  // Active row being ended via the "Amt beenden…" dialog (only persisted rows).
-  // `endUnknown` toggles "Datum unbekannt" (disables the date field).
-  const [endTarget, setEndTarget] = useState<{
-    key: string;
-    id: number;
-    endDate: string;
-    endUnknown: boolean;
-  } | null>(null);
-  // Add/edit dialog for a past tenure. `id` null = new entry.
-  type HistForm = {
-    id: number | null;
-    groupId: number | null;
-    officeId: number | null;
-    startDate: string;
-    endDate: string;
-    endUnknown: boolean;
-  };
+  const [endTarget, setEndTarget] = useState<EndTarget | null>(null);
   const [histForm, setHistForm] = useState<HistForm | null>(null);
 
   // --- Amtsinhaber-Warnung (issue #26) -------------------------------------------
-  // On-demand cache of active holders per "officeId:groupId" combination (no polling).
-  const [holdersCache, setHoldersCache] = useState<Map<string, ActiveHolder[]>>(new Map());
+  const otherHolders = useActiveHolders(assignments, person?.id);
   // Buffered "end this foreign tenure on save" orders, keyed by the target assignmentId.
   // Nothing is written until savePerson runs them in its transaction.
-  type EndPreviousOrder = {
-    assignmentId: number;
-    personId: number;
-    name: string;
-    endDate: string;
-    endUnknown: boolean;
-  };
   const [endPrevious, setEndPrevious] = useState<Map<number, EndPreviousOrder>>(new Map());
   // The "Amtszeit von {Name} beenden…" dialog before an order is buffered.
-  const [holderDialog, setHolderDialog] = useState<
-    { assignmentId: number; personId: number; name: string; endDate: string; endUnknown: boolean } | null
-  >(null);
-
-  // The active office+group combinations to check for existing holders: a row needs an
-  // office AND a group AND no "bis" date (an ended row is history, not a new assignment).
-  const activeComboKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const a of assignments) {
-      if (a.groupId != null && a.officeId != null && !a.endDate) keys.add(`${a.officeId}:${a.groupId}`);
-    }
-    return [...keys];
-  }, [assignments]);
-
-  // Fetch holders for any combination not cached yet. Re-runs when the set of active
-  // combinations changes (or the cache updates — guarded by the empty-missing early
-  // return, so no loop and no dependency lint warning).
-  useEffect(() => {
-    const missing = activeComboKeys.filter((k) => !holdersCache.has(k));
-    if (missing.length === 0) return;
-    let cancelled = false;
-    void (async () => {
-      const entries = await Promise.all(
-        missing.map(async (k) => {
-          const [officeId, groupId] = k.split(":").map(Number);
-          return [k, await getActiveHolders(officeId, groupId)] as const;
-        }),
-      );
-      if (cancelled) return;
-      setHoldersCache((prev) => {
-        const next = new Map(prev);
-        for (const [k, v] of entries) next.set(k, v);
-        return next;
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeComboKeys, holdersCache]);
+  const [holderDialog, setHolderDialog] = useState<HolderDialogState | null>(null);
 
   const groupOptions: ComboOption[] = useMemo(
     () =>
@@ -494,16 +344,6 @@ export function PersonForm({
     const to = h.endUnknown ? "?" : formatDate(h.endDate);
     if (from) return `${from} – ${to}`;
     return h.endUnknown ? "Ende unbekannt" : `bis ${to}`;
-  }
-
-  /**
-   * Active holders of this row's office+group that are NOT the person being edited —
-   * the ones the warning is about. Empty until the on-demand fetch resolves.
-   */
-  function otherHolders(a: AssignmentRow): ActiveHolder[] {
-    if (a.groupId == null || a.officeId == null || a.endDate) return [];
-    const holders = holdersCache.get(`${a.officeId}:${a.groupId}`) ?? [];
-    return holders.filter((h) => h.personId !== person?.id);
   }
 
   /** Confirm the holder dialog: buffer an "end previous tenure" order (no write yet). */
@@ -769,61 +609,20 @@ export function PersonForm({
                       {isDup ? (
                         <p className="mt-1 text-xs text-crit">Diese Kombination ist bereits zugeordnet.</p>
                       ) : null}
-                      {otherHolders(a).map((h) => {
-                        const order = endPrevious.get(h.assignmentId);
-                        if (order) {
-                          // A follow-up is buffered: show a chip with an undo, no more warning.
-                          return (
-                            <div
-                              key={h.assignmentId}
-                              className="mt-1.5 flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2.5 py-1.5 text-xs text-ink-soft"
-                            >
-                              <span className="min-w-0">
-                                Amtszeit von <span className="font-medium text-ink">{order.name}</span> wird beendet
-                                <span className="text-ink-faint">
-                                  {" · "}
-                                  {order.endUnknown ? "Ende unbekannt" : formatDate(order.endDate)}
-                                </span>
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => cancelEndPrevious(h.assignmentId)}
-                                className="ml-auto inline-flex shrink-0 items-center gap-1 text-ink-faint transition-colors hover:text-ink"
-                              >
-                                <Undo2 className="size-3.5" />
-                                Rückgängig
-                              </button>
-                            </div>
-                          );
+                      <HolderWarning
+                        holders={otherHolders(a)}
+                        endPrevious={endPrevious}
+                        onStartEnd={(h) =>
+                          setHolderDialog({
+                            assignmentId: h.assignmentId,
+                            personId: h.personId,
+                            name: h.name,
+                            endDate: todayIso(),
+                            endUnknown: false,
+                          })
                         }
-                        return (
-                          <div
-                            key={h.assignmentId}
-                            className="mt-1.5 flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2.5 py-1.5 text-xs text-ink-soft"
-                          >
-                            <TriangleAlert className="size-3.5 shrink-0 text-ink-faint" />
-                            <span className="min-w-0">
-                              <span className="font-medium text-ink">{h.name}</span> hat dieses Amt aktuell inne
-                              {h.startDate ? ` (seit ${formatDate(h.startDate)})` : ""}.
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setHolderDialog({
-                                  assignmentId: h.assignmentId,
-                                  personId: h.personId,
-                                  name: h.name,
-                                  endDate: todayIso(),
-                                  endUnknown: false,
-                                })
-                              }
-                              className="ml-auto shrink-0 whitespace-nowrap font-medium text-fir transition-colors hover:underline"
-                            >
-                              Amtszeit von {h.name} beenden…
-                            </button>
-                          </div>
-                        );
-                      })}
+                        onCancelEnd={cancelEndPrevious}
+                      />
                     </div>
                   );
                 })}
@@ -976,148 +775,32 @@ export function PersonForm({
       </div>
 
       {/* End an active tenure → moves it into the history */}
-      <Dialog open={endTarget != null} onOpenChange={(o) => !o && setEndTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Amt beenden</DialogTitle>
-            <DialogDescription>
-              Das Amt wird zum angegebenen Datum beendet und wandert in „Frühere Ämter“. Der
-              Eintrag bleibt erhalten, zählt aber nicht mehr für Verzeichnis, PDF und Verteiler.
-            </DialogDescription>
-          </DialogHeader>
-          {endTarget ? (
-            <EndDateChoice
-              idPrefix="f-end"
-              endDate={endTarget.endDate}
-              endUnknown={endTarget.endUnknown}
-              onDate={(v) => setEndTarget({ ...endTarget, endDate: v })}
-              onUnknown={(v) => setEndTarget({ ...endTarget, endUnknown: v })}
-            />
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEndTarget(null)} disabled={isHistoryPending}>
-              Abbrechen
-            </Button>
-            <Button
-              onClick={confirmEnd}
-              disabled={isHistoryPending || (!endTarget?.endUnknown && !endTarget?.endDate)}
-            >
-              {isHistoryPending ? "Beenden …" : "Amt beenden"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EndTenureDialog
+        target={endTarget}
+        onChange={setEndTarget}
+        onClose={() => setEndTarget(null)}
+        onConfirm={confirmEnd}
+        pending={isHistoryPending}
+      />
 
       {/* Add / edit a past tenure */}
-      <Dialog open={histForm != null} onOpenChange={(o) => !o && setHistForm(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {histForm?.id != null ? "Früheres Amt bearbeiten" : "Früheres Amt hinzufügen"}
-            </DialogTitle>
-            <DialogDescription>
-              Ein bereits beendetes Amt für die rückwirkende Erfassung. Bis-Datum angeben
-              oder „Datum unbekannt“ wählen; das Von-Datum ist optional.
-            </DialogDescription>
-          </DialogHeader>
-          {histForm ? (
-            <div className="flex flex-col gap-3">
-              <Field label="Amt">
-                <Combobox
-                  aria-label="Amt"
-                  options={officeOptions}
-                  value={histForm.officeId != null ? String(histForm.officeId) : null}
-                  onChange={(v) =>
-                    setHistForm({ ...histForm, officeId: v === OFFICE_NONE ? null : Number(v) })
-                  }
-                  placeholder="Amt (optional)"
-                  searchPlaceholder="Amt suchen …"
-                  emptyText="Kein Amt gefunden."
-                />
-              </Field>
-              <Field label="Gliederung">
-                <Combobox
-                  aria-label="Gliederung"
-                  options={groupOptions}
-                  value={histForm.groupId != null ? String(histForm.groupId) : null}
-                  onChange={(v) => setHistForm({ ...histForm, groupId: Number(v) })}
-                  placeholder="Gliederung wählen"
-                  searchPlaceholder="Gliederung suchen …"
-                  emptyText="Keine Gliederung gefunden."
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="von" htmlFor="f-hist-from">
-                  <Input
-                    id="f-hist-from"
-                    type="date"
-                    value={histForm.startDate}
-                    onChange={(e) => setHistForm({ ...histForm, startDate: e.target.value })}
-                  />
-                </Field>
-                <Field label="bis" htmlFor="f-hist-to">
-                  <Input
-                    id="f-hist-to"
-                    type="date"
-                    value={histForm.endUnknown ? "" : histForm.endDate}
-                    disabled={histForm.endUnknown}
-                    onChange={(e) => setHistForm({ ...histForm, endDate: e.target.value })}
-                  />
-                </Field>
-              </div>
-              <label className="flex items-center gap-2 text-[13px] text-ink-soft">
-                <Checkbox
-                  checked={histForm.endUnknown}
-                  onCheckedChange={(v) => setHistForm({ ...histForm, endUnknown: v === true })}
-                />
-                Ende unbekannt
-              </label>
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setHistForm(null)} disabled={isHistoryPending}>
-              Abbrechen
-            </Button>
-            <Button onClick={submitHistForm} disabled={isHistoryPending}>
-              {isHistoryPending ? "Speichern …" : "Speichern"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <HistoryDialog
+        form={histForm}
+        onChange={setHistForm}
+        onClose={() => setHistForm(null)}
+        onSubmit={submitHistForm}
+        pending={isHistoryPending}
+        officeOptions={officeOptions}
+        groupOptions={groupOptions}
+      />
 
       {/* Holder warning: buffer an "end previous tenure" order — written only on save */}
-      <Dialog open={holderDialog != null} onOpenChange={(o) => !o && setHolderDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Amtszeit von {holderDialog?.name} beenden</DialogTitle>
-            <DialogDescription>
-              Die Amtszeit wird erst beim <strong>Speichern</strong> beendet. Bis dahin lässt sich
-              die Entscheidung rückgängig machen; brichst du das Formular ab, bleibt alles
-              unverändert. „Datum unbekannt“ wählen, wenn das Ende nicht mehr bekannt ist.
-            </DialogDescription>
-          </DialogHeader>
-          {holderDialog ? (
-            <EndDateChoice
-              idPrefix="f-holder"
-              endDate={holderDialog.endDate}
-              endUnknown={holderDialog.endUnknown}
-              onDate={(v) => setHolderDialog({ ...holderDialog, endDate: v })}
-              onUnknown={(v) => setHolderDialog({ ...holderDialog, endUnknown: v })}
-            />
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setHolderDialog(null)}>
-              Abbrechen
-            </Button>
-            <Button
-              onClick={confirmHolderDialog}
-              disabled={!holderDialog?.endUnknown && !holderDialog?.endDate}
-            >
-              Übernehmen
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <HolderDialog
+        dialog={holderDialog}
+        onChange={setHolderDialog}
+        onClose={() => setHolderDialog(null)}
+        onConfirm={confirmHolderDialog}
+      />
 
       {/* Delete this person */}
       {mode === "edit" && person ? (
@@ -1137,99 +820,5 @@ export function PersonForm({
         />
       ) : null}
     </>
-  );
-}
-
-// --- "Frühere Ämter" — dezenter, einklappbarer Historienabschnitt ---------------
-
-function HistorySection({
-  historical,
-  open,
-  onToggle,
-  onAdd,
-  onEdit,
-  onDelete,
-  range,
-  busy,
-}: {
-  historical: HistoricalAssignment[];
-  open: boolean;
-  onToggle: () => void;
-  onAdd: () => void;
-  onEdit: (h: HistoricalAssignment) => void;
-  onDelete: (id: number) => void;
-  range: (h: HistoricalAssignment) => string;
-  busy: boolean;
-}) {
-  return (
-    <div className="mt-4 border-t border-line pt-3">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center gap-1.5 text-[13px] font-semibold text-ink-soft transition-colors hover:text-ink"
-      >
-        {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-        Frühere Ämter
-        {historical.length > 0 ? (
-          <span className="font-normal text-ink-faint">({historical.length})</span>
-        ) : null}
-      </button>
-      {open ? (
-        <div className="mt-2.5 flex flex-col gap-1.5">
-          {historical.length === 0 ? (
-            <p className="text-xs text-ink-faint">Keine früheren Ämter erfasst.</p>
-          ) : (
-            historical.map((h) => (
-              <div
-                key={h.id}
-                className="group/hist flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2.5 py-1.5 text-[13px]"
-              >
-                <span className="min-w-0 text-ink-soft">
-                  {h.officeName ? (
-                    <span className="text-ink">{h.officeName}</span>
-                  ) : (
-                    <span className="italic">ohne Amt</span>
-                  )}
-                  <span className="text-ink-faint"> · {h.groupName} · </span>
-                  <span className="tabular-nums">{range(h)}</span>
-                </span>
-                <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/hist:opacity-100">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Bearbeiten"
-                    disabled={busy}
-                    onClick={() => onEdit(h)}
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Eintrag löschen"
-                    disabled={busy}
-                    className="text-ink-faint hover:text-crit"
-                    onClick={() => onDelete(h.id)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
-                </span>
-              </div>
-            ))
-          )}
-          <button
-            type="button"
-            onClick={onAdd}
-            disabled={busy}
-            className="mt-1 inline-flex items-center gap-1 self-start text-[13px] text-ink-soft transition-colors hover:text-fir disabled:opacity-50"
-          >
-            <Plus className="size-3.5" />
-            Früheres Amt hinzufügen
-          </button>
-        </div>
-      ) : null}
-    </div>
   );
 }
