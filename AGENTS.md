@@ -32,7 +32,7 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 - Alle Mutationen als **Server Actions** in `src/actions/*.ts` (`"use server"`, danach `revalidatePath`)
 - Route Handler NUR für: Auth-Catch-all (`src/app/api/auth/[...all]/route.ts`), PDF-/CSV-Export (brauchen `Content-Disposition`)
 - Geschützter Bereich: Route-Group `src/app/(app)/` — deren `layout.tsx` prüft autoritativ `auth.api.getSession()`, sonst `redirect("/login")`. `proxy.ts` macht nur optimistisches Cookie-Redirect
-- DB-Zugriff: zentraler Client `src/db/index.ts`; niemals SQL-Strings in Komponenten
+- DB-Zugriff: zentraler Client `src/db/index.ts`; niemals SQL-Strings in Komponenten. Zwei dokumentierte Ausnahmen greifen direkt auf `db` zu: `src/pdf/build-data.ts` (isolierte Full-Table-Reads fürs PDF) und `src/lib/mail.ts` (`mail_log`-Schreiben atomar zum SMTP-Versand)
 - Personentabelle: alle Datensätze serverseitig laden (~600), clientseitig filtern (TanStack Table). Keine Pagination
 - `updated_by` = Name/E-Mail aus der Session bei jeder Mutation setzen
 
@@ -43,7 +43,7 @@ Referenz-Mockup (Struktur übernehmen): https://claude.ai/code/artifact/f1874284
 
 - Grundton Papierweiß/Anthrazit (light/dark), Tinte fast schwarz
 - Akzent Tannengrün `--color-fir` (#2E5C46) sparsam; Messing `--color-brass` nur für kleine Kennzeichnungen (Verteiler-Chips)
-- Schrift: Fira Sans (UI/Daten, wie das gedruckte Verzeichnis), Display-Serif (Iowan Old Style/Palatino-Stack) nur für Seitentitel/Wortmarke
+- Schrift: Fira Sans (UI/Daten, wie das gedruckte Verzeichnis), Display-Serif (Iowan Old Style/Palatino-Stack) nur für Seitentitel, Wortmarke und Panel-Überschriften
 - Dicht aber ruhig: 13.5–14px Tabellentext, `tabular-nums` für Zahlenspalten
 - Beide Themes pflegen (`prefers-color-scheme` + `data-theme`-Override)
 
