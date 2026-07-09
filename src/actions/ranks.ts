@@ -6,9 +6,13 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import { persons, ranks } from "@/db/schema";
+import {
+  firstError,
+  isForeignKeyViolation,
+  isUniqueViolation,
+  type ActionResult,
+} from "@/lib/action-helpers";
 import { requireSession } from "@/lib/auth-helpers";
-
-export type ActionResult = { ok: true } | { ok: false; message: string };
 
 const rankSchema = z.object({
   name: z.string().trim().min(1, "Name ist erforderlich."),
@@ -16,18 +20,6 @@ const rankSchema = z.object({
 });
 
 export type RankInput = z.infer<typeof rankSchema>;
-
-function firstError(e: z.ZodError): string {
-  return e.issues[0]?.message ?? "Ungültige Eingabe.";
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505";
-}
-
-function isForeignKeyViolation(err: unknown): boolean {
-  return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23503";
-}
 
 export async function createRank(raw: RankInput): Promise<ActionResult> {
   await requireSession();

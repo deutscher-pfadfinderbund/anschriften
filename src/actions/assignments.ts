@@ -7,6 +7,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import type { ActiveHolder } from "@/db/queries";
 import { assignments, persons } from "@/db/schema";
+import { firstError, type ActionResult } from "@/lib/action-helpers";
 import { actorName, requireSession } from "@/lib/auth-helpers";
 import { formatName } from "@/lib/format";
 import { resolveTenureEnd } from "@/lib/person-schema";
@@ -15,12 +16,6 @@ import { resolveTenureEnd } from "@/lib/person-schema";
 // (delete + recreate from the form); these actions manage the *history* — ending a
 // current office and creating/editing/removing past ones — as immediate, standalone
 // writes so a normal person save never touches historical rows.
-
-export type ActionResult = { ok: true } | { ok: false; message: string };
-
-function firstError(e: z.ZodError): string {
-  return e.issues[0]?.message ?? "Ungültige Eingabe.";
-}
 
 const dateField = z
   .string()

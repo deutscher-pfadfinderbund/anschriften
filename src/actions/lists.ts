@@ -10,9 +10,14 @@ import {
   distributionListOfficeRules,
   distributionLists,
 } from "@/db/schema";
+import {
+  firstError,
+  isForeignKeyViolation,
+  isUniqueViolation,
+  type ActionResult,
+} from "@/lib/action-helpers";
 import { requireSession } from "@/lib/auth-helpers";
 
-export type ActionResult = { ok: true } | { ok: false; message: string };
 export type CreateListResult = { ok: true; id: number } | { ok: false; message: string };
 
 const listSchema = z.object({
@@ -30,28 +35,6 @@ const listSchema = z.object({
 });
 
 export type ListInput = z.infer<typeof listSchema>;
-
-function firstError(e: z.ZodError): string {
-  return e.issues[0]?.message ?? "Ungültige Eingabe.";
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: string }).code === "23505"
-  );
-}
-
-function isForeignKeyViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: string }).code === "23503"
-  );
-}
 
 export async function createList(raw: ListInput): Promise<CreateListResult> {
   await requireSession();
