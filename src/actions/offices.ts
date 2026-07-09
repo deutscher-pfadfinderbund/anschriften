@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { assignments, offices } from "@/db/schema";
+import { assignments, distributionListOfficeRules, offices } from "@/db/schema";
 import {
   firstError,
   isForeignKeyViolation,
@@ -59,6 +59,14 @@ export async function deleteOffice(id: number): Promise<ActionResult> {
     .where(eq(assignments.officeId, id));
   if (Number(n) > 0)
     return { ok: false, message: "Amt ist noch Personen zugeordnet und kann nicht gelöscht werden." };
+  // Distribution-list office rules reference the office with onDelete: cascade — deleting
+  // it would silently drop the rules and change who gets future mailings, so block it here.
+  const [{ n: rules }] = await db
+    .select({ n: count() })
+    .from(distributionListOfficeRules)
+    .where(eq(distributionListOfficeRules.officeId, id));
+  if (Number(rules) > 0)
+    return { ok: false, message: "Amt wird von Verteiler-Regeln verwendet und kann nicht gelöscht werden." };
   try {
     await db.delete(offices).where(eq(offices.id, id));
   } catch (err) {

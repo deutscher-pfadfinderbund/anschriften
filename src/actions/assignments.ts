@@ -34,6 +34,9 @@ async function touchPerson(personId: number, by: string): Promise<void> {
 function refresh(): void {
   revalidatePath("/");
   revalidatePath("/verteiler");
+  // groupUsage/officeUsage feed the delete guards on these pages — see src/db/queries.ts.
+  revalidatePath("/stammdaten");
+  revalidatePath("/gliederungen");
 }
 
 // --- end an active tenure ("Amt beenden…") --------------------------------------

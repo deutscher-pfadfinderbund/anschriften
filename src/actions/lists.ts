@@ -46,6 +46,8 @@ export async function createList(raw: ListInput): Promise<CreateListResult> {
       .values(parsed.data)
       .returning({ id: distributionLists.id });
     revalidatePath("/verteiler");
+    // Manual memberships also drive the Verteiler badges and list filter on "/".
+    revalidatePath("/");
     return { ok: true, id: row.id };
   } catch (err) {
     if (isUniqueViolation(err))
@@ -66,6 +68,8 @@ export async function updateList(id: number, raw: ListInput): Promise<ActionResu
     throw err;
   }
   revalidatePath("/verteiler");
+  // Manual memberships also drive the Verteiler badges and list filter on "/".
+  revalidatePath("/");
   return { ok: true };
 }
 
@@ -74,6 +78,8 @@ export async function deleteList(id: number): Promise<ActionResult> {
   // Memberships cascade via the distribution_list_members FK (onDelete: cascade).
   await db.delete(distributionLists).where(eq(distributionLists.id, id));
   revalidatePath("/verteiler");
+  // Manual memberships also drive the Verteiler badges and list filter on "/".
+  revalidatePath("/");
   return { ok: true };
 }
 
@@ -94,6 +100,8 @@ export async function addMembers(listId: number, personIds: number[]): Promise<A
     throw err;
   }
   revalidatePath("/verteiler");
+  // Manual memberships also drive the Verteiler badges and list filter on "/".
+  revalidatePath("/");
   return { ok: true };
 }
 
@@ -108,6 +116,8 @@ export async function removeMember(listId: number, personId: number): Promise<Ac
       ),
     );
   revalidatePath("/verteiler");
+  // Manual memberships also drive the Verteiler badges and list filter on "/".
+  revalidatePath("/");
   return { ok: true };
 }
 

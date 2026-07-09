@@ -24,6 +24,18 @@ class SaveAbort extends Error {}
 
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
+/**
+ * Revalidate every page whose data reflects a person + assignment change: the directory
+ * ("/"), the Verteiler badges, and the Stammdaten/Gliederungen delete guards fed by
+ * groupUsage/officeUsage (see src/db/queries.ts).
+ */
+function refresh(): void {
+  revalidatePath("/");
+  revalidatePath("/verteiler");
+  revalidatePath("/stammdaten");
+  revalidatePath("/gliederungen");
+}
+
 export type SaveResult =
   | { ok: true; id: number }
   | { ok: false; errors: FieldErrors; message?: string };
@@ -170,16 +182,14 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
     throw err;
   }
 
-  revalidatePath("/");
-  revalidatePath("/verteiler");
+  refresh();
   return { ok: true, id };
 }
 
 export async function deletePerson(id: number): Promise<{ ok: true }> {
   await requireSession();
-  await db.delete(persons).where(eq(persons.id, id));
-  revalidatePath("/");
   // Memberships cascade with the person, so the list counts change too.
-  revalidatePath("/verteiler");
+  await db.delete(persons).where(eq(persons.id, id));
+  refresh();
   return { ok: true };
 }
