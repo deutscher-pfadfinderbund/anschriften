@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { persons, ranks } from "@/db/schema";
+import { distributionListRankRules, persons, ranks } from "@/db/schema";
 import {
   firstError,
   isForeignKeyViolation,
@@ -61,6 +61,14 @@ export async function deleteRank(id: number): Promise<ActionResult> {
     .where(eq(persons.rankId, id));
   if (Number(n) > 0)
     return { ok: false, message: "Stand ist noch Personen zugeordnet und kann nicht gelöscht werden." };
+  // Distribution-list rank rules reference the rank with onDelete: cascade — deleting
+  // it would silently drop the rules and change who gets future mailings, so block it here.
+  const [{ n: rules }] = await db
+    .select({ n: count() })
+    .from(distributionListRankRules)
+    .where(eq(distributionListRankRules.rankId, id));
+  if (Number(rules) > 0)
+    return { ok: false, message: "Stand wird von Verteiler-Regeln verwendet und kann nicht gelöscht werden." };
   try {
     await db.delete(ranks).where(eq(ranks.id, id));
   } catch (err) {

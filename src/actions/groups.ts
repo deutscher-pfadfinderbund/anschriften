@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { assignments, groups } from "@/db/schema";
+import { assignments, distributionListGroupRules, groups } from "@/db/schema";
 import {
   firstError,
   isForeignKeyViolation,
@@ -85,6 +85,15 @@ export async function deleteGroup(id: number): Promise<ActionResult> {
     .where(eq(assignments.groupId, id));
   if (Number(assignmentCount) > 0)
     return { ok: false, message: "Gliederung ist noch Personen zugeordnet und kann nicht gelöscht werden." };
+
+  // Distribution-list group rules reference the group with onDelete: cascade — deleting
+  // it would silently drop the rules and change who gets future mailings, so block it here.
+  const [{ n: ruleCount }] = await db
+    .select({ n: count() })
+    .from(distributionListGroupRules)
+    .where(eq(distributionListGroupRules.groupId, id));
+  if (Number(ruleCount) > 0)
+    return { ok: false, message: "Gliederung wird von Verteiler-Regeln verwendet und kann nicht gelöscht werden." };
 
   try {
     await db.delete(groups).where(eq(groups.id, id));
