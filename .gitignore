@@ -46,6 +46,3 @@ next-env.d.ts
 
 # Claude Code session data (agent worktrees, local state)
 .claude/
-
-# Legacy Access exports (real member data — never commit)
-*.mdb
