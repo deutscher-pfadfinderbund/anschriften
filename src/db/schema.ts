@@ -208,6 +208,46 @@ export const distributionListOfficeRules = pgTable(
 );
 
 /**
+ * Rank-based membership rules: a list automatically contains everyone carrying the
+ * listed Stand. Unlike offices/groups a rank has no tenure — it is a plain property
+ * of the person — so a living person with the rank is a member, full stop. Maintained
+ * by the Kanzlei; the import only ever writes manual memberships.
+ */
+export const distributionListRankRules = pgTable(
+  "distribution_list_rank_rules",
+  {
+    listId: integer("list_id")
+      .notNull()
+      .references(() => distributionLists.id, { onDelete: "cascade" }),
+    rankId: integer("rank_id")
+      .notNull()
+      .references(() => ranks.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.listId, t.rankId] })],
+);
+
+/**
+ * Group-based membership rules: a list automatically contains whoever is currently
+ * (actively) assigned to the listed Gliederung, regardless of office. Effective
+ * membership counts living persons with an active (end_date IS NULL) assignment in
+ * the group. Maintained by the Kanzlei; the import only ever writes manual memberships.
+ */
+export const distributionListGroupRules = pgTable(
+  "distribution_list_group_rules",
+  {
+    listId: integer("list_id")
+      .notNull()
+      .references(() => distributionLists.id, { onDelete: "cascade" }),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.listId, t.groupId] })],
+);
+
+/**
  * Send log for the optional mail module (issue #19). One row per sent mailing
  * (not per BCC chunk). `list_id` is nullable and SET NULL on delete: a mailing
  * sent to a table selection has no list, and deleting a list must not erase its
@@ -228,6 +268,7 @@ export const mailLog = pgTable("mail_log", {
 
 export const ranksRelations = relations(ranks, ({ many }) => ({
   persons: many(persons),
+  rankRules: many(distributionListRankRules),
 }));
 
 export const groupsRelations = relations(groups, ({ one, many }) => ({
@@ -238,6 +279,7 @@ export const groupsRelations = relations(groups, ({ one, many }) => ({
   }),
   children: many(groups, { relationName: "group_tree" }),
   assignments: many(assignments),
+  groupRules: many(distributionListGroupRules),
 }));
 
 export const officesRelations = relations(offices, ({ many }) => ({
@@ -260,6 +302,8 @@ export const assignmentsRelations = relations(assignments, ({ one }) => ({
 export const distributionListsRelations = relations(distributionLists, ({ many }) => ({
   members: many(distributionListMembers),
   officeRules: many(distributionListOfficeRules),
+  rankRules: many(distributionListRankRules),
+  groupRules: many(distributionListGroupRules),
   mailLog: many(mailLog),
 }));
 
@@ -291,6 +335,34 @@ export const distributionListOfficeRulesRelations = relations(
     office: one(offices, {
       fields: [distributionListOfficeRules.officeId],
       references: [offices.id],
+    }),
+  }),
+);
+
+export const distributionListRankRulesRelations = relations(
+  distributionListRankRules,
+  ({ one }) => ({
+    list: one(distributionLists, {
+      fields: [distributionListRankRules.listId],
+      references: [distributionLists.id],
+    }),
+    rank: one(ranks, {
+      fields: [distributionListRankRules.rankId],
+      references: [ranks.id],
+    }),
+  }),
+);
+
+export const distributionListGroupRulesRelations = relations(
+  distributionListGroupRules,
+  ({ one }) => ({
+    list: one(distributionLists, {
+      fields: [distributionListGroupRules.listId],
+      references: [distributionLists.id],
+    }),
+    group: one(groups, {
+      fields: [distributionListGroupRules.groupId],
+      references: [groups.id],
     }),
   }),
 );

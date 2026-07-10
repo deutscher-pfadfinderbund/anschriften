@@ -1,6 +1,6 @@
 {
-  "id": "91a527c3-2edd-4d9d-a986-a76e0f063526",
-  "prevId": "a647a9d8-38c9-435f-b403-225fbb42be08",
+  "id": "f43279ad-9a1a-49d8-8085-3624b675443b",
+  "prevId": "91a527c3-2edd-4d9d-a986-a76e0f063526",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -102,6 +102,36 @@
           ],
           "isUnique": true,
           "where": "\"assignments\".\"end_date\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "assignments_groupId_idx": {
+          "name": "assignments_groupId_idx",
+          "columns": [
+            {
+              "expression": "group_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "assignments_officeId_idx": {
+          "name": "assignments_officeId_idx",
+          "columns": [
+            {
+              "expression": "office_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -455,6 +485,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -539,6 +575,12 @@
           "notNull": true,
           "default": 0
         },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -554,7 +596,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "groups_parentId_idx": {
+          "name": "groups_parentId_idx",
+          "columns": [
+            {
+              "expression": "parent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "groups_parent_id_groups_id_fk": {
           "name": "groups_parent_id_groups_id_fk",
@@ -705,6 +763,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 999
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -883,7 +947,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "persons_rankId_idx": {
+          "name": "persons_rankId_idx",
+          "columns": [
+            {
+              "expression": "rank_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "persons_rank_id_ranks_id_fk": {
           "name": "persons_rank_id_ranks_id_fk",
@@ -946,6 +1026,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

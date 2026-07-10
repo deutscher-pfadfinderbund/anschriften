@@ -3,10 +3,12 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Award,
   Briefcase,
   Clock,
   Copy,
   Download,
+  Layers,
   Lock,
   Mail,
   Pencil,
@@ -16,16 +18,21 @@ import {
   UserPlus,
   Users,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  addGroupRule,
   addMembers,
   addOfficeRule,
+  addRankRule,
   createList,
   deleteList,
+  removeGroupRule,
   removeMember,
   removeOfficeRule,
+  removeRankRule,
   updateList,
 } from "@/actions/lists";
 import { Combobox } from "@/components/combobox";
@@ -49,10 +56,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   DistributionListWithMembers,
+  GroupRow,
   ListMemberRow,
   MailLogEntry,
   OfficeRow,
   PersonOption,
+  RankRow,
 } from "@/db/queries";
 import { buildBcc, type BccSeparator } from "@/lib/export";
 import { formatDateTime, formatName } from "@/lib/format";
@@ -75,10 +84,95 @@ function hasEmail(m: ListMemberRow): boolean {
   return !!m.email && m.email.trim().length > 0;
 }
 
+type RuleRow = { id: number; name: string };
+
+/**
+ * One "Automatisch enthalten (nach …)" card. Identical chrome for Amt, Stand and
+ * Gliederung — only the icon, texts and the id/name rows differ.
+ */
+function RuleSection({
+  icon: Icon,
+  title,
+  description,
+  rows,
+  options,
+  onAdd,
+  onRemove,
+  emptyRules,
+  addAriaLabel,
+  addPlaceholder,
+  searchPlaceholder,
+  comboEmptyText,
+  disabled,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  rows: RuleRow[];
+  options: { value: string; label: string }[];
+  onAdd: (id: number) => void;
+  onRemove: (id: number) => void;
+  emptyRules: string;
+  addAriaLabel: string;
+  addPlaceholder: string;
+  searchPlaceholder: string;
+  comboEmptyText: string;
+  disabled: boolean;
+}) {
+  return (
+    <section className="rounded-lg border border-line bg-surface shadow-sm">
+      <div className="border-b border-line px-[18px] py-3">
+        <span className="font-display text-[15.5px] font-semibold text-ink">{title}</span>
+        <p className="mt-0.5 text-[12.5px] text-ink-faint">{description}</p>
+      </div>
+      <div className="p-[18px]">
+        {rows.length === 0 ? (
+          <p className="mb-3 text-[13px] text-ink-soft">{emptyRules}</p>
+        ) : (
+          <ul className="mb-3 flex flex-col gap-1.5">
+            {rows.map((r) => (
+              <li
+                key={r.id}
+                className="group/rule flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[13.5px]"
+              >
+                <Icon className="size-3.5 shrink-0 text-ink-faint" />
+                <span className="min-w-0 flex-1 truncate text-ink">{r.name}</span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Regel „${r.name}“ entfernen`}
+                  className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100"
+                  disabled={disabled}
+                  onClick={() => onRemove(r.id)}
+                >
+                  <X className="size-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="max-w-sm">
+          <Combobox
+            aria-label={addAriaLabel}
+            options={options}
+            value={null}
+            onChange={(v) => onAdd(Number(v))}
+            placeholder={addPlaceholder}
+            searchPlaceholder={searchPlaceholder}
+            emptyText={comboEmptyText}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function VerteilerManager({
   lists,
   personOptions,
   offices,
+  ranks,
+  groups,
   initialListId,
   mailEnabled = false,
   mailLog = [],
@@ -86,6 +180,8 @@ export function VerteilerManager({
   lists: DistributionListWithMembers[];
   personOptions: PersonOption[];
   offices: OfficeRow[];
+  ranks: RankRow[];
+  groups: GroupRow[];
   initialListId?: number | null;
   /** True when the optional mail module is configured (see isMailEnabled). */
   mailEnabled?: boolean;
@@ -233,6 +329,60 @@ export function VerteilerManager({
     if (!activeList) return;
     startTransition(async () => {
       const res = await removeOfficeRule(activeList.id, officeId);
+      if (!res.ok) return void toast.error(res.message);
+      router.refresh();
+    });
+  }
+
+  // Stände not yet a rule on the active list — the "+ Stand hinzufügen" combobox.
+  const ruleRankOptions = useMemo(() => {
+    if (!activeList) return [];
+    const existing = new Set(activeList.rankRules.map((r) => r.rankId));
+    return ranks.filter((r) => !existing.has(r.id)).map((r) => ({ value: String(r.id), label: r.name }));
+  }, [activeList, ranks]);
+
+  function handleAddRankRule(rankId: number) {
+    if (!activeList || !Number.isInteger(rankId)) return;
+    startTransition(async () => {
+      const res = await addRankRule(activeList.id, rankId);
+      if (!res.ok) return void toast.error(res.message);
+      const name = ranks.find((r) => r.id === rankId)?.name ?? "Stand";
+      toast.success(`Regel „${name}“ hinzugefügt.`);
+      router.refresh();
+    });
+  }
+
+  function handleRemoveRankRule(rankId: number) {
+    if (!activeList) return;
+    startTransition(async () => {
+      const res = await removeRankRule(activeList.id, rankId);
+      if (!res.ok) return void toast.error(res.message);
+      router.refresh();
+    });
+  }
+
+  // Gliederungen not yet a rule on the active list — the "+ Gliederung hinzufügen" combobox.
+  const ruleGroupOptions = useMemo(() => {
+    if (!activeList) return [];
+    const existing = new Set(activeList.groupRules.map((r) => r.groupId));
+    return groups.filter((g) => !existing.has(g.id)).map((g) => ({ value: String(g.id), label: g.name }));
+  }, [activeList, groups]);
+
+  function handleAddGroupRule(groupId: number) {
+    if (!activeList || !Number.isInteger(groupId)) return;
+    startTransition(async () => {
+      const res = await addGroupRule(activeList.id, groupId);
+      if (!res.ok) return void toast.error(res.message);
+      const name = groups.find((g) => g.id === groupId)?.name ?? "Gliederung";
+      toast.success(`Regel „${name}“ hinzugefügt.`);
+      router.refresh();
+    });
+  }
+
+  function handleRemoveGroupRule(groupId: number) {
+    if (!activeList) return;
+    startTransition(async () => {
+      const res = await removeGroupRule(activeList.id, groupId);
       if (!res.ok) return void toast.error(res.message);
       router.refresh();
     });
@@ -449,56 +599,54 @@ export function VerteilerManager({
                 </section>
               ) : null}
 
-              {/* Office rules: automatic membership by office */}
-              <section className="rounded-lg border border-line bg-surface shadow-sm">
-                <div className="border-b border-line px-[18px] py-3">
-                  <span className="font-display text-[15.5px] font-semibold text-ink">
-                    Automatisch enthalten (nach Amt)
-                  </span>
-                  <p className="mt-0.5 text-[12.5px] text-ink-faint">
-                    Wer eines dieser Ämter innehat, ist automatisch Mitglied — bei einem Amtswechsel
-                    wandert die Mitgliedschaft mit.
-                  </p>
-                </div>
-                <div className="p-[18px]">
-                  {activeList.officeRules.length === 0 ? (
-                    <p className="mb-3 text-[13px] text-ink-soft">Noch keine Amts-Regel.</p>
-                  ) : (
-                    <ul className="mb-3 flex flex-col gap-1.5">
-                      {activeList.officeRules.map((r) => (
-                        <li
-                          key={r.officeId}
-                          className="group/rule flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[13.5px]"
-                        >
-                          <Briefcase className="size-3.5 shrink-0 text-ink-faint" />
-                          <span className="min-w-0 flex-1 truncate text-ink">{r.officeName}</span>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Regel „${r.officeName}“ entfernen`}
-                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100"
-                            disabled={isPending}
-                            onClick={() => handleRemoveRule(r.officeId)}
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="max-w-sm">
-                    <Combobox
-                      aria-label="Amt als Regel hinzufügen"
-                      options={ruleOfficeOptions}
-                      value={null}
-                      onChange={(v) => handleAddRule(Number(v))}
-                      placeholder="+ Amt hinzufügen"
-                      searchPlaceholder="Amt suchen …"
-                      emptyText="Kein Amt gefunden."
-                    />
-                  </div>
-                </div>
-              </section>
+              {/* Automatic membership rules — same shape for Amt, Stand and Gliederung. */}
+              <RuleSection
+                icon={Briefcase}
+                title="Automatisch enthalten (nach Amt)"
+                description="Wer eines dieser Ämter innehat, ist automatisch Mitglied — bei einem Amtswechsel wandert die Mitgliedschaft mit."
+                rows={activeList.officeRules.map((r) => ({ id: r.officeId, name: r.officeName }))}
+                options={ruleOfficeOptions}
+                onAdd={handleAddRule}
+                onRemove={handleRemoveRule}
+                emptyRules="Noch keine Amts-Regel."
+                addAriaLabel="Amt als Regel hinzufügen"
+                addPlaceholder="+ Amt hinzufügen"
+                searchPlaceholder="Amt suchen …"
+                comboEmptyText="Kein Amt gefunden."
+                disabled={isPending}
+              />
+
+              <RuleSection
+                icon={Award}
+                title="Automatisch enthalten (nach Stand)"
+                description="Wer einen dieser Stände trägt, ist automatisch Mitglied — z. B. alle Ordensritter und St.-Georgs-Ritter."
+                rows={activeList.rankRules.map((r) => ({ id: r.rankId, name: r.rankName }))}
+                options={ruleRankOptions}
+                onAdd={handleAddRankRule}
+                onRemove={handleRemoveRankRule}
+                emptyRules="Noch keine Stand-Regel."
+                addAriaLabel="Stand als Regel hinzufügen"
+                addPlaceholder="+ Stand hinzufügen"
+                searchPlaceholder="Stand suchen …"
+                comboEmptyText="Kein Stand gefunden."
+                disabled={isPending}
+              />
+
+              <RuleSection
+                icon={Layers}
+                title="Automatisch enthalten (nach Gliederung)"
+                description="Wer aktiv einer dieser Gliederungen zugeordnet ist, ist automatisch Mitglied — z. B. die ganze Bundesführung."
+                rows={activeList.groupRules.map((r) => ({ id: r.groupId, name: r.groupName }))}
+                options={ruleGroupOptions}
+                onAdd={handleAddGroupRule}
+                onRemove={handleRemoveGroupRule}
+                emptyRules="Noch keine Gliederungs-Regel."
+                addAriaLabel="Gliederung als Regel hinzufügen"
+                addPlaceholder="+ Gliederung hinzufügen"
+                searchPlaceholder="Gliederung suchen …"
+                comboEmptyText="Keine Gliederung gefunden."
+                disabled={isPending}
+              />
 
               {/* Members */}
               <section className="rounded-lg border border-line bg-surface shadow-sm">
@@ -538,13 +686,32 @@ export function VerteilerManager({
                             ) : null}
                             {m.viaOffices.map((o) => (
                               <span
-                                key={o.id}
+                                key={`o${o.id}`}
                                 className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
                               >
                                 über Amt: {o.name}
                               </span>
                             ))}
-                            {m.mainOffice && m.viaOffices.length === 0 ? (
+                            {m.viaRanks.map((r) => (
+                              <span
+                                key={`r${r.id}`}
+                                className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
+                              >
+                                über Stand: {r.name}
+                              </span>
+                            ))}
+                            {m.viaGroups.map((g) => (
+                              <span
+                                key={`g${g.id}`}
+                                className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
+                              >
+                                über Gliederung: {g.name}
+                              </span>
+                            ))}
+                            {m.mainOffice &&
+                            m.viaOffices.length === 0 &&
+                            m.viaRanks.length === 0 &&
+                            m.viaGroups.length === 0 ? (
                               <span className="text-xs text-ink-faint">{m.mainOffice}</span>
                             ) : null}
                           </div>

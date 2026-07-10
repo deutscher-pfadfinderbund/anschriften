@@ -117,13 +117,13 @@ export function PersonForm({
     () => new Set(person?.distributionListIds ?? []),
   );
 
-  // Lists this person belongs to automatically because they hold a rule office.
-  // These checkboxes render locked + ticked; the editable `listIds` state below
-  // still only ever carries the *manual* memberships.
-  const ruleOfficeNamesByList = useMemo(() => {
+  // Lists this person belongs to automatically because a rule matches them (held
+  // office, Stand or Gliederung). These checkboxes render locked + ticked; the
+  // editable `listIds` state below still only ever carries the *manual* memberships.
+  const ruleReasonsByList = useMemo(() => {
     const map = new Map<number, string>();
     for (const r of person?.ruleMemberships ?? []) {
-      map.set(r.listId, r.officeNames.join(", "));
+      map.set(r.listId, r.reasons.join(", "));
     }
     return map;
   }, [person?.ruleMemberships]);
@@ -688,8 +688,8 @@ export function PersonForm({
               ) : (
                 <div className="flex flex-col gap-2">
                   {distributionLists.map((l) => {
-                    const viaOffice = ruleOfficeNamesByList.get(l.id);
-                    const isRuleBased = viaOffice != null;
+                    const viaRule = ruleReasonsByList.get(l.id);
+                    const isRuleBased = viaRule != null;
                     // Ticked when a manual membership OR a rule applies; locked when a
                     // rule applies (the rule, not this checkbox, controls it then).
                     const checked = listIds.has(l.id) || isRuleBased;
@@ -702,7 +702,7 @@ export function PersonForm({
                         )}
                         title={
                           isRuleBased
-                            ? `Automatisch enthalten über Amt ${viaOffice} — über den Verteiler oder das Amt änderbar.`
+                            ? `Automatisch enthalten (${viaRule}) — über den Verteiler oder die zugrunde liegende Regel änderbar.`
                             : undefined
                         }
                       >
@@ -724,9 +724,7 @@ export function PersonForm({
                         <span className="min-w-0">
                           {l.name}
                           {isRuleBased ? (
-                            <span className="ml-1.5 text-xs text-ink-faint">
-                              · über Amt {viaOffice}
-                            </span>
+                            <span className="ml-1.5 text-xs text-ink-faint">· {viaRule}</span>
                           ) : null}
                         </span>
                       </label>
