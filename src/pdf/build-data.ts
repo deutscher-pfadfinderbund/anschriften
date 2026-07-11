@@ -16,6 +16,7 @@
  */
 import { db } from "@/db";
 import { assignments, groups, offices, persons, ranks } from "@/db/schema";
+import { RANK_UNRANKED } from "@/lib/rank";
 
 // ---------------------------------------------------------------------------------------
 //  Types
@@ -170,8 +171,6 @@ const PROFILE_SUBTITLE: Record<Profile, string | null> = {
   nurOrdenStChristophorus: "Orden St. Christophorus",
 };
 
-const RANK_AMTLOS = 999;
-
 // ---------------------------------------------------------------------------------------
 //  Small pure helpers (exported for tests where useful)
 // ---------------------------------------------------------------------------------------
@@ -322,7 +321,7 @@ export function buildProfileData(
     const rows = [...byPerson.entries()].map(([personId, offs]) => {
       const p = personById.get(personId)!;
       const sortedOffs = [...offs].sort((x, y) => x.rank - y.rank || x.name.localeCompare(y.name, "de"));
-      const minRank = sortedOffs.length > 0 ? sortedOffs[0].rank : RANK_AMTLOS;
+      const minRank = sortedOffs.length > 0 ? sortedOffs[0].rank : RANK_UNRANKED;
       const sortName = normalizeSortKey(joinNonEmpty([p.scoutName || p.lastName || p.firstName]));
       return { p, officeNames: sortedOffs.map((o) => o.name), minRank, sortName };
     });

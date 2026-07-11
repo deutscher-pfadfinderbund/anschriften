@@ -3,13 +3,13 @@
 Ziel: absichern, dass Typst ein A5-Verzeichnis mit Fira Sans und ein Namensregister
 mit korrekten Seitenzahlen erzeugen kann, bevor M5 startet.
 
-**Ergebnis: funktioniert.** Getestet mit **Typst 0.15.0**. Template: `src/pdf/templates/spike.typ`,
+**Ergebnis: funktioniert.** Getestet mit **Typst 0.15.0**. Template: `docs/typst-spike.typ`,
 Schriften eingecheckt unter `src/pdf/fonts/` (Fira Sans Regular/Bold/Italic, SIL OFL).
 
 Kompilieren:
 
 ```bash
-typst compile --font-path src/pdf/fonts src/pdf/templates/spike.typ /tmp/spike.pdf
+typst compile --font-path src/pdf/fonts docs/typst-spike.typ /tmp/spike.pdf
 ```
 
 Das Namensregister löst Seitenzahlen über Labels auf: jeder Eintrag trägt ein Label

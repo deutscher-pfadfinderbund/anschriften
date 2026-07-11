@@ -26,7 +26,7 @@ export function LoginButton() {
       type="button"
       onClick={signIn}
       disabled={pending}
-      className="w-full rounded-md bg-fir px-4 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-fir-deep disabled:opacity-60"
+      className="w-full rounded-md bg-fir px-4 py-2.5 text-sm font-medium text-on-fir transition-colors hover:bg-fir-deep disabled:opacity-60"
     >
       {pending ? "Weiterleitung …" : "Anmelden mit DPB-Login"}
     </button>

@@ -5,10 +5,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { assignments, groups } from "@/db/schema";
-import { requireSession } from "@/lib/auth-helpers";
-
-export type ActionResult = { ok: true } | { ok: false; message: string };
+import { assignments, distributionListGroupRules, groups } from "@/db/schema";
+import {
+  firstError,
+  isForeignKeyViolation,
+  isUniqueViolation,
+  type ActionResult,
+} from "@/lib/action-helpers";
+import { actorName, requireSession } from "@/lib/auth-helpers";
 
 const SECTIONS = [
   "bund",
@@ -33,24 +37,13 @@ const groupSchema = z.object({
 
 export type GroupInput = z.infer<typeof groupSchema>;
 
-function firstError(e: z.ZodError): string {
-  return e.issues[0]?.message ?? "Ungültige Eingabe.";
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505";
-}
-
-function isForeignKeyViolation(err: unknown): boolean {
-  return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23503";
-}
-
 export async function createGroup(raw: GroupInput): Promise<ActionResult> {
-  await requireSession();
+  const session = await requireSession();
+  const by = actorName(session);
   const parsed = groupSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
   try {
-    await db.insert(groups).values(parsed.data);
+    await db.insert(groups).values({ ...parsed.data, updatedBy: by });
   } catch (err) {
     if (isUniqueViolation(err)) return { ok: false, message: "Eine Gliederung mit diesem Namen existiert bereits." };
     throw err;
@@ -61,12 +54,13 @@ export async function createGroup(raw: GroupInput): Promise<ActionResult> {
 }
 
 export async function updateGroup(id: number, raw: GroupInput): Promise<ActionResult> {
-  await requireSession();
+  const session = await requireSession();
+  const by = actorName(session);
   const parsed = groupSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
   if (parsed.data.parentId === id) return { ok: false, message: "Eine Gliederung kann nicht ihr eigenes Elternteil sein." };
   try {
-    await db.update(groups).set(parsed.data).where(eq(groups.id, id));
+    await db.update(groups).set({ ...parsed.data, updatedBy: by, updatedAt: new Date() }).where(eq(groups.id, id));
   } catch (err) {
     if (isUniqueViolation(err)) return { ok: false, message: "Eine Gliederung mit diesem Namen existiert bereits." };
     throw err;
@@ -91,6 +85,15 @@ export async function deleteGroup(id: number): Promise<ActionResult> {
     .where(eq(assignments.groupId, id));
   if (Number(assignmentCount) > 0)
     return { ok: false, message: "Gliederung ist noch Personen zugeordnet und kann nicht gelöscht werden." };
+
+  // Distribution-list group rules reference the group with onDelete: cascade — deleting
+  // it would silently drop the rules and change who gets future mailings, so block it here.
+  const [{ n: ruleCount }] = await db
+    .select({ n: count() })
+    .from(distributionListGroupRules)
+    .where(eq(distributionListGroupRules.groupId, id));
+  if (Number(ruleCount) > 0)
+    return { ok: false, message: "Gliederung wird von Verteiler-Regeln verwendet und kann nicht gelöscht werden." };
 
   try {
     await db.delete(groups).where(eq(groups.id, id));

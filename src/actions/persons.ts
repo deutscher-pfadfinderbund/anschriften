@@ -5,22 +5,16 @@ import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
 import { assignments, distributionListMembers, persons } from "@/db/schema";
+import { isUniqueViolation } from "@/lib/action-helpers";
 import { actorName, requireSession } from "@/lib/auth-helpers";
 import {
+  cleanPersonInput,
   parsePersonInput,
   resolveTenureEnd,
   validateTenure,
-  type AssignmentInput,
   type FieldErrors,
   type PersonInput,
 } from "@/lib/person-schema";
-
-/** Postgres unique-violation SQLSTATE — the active-tenure partial unique index. */
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505"
-  );
-}
 
 /**
  * Thrown inside the save transaction to roll everything back with a user-facing German
@@ -30,57 +24,21 @@ class SaveAbort extends Error {}
 
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
+/**
+ * Revalidate every page whose data reflects a person + assignment change: the directory
+ * ("/"), the Verteiler badges, and the Stammdaten/Gliederungen delete guards fed by
+ * groupUsage/officeUsage (see src/db/queries.ts).
+ */
+function refresh(): void {
+  revalidatePath("/");
+  revalidatePath("/verteiler");
+  revalidatePath("/stammdaten");
+  revalidatePath("/gliederungen");
+}
+
 export type SaveResult =
   | { ok: true; id: number }
   | { ok: false; errors: FieldErrors; message?: string };
-
-const trimOrNull = (v: string | null | undefined): string | null => {
-  const s = (v ?? "").trim();
-  return s.length > 0 ? s : null;
-};
-
-/** Drop empty numbers, default the label, dedupe assignments by (group, office). */
-function clean(input: PersonInput): PersonInput {
-  const seen = new Set<string>();
-  const uniqueAssignments: AssignmentInput[] = [];
-  for (const a of input.assignments) {
-    if (!a.groupId) continue;
-    // The end date is part of the identity: the same combination may appear once
-    // active and once (or repeatedly) as finished tenures — only exact duplicates collapse.
-    const key = `${a.groupId}:${a.officeId ?? "null"}:${trimOrNull(a.endDate) ?? "active"}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    // Keep the tenure dates; blank strings become null (unknown / active).
-    uniqueAssignments.push({
-      groupId: a.groupId,
-      officeId: a.officeId ?? null,
-      startDate: trimOrNull(a.startDate),
-      endDate: trimOrNull(a.endDate),
-    });
-  }
-
-  return {
-    ...input,
-    distributionListIds: [...new Set(input.distributionListIds)],
-    salutation: trimOrNull(input.salutation),
-    title: trimOrNull(input.title),
-    firstName: trimOrNull(input.firstName),
-    lastName: trimOrNull(input.lastName),
-    scoutName: trimOrNull(input.scoutName),
-    birthDate: trimOrNull(input.birthDate),
-    deathDate: trimOrNull(input.deathDate),
-    street: trimOrNull(input.street),
-    addressExtra: trimOrNull(input.addressExtra),
-    postalCode: trimOrNull(input.postalCode),
-    city: trimOrNull(input.city),
-    email: trimOrNull(input.email),
-    notes: trimOrNull(input.notes),
-    phones: input.phones
-      .map((p) => ({ label: (p.label || "Telefon").trim() || "Telefon", number: (p.number ?? "").trim() }))
-      .filter((p) => p.number.length > 0),
-    assignments: uniqueAssignments,
-  };
-}
 
 /** Create or update a person plus its assignments (delete + recreate) in one transaction. */
 export async function savePerson(raw: PersonInput): Promise<SaveResult> {
@@ -88,7 +46,7 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
 
   const parsed = parsePersonInput(raw);
   if (!parsed.ok) return { ok: false, errors: parsed.errors };
-  const data = clean(parsed.data);
+  const data = cleanPersonInput(parsed.data);
 
   // Re-validate the cleaned payload (empty PLZ/e-mail become null → no false errors).
   const revalidated = parsePersonInput(data);
@@ -224,16 +182,14 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
     throw err;
   }
 
-  revalidatePath("/");
-  revalidatePath("/verteiler");
+  refresh();
   return { ok: true, id };
 }
 
 export async function deletePerson(id: number): Promise<{ ok: true }> {
   await requireSession();
-  await db.delete(persons).where(eq(persons.id, id));
-  revalidatePath("/");
   // Memberships cascade with the person, so the list counts change too.
-  revalidatePath("/verteiler");
+  await db.delete(persons).where(eq(persons.id, id));
+  refresh();
   return { ok: true };
 }

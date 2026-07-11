@@ -37,6 +37,8 @@ import {
 } from "@/actions/lists";
 import { Combobox } from "@/components/combobox";
 import { ComposeMailDialog } from "@/components/compose-mail-dialog";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { FormLabel } from "@/components/form-label";
 import { MultiSelectList } from "@/components/multi-select-list";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -500,7 +502,7 @@ export function VerteilerManager({
 
                 <div className="p-[18px]">
                   {withoutEmail.length > 0 ? (
-                    <p className="mb-3 rounded-md border border-brass/40 bg-brass-tint px-3 py-2 text-[12.5px] text-ink-soft">
+                    <p className="mb-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-[12.5px] text-ink-soft">
                       <span className="font-medium text-ink">
                         {withoutEmail.length}{" "}
                         {withoutEmail.length === 1 ? "Mitglied" : "Mitglieder"} ohne E-Mail-Adresse:
@@ -580,7 +582,7 @@ export function VerteilerManager({
                           </div>
                         </div>
                         {e.status === "sent" ? (
-                          <span className="shrink-0 rounded-[4px] border border-fir/40 bg-fir-tint px-1.5 py-px text-[10.5px] font-medium text-fir">
+                          <span className="shrink-0 rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft">
                             versendet
                           </span>
                         ) : (
@@ -786,12 +788,7 @@ export function VerteilerManager({
           {listForm ? (
             <div className="flex flex-col gap-3">
               <div>
-                <Label
-                  htmlFor="list-name"
-                  className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint"
-                >
-                  Name
-                </Label>
+                <FormLabel htmlFor="list-name">Name</FormLabel>
                 <Input
                   id="list-name"
                   autoFocus
@@ -804,12 +801,7 @@ export function VerteilerManager({
                 />
               </div>
               <div>
-                <Label
-                  htmlFor="list-desc"
-                  className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint"
-                >
-                  Beschreibung (optional)
-                </Label>
+                <FormLabel htmlFor="list-desc">Beschreibung (optional)</FormLabel>
                 <Textarea
                   id="list-desc"
                   value={listForm.description}
@@ -831,26 +823,21 @@ export function VerteilerManager({
       </Dialog>
 
       {/* Delete dialog */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Verteiler löschen?</DialogTitle>
-            <DialogDescription>
-              „{activeList?.name}“ wird mit allen {activeList?.members.length ?? 0} Mitgliedschaften
-              gelöscht. Die Anschriften selbst bleiben erhalten. Diese Aktion kann nicht rückgängig
-              gemacht werden.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={isPending}>
-              Abbrechen
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete} disabled={isPending}>
-              {isPending ? "Löschen …" : "Endgültig löschen"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Verteiler löschen?"
+        description={
+          <>
+            „{activeList?.name}“ wird mit allen {activeList?.members.length ?? 0} Mitgliedschaften
+            gelöscht. Die Anschriften selbst bleiben erhalten. Diese Aktion kann nicht rückgängig
+            gemacht werden.
+          </>
+        }
+        confirmLabel="Endgültig löschen"
+        pending={isPending}
+        onConfirm={confirmDelete}
+      />
 
       {/* Add members dialog */}
       <Dialog

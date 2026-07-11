@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isValidDate, resolveTenureEnd, validateTenure } from "./person-schema";
+import { isValidDate, parsePersonInput, resolveTenureEnd, validateTenure } from "./person-schema";
 
 // Fictional dates only — validation logic for the office-history Amtszeiten (issue #22).
 describe("isValidDate", () => {
@@ -91,5 +91,93 @@ describe("resolveTenureEnd", () => {
       ok: false,
       message: "Das Bis-Datum darf nicht vor dem Von-Datum liegen.",
     });
+  });
+});
+
+// The cross-field superRefine rules of personInputSchema, exercised through
+// parsePersonInput. `base` is otherwise valid so each test isolates one rule.
+// All values are fictitious.
+function base(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    salutation: null,
+    title: null,
+    firstName: "Holger",
+    lastName: "Specht",
+    scoutName: null,
+    birthDate: null,
+    deathDate: null,
+    rankId: null,
+    street: null,
+    addressExtra: null,
+    postalCode: null,
+    city: null,
+    email: null,
+    phones: [],
+    notes: null,
+    doNotPrint: false,
+    assignments: [],
+    ...over,
+  };
+}
+
+describe("personInputSchema: name requirement", () => {
+  it("requires a last name or a scout name", () => {
+    const r = parsePersonInput(base({ lastName: null, scoutName: null }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.lastName).toBe("Nachname oder Fahrtenname ist erforderlich.");
+  });
+
+  it("treats a whitespace-only name as missing", () => {
+    const r = parsePersonInput(base({ lastName: "  ", firstName: "  ", scoutName: "   " }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errors.lastName).toBe("Nachname oder Fahrtenname ist erforderlich.");
+  });
+
+  it("accepts a scout name without a civil name", () => {
+    const r = parsePersonInput(base({ lastName: null, firstName: null, scoutName: "Falke" }));
+    expect(r.ok).toBe(true);
+  });
+
+  it("accepts a last name without a scout name", () => {
+    const r = parsePersonInput(base({ scoutName: null }));
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe("personInputSchema: e-mail format", () => {
+  it("rejects a malformed e-mail address", () => {
+    for (const email of ["kein-at", "a@b", "a b@x.de", "@x.de", "a@.de"]) {
+      const r = parsePersonInput(base({ email }));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.errors.email).toBe("Bitte eine gültige E-Mail-Adresse eingeben.");
+    }
+  });
+
+  it("accepts a valid e-mail address", () => {
+    expect(parsePersonInput(base({ email: "holger.specht@example.org" })).ok).toBe(true);
+  });
+
+  it("skips the check for an empty or whitespace-only e-mail", () => {
+    expect(parsePersonInput(base({ email: null })).ok).toBe(true);
+    expect(parsePersonInput(base({ email: "   " })).ok).toBe(true);
+  });
+});
+
+describe("personInputSchema: postal code format", () => {
+  it("rejects a postal code that is not exactly five digits", () => {
+    for (const postalCode of ["1234", "123456", "abcde", "9040a", "90 402"]) {
+      const r = parsePersonInput(base({ postalCode }));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.errors.postalCode).toBe("Die PLZ muss aus 5 Ziffern bestehen.");
+    }
+  });
+
+  it("accepts a five-digit postal code", () => {
+    expect(parsePersonInput(base({ postalCode: "90402" })).ok).toBe(true);
+  });
+
+  it("skips the check for an empty or whitespace-only postal code", () => {
+    expect(parsePersonInput(base({ postalCode: null })).ok).toBe(true);
+    expect(parsePersonInput(base({ postalCode: "   " })).ok).toBe(true);
   });
 });

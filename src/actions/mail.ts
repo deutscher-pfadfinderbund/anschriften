@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { effectiveMemberIds, personEmailsByIds } from "@/db/queries";
+import { firstError } from "@/lib/action-helpers";
 import { actorName, requireSession } from "@/lib/auth-helpers";
 import { isMailEnabled, normalizeRecipients, sendListMail } from "@/lib/mail";
 
@@ -31,10 +32,6 @@ const composeSchema = z.object({
 });
 
 export type SendMailInput = z.infer<typeof composeSchema>;
-
-function firstError(e: z.ZodError): string {
-  return e.issues[0]?.message ?? "Ungültige Eingabe.";
-}
 
 /**
  * Send a plaintext mailing to a whole distribution list or a table selection.

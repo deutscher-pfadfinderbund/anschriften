@@ -83,7 +83,7 @@ export function Sidebar({ userName }: { userName: string }) {
       </nav>
 
       <div className="flex items-center gap-2.5 border-t border-line px-4 py-3.5">
-        <div className="grid size-[30px] place-items-center rounded-full bg-fir text-xs font-semibold text-[var(--on-fir)]">
+        <div className="grid size-[30px] place-items-center rounded-full bg-fir text-xs font-semibold text-on-fir">
           {initials(userName)}
         </div>
         <div className="min-w-0 flex-1 text-xs leading-tight">
