@@ -65,6 +65,26 @@ export function normalizeRecipients(emails: (string | null | undefined)[]): Norm
   return { recipients, skipped };
 }
 
+/**
+ * Turn a caught SMTP error into a short, privacy-preserving string for
+ * `mail_log.error`. SMTP rejections often echo recipient addresses; those are
+ * PII and must not be persisted. We keep the nodemailer error code and SMTP
+ * response code (the useful debugging signal), take only the first line, and
+ * mask any e-mail address in it.
+ */
+export function sanitizeMailError(err: unknown): string {
+  const e = err as { code?: unknown; responseCode?: unknown; message?: unknown };
+  const parts: string[] = [];
+  if (typeof e?.code === "string") parts.push(e.code);
+  if (typeof e?.responseCode === "number") parts.push(`SMTP ${e.responseCode}`);
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  const firstLine = raw.split("\n")[0]?.trim() ?? "";
+  // Mask anything that looks like an e-mail address.
+  const masked = firstLine.replace(/[^\s@<>]+@[^\s@<>]+/g, "<redacted>");
+  if (masked) parts.push(masked);
+  return (parts.join(": ") || "Unbekannter Fehler").slice(0, 500);
+}
+
 export type SendListMailInput = {
   subject: string;
   body: string;
@@ -102,6 +122,10 @@ export async function sendListMail(input: SendListMailInput): Promise<SendListMa
     host,
     port,
     secure,
+    // When not on an implicit-TLS port (secure === false, i.e. STARTTLS on 587),
+    // require STARTTLS: nodemailer refuses to send rather than silently falling
+    // back to plaintext, so credentials/messages are never sent in the clear.
+    ...(secure ? {} : { requireTLS: true }),
     // Auth-less relays (Mailpit in dev, some internal servers) must get no auth
     // block at all — an empty user/pass pair makes some transports misbehave.
     ...(user ? { auth: { user, pass } } : {}),
@@ -141,7 +165,8 @@ export async function sendListMail(input: SendListMailInput): Promise<SendListMa
       subject: input.subject,
       recipientCount,
       status: "failed",
-      error: message.slice(0, 2000),
+      // Never persist recipient addresses from SMTP rejections (PII).
+      error: sanitizeMailError(err),
     });
     return { ok: false, error: message };
   } finally {

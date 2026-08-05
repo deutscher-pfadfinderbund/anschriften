@@ -113,8 +113,10 @@ export interface Entry {
   extra: string | null; // address addition
   street: string | null;
   city: string | null; // "PLZ Ort"
-  phoneStreet: string | null; // secondary phone, printed on the street row
-  phoneCity: string | null; // primary phone, printed on the PLZ/Ort row
+  // All phone numbers with their labels (issue #8): the template prints "Label: number" so a
+  // reader can tell mobil/privat/dienstlich apart; no extras are silently dropped. `label` is
+  // null when the number carries no label.
+  phones: { label: string | null; number: string }[];
   email: string | null;
   birth: string | null; // formatted birth date when withBirthdays
 }
@@ -175,9 +177,15 @@ const PROFILE_SUBTITLE: Record<Profile, string | null> = {
 //  Small pure helpers (exported for tests where useful)
 // ---------------------------------------------------------------------------------------
 
-/** Fold German umlauts the phone-book way and lower-case, for alphabetical register order. */
+/**
+ * Canonical German collation key (DIN 5007-2, phone-book): compose first so decomposed
+ * umlauts (combining diacritics) fold too, map ä→ae, ö→oe, ü→ue, ß→ss, strip any remaining
+ * accents and lower-case. Identical rule to `fold` in src/lib/format.ts, so the on-screen
+ * persons table and the printed register/memorial sort the same way.
+ */
 export function normalizeSortKey(value: string): string {
   return value
+    .normalize("NFC")
     .replace(/ä/g, "ae")
     .replace(/ö/g, "oe")
     .replace(/ü/g, "ue")
@@ -185,6 +193,8 @@ export function normalizeSortKey(value: string): string {
     .replace(/Ö/g, "Oe")
     .replace(/Ü/g, "Ue")
     .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .trim();
 }
@@ -206,10 +216,23 @@ export function formatDate(iso: string | null): string | null {
   return `${m[3]}.${m[2]}.${m[1]}`;
 }
 
-function formatToday(today: Date): string {
-  const dd = String(today.getDate()).padStart(2, "0");
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  return `${dd}.${mm}.${today.getFullYear()}`;
+/**
+ * The calendar date of `now` in Europe/Berlin (issue #16). The server runs in UTC, so a plain
+ * `getDate()` stamps an export made at 23:30 CEST with the previous day. Returned as both the
+ * printed `dd.MM.yyyy` "Stand" and an ISO `yyyy-MM-dd` used as the active-assignment cutoff (#6).
+ */
+function berlinToday(now: Date): { display: string; iso: string } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  const yyyy = get("year");
+  const mm = get("month");
+  const dd = get("day");
+  return { display: `${dd}.${mm}.${yyyy}`, iso: `${yyyy}-${mm}-${dd}` };
 }
 
 /** Leadership offices whose label is implied by the (sub)group heading and thus suppressed. */
@@ -220,6 +243,13 @@ function isLeaderOffice(name: string): boolean {
 
 function personDisplayName(p: DataPerson): string {
   return joinNonEmpty([p.title, p.firstName, p.lastName]);
+}
+
+/** All non-empty phone numbers with their (trimmed, else null) labels, order preserved. */
+function entryPhones(p: DataPerson): { label: string | null; number: string }[] {
+  return p.phones
+    .map((ph) => ({ label: nullIfEmpty(ph.label), number: (ph.number ?? "").trim() }))
+    .filter((ph) => ph.number.length > 0);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -233,6 +263,7 @@ export function buildProfileData(
   today: Date = new Date(),
 ): ProfileData {
   const includedSections = new Set<Section>(PROFILE_SECTIONS[profile]);
+  const { display: dateDisplay, iso: todayIso } = berlinToday(today);
 
   const personById = new Map(raw.persons.map((p) => [p.id, p]));
   const groupById = new Map(raw.groups.map((g) => [g.id, g]));
@@ -248,8 +279,12 @@ export function buildProfileData(
 
   // Amtszeiten (issue #22): the printed directory only ever shows currently held
   // offices. Filter to active tenures once, here, and feed every downstream consumer
-  // (group tree, register, memorial, confidential cover) from this single array.
-  const activeAssignments = raw.assignments.filter((a) => a.endDate == null);
+  // (group tree, register, confidential cover) from this single array. A tenure counts as
+  // active while it has no end date OR ends today or later (issue #6): a future "Amtszeit
+  // bis" must not empty a group from the current booklet.
+  const activeAssignments = raw.assignments.filter(
+    (a) => a.endDate == null || a.endDate.slice(0, 10) >= todayIso,
+  );
 
   // assignments per group, filtered to printable + living persons
   const assignmentsByGroup = new Map<number, DataAssignment[]>();
@@ -281,11 +316,13 @@ export function buildProfileData(
 
   // Build one entry for a person's presence in a group (offices already collapsed).
   const makeEntry = (p: DataPerson, officeNames: string[], depth: number): Entry => {
+    // Below the top level a leader office is implied by the (sub)group heading and dropped —
+    // but only that office, keeping any co-held non-leader offices (issue #7); previously a
+    // single leader office suppressed the whole list.
     let office: string | null = null;
     if (officeNames.length > 0) {
-      if (depth === 0 || !officeNames.some(isLeaderOffice)) {
-        office = officeNames.join(", ");
-      }
+      const kept = officeNames.filter((n) => depth === 0 || !isLeaderOffice(n));
+      office = kept.length > 0 ? kept.join(", ") : null;
     }
     let label: string | null = null;
     if (!anchored.has(p.id)) {
@@ -300,8 +337,7 @@ export function buildProfileData(
       extra: nullIfEmpty(p.addressExtra),
       street: nullIfEmpty(p.street),
       city: nullIfEmpty(joinNonEmpty([p.postalCode, p.city])),
-      phoneStreet: p.phones[1]?.number ?? null,
-      phoneCity: p.phones[0]?.number ?? null,
+      phones: entryPhones(p),
       email: nullIfEmpty(p.email),
       birth: options.withBirthdays ? formatDate(p.birthDate) : null,
     };
@@ -375,17 +411,26 @@ export function buildProfileData(
   );
 
   // ---- memorial list (deceased persons with a membership in an included section) ----
+  // The Gedenkseite exists for the deceased, but a dead member normally has their tenure
+  // ended (holder-warning flow), so they carry no ACTIVE assignment. Source scope from ALL
+  // assignments — active or ended — so the very people the page is for do not drop off
+  // (issue #1). do_not_print is still honoured. Sorted with the shared ae-folded key so ä
+  // collates as "ae", matching the register (issue #4b).
   const memorial: string[] = [];
   if (options.withMemorial) {
     const dead = raw.persons.filter((p) => !p.doNotPrint && p.deathDate);
     const inScope = dead.filter((p) =>
-      (assignmentsByPerson.get(p.id) ?? []).some((a) => {
+      raw.assignments.some((a) => {
+        if (a.personId !== p.id) return false;
         const g = groupById.get(a.groupId);
-        return g && includedSections.has(g.section);
+        return g != null && includedSections.has(g.section);
       }),
     );
     inScope.sort((a, b) =>
-      joinNonEmpty([a.lastName, a.firstName]).localeCompare(joinNonEmpty([b.lastName, b.firstName]), "de"),
+      normalizeSortKey(joinNonEmpty([a.lastName, a.firstName])).localeCompare(
+        normalizeSortKey(joinNonEmpty([b.lastName, b.firstName])),
+        "de",
+      ),
     );
     for (const p of inScope) {
       const base = personDisplayName(p);
@@ -401,7 +446,7 @@ export function buildProfileData(
     profile,
     title: "Anschriftenverzeichnis",
     subtitle: PROFILE_SUBTITLE[profile],
-    date: formatToday(today),
+    date: dateDisplay,
     kanzlei,
     options,
     sections,
@@ -444,12 +489,17 @@ function buildRegister(
     if (scout) {
       lead = `${scout},`;
       rest = ` ${joinNonEmpty([first, last])}${breadcrumb}`;
-    } else {
+    } else if (first) {
       lead = first;
       rest = ` ${last}${breadcrumb}`;
+    } else {
+      // Neither Fahrtenname nor Vorname: lead with the surname so the entry does not sort to
+      // the top with an empty bold lead (issue #9).
+      lead = last;
+      rest = breadcrumb;
     }
 
-    const key = normalizeSortKey(`${scout || first}#${first}#${last}`);
+    const key = normalizeSortKey(`${scout || first || last}#${first}#${last}`);
     rows.push({ key, entry: { label: `p${pid}`, lead, rest } });
   }
 
@@ -472,27 +522,48 @@ function registerBreadcrumb(
     if (a.officeId != null) officesByGroup.get(a.groupId)!.push(a.officeId);
   }
 
+  // Walk memberships parent-before-child so the breadcrumb reads top-down; a sub-group
+  // (low sort_key) must never precede its parent (issue #3). Depth wins over sort_key.
+  const depthOf = (gid: number): number => {
+    let d = 0;
+    let cur: DataGroup | undefined = groupById.get(gid);
+    const guard = new Set<number>();
+    while (cur && cur.parentId != null && !guard.has(cur.id)) {
+      guard.add(cur.id);
+      cur = groupById.get(cur.parentId);
+      d += 1;
+    }
+    return d;
+  };
   const groupIds = [...officesByGroup.keys()].sort((x, y) => {
     const gx = groupById.get(x)!;
     const gy = groupById.get(y)!;
-    return gx.sortKey - gy.sortKey || gx.name.localeCompare(gy.name, "de");
+    return depthOf(x) - depthOf(y) || gx.sortKey - gy.sortKey || gx.name.localeCompare(gy.name, "de");
   });
 
+  // Dedup group and office names across the WHOLE entry (issue #3), not just within a single
+  // group: a parent shared by several memberships and a repeated office are printed once.
+  const seenGroups = new Set<string>();
+  const seenOffices = new Set<string>();
   let out = "";
+  const pushGroup = (name: string) => {
+    if (seenGroups.has(name)) return;
+    seenGroups.add(name);
+    out += `, ${name}`;
+  };
   for (const gid of groupIds) {
     const g = groupById.get(gid)!;
     const parent = g.parentId != null ? groupById.get(g.parentId) : null;
-    if (parent && parent.name !== g.name) out += `, ${parent.name}`;
-    if (g.name !== "Bundesführung" && g.name !== "Bundesbeauftragte") out += `, ${g.name}`;
+    if (parent && parent.name !== g.name) pushGroup(parent.name);
+    if (g.name !== "Bundesführung" && g.name !== "Bundesbeauftragte") pushGroup(g.name);
     const offs = officesByGroup
       .get(gid)!
       .map((id) => officeById.get(id))
       .filter((o): o is DataOffice => o != null)
       .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, "de"));
-    const seen = new Set<string>();
     for (const o of offs) {
-      if (seen.has(o.name)) continue;
-      seen.add(o.name);
+      if (seenOffices.has(o.name)) continue;
+      seenOffices.add(o.name);
       out += `, ${o.name}`;
     }
   }
@@ -531,8 +602,7 @@ function buildKanzlei(
         extra: nullIfEmpty(p.addressExtra),
         street: nullIfEmpty(p.street),
         city: nullIfEmpty(joinNonEmpty([p.postalCode, p.city])),
-        phoneStreet: p.phones[1]?.number ?? null,
-        phoneCity: p.phones[0]?.number ?? null,
+        phones: entryPhones(p),
         email: nullIfEmpty(p.email),
         birth: null,
       },

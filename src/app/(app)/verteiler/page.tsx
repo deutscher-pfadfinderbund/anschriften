@@ -6,6 +6,7 @@ import {
   listRanks,
   mailLogForLists,
 } from "@/db/queries";
+import { requirePageSession } from "@/lib/auth-helpers";
 import { isMailEnabled } from "@/lib/mail";
 
 import { VerteilerManager } from "./verteiler-manager";
@@ -19,6 +20,8 @@ export default async function VerteilerPage({
 }: {
   searchParams: Promise<{ list?: string }>;
 }) {
+  // Authoritative gate: the layout is not re-rendered on RSC navigations.
+  await requirePageSession();
   const mailEnabled = isMailEnabled();
   const [lists, personOptions, offices, ranks, groups, mailLog, { list }] = await Promise.all([
     listDistributionLists(),

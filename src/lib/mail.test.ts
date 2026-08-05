@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { bccChunkSize, chunk, isMailEnabled, normalizeRecipients } from "./mail";
+import { bccChunkSize, chunk, isMailEnabled, normalizeRecipients, sanitizeMailError } from "./mail";
 
 describe("chunk", () => {
   it("splits into consecutive chunks of at most size", () => {
@@ -52,6 +52,31 @@ describe("normalizeRecipients", () => {
     ]);
     expect(res.recipients).toEqual(["ok@example.org"]);
     expect(res.skipped).toBe(3);
+  });
+});
+
+describe("sanitizeMailError", () => {
+  it("keeps code + SMTP response code but masks recipient addresses", () => {
+    const err = Object.assign(new Error("550 5.1.1 <opfer@example.org>: Recipient unknown"), {
+      code: "EENVELOPE",
+      responseCode: 550,
+    });
+    const out = sanitizeMailError(err);
+    expect(out).toContain("EENVELOPE");
+    expect(out).toContain("SMTP 550");
+    expect(out).toContain("<redacted>");
+    expect(out).not.toContain("opfer@example.org");
+  });
+
+  it("takes only the first line and never exceeds 500 chars", () => {
+    const out = sanitizeMailError(new Error(`first line ${"x".repeat(1000)}\nsecond line`));
+    expect(out).not.toContain("second line");
+    expect(out.length).toBeLessThanOrEqual(500);
+  });
+
+  it("handles non-Error values", () => {
+    expect(sanitizeMailError("boom")).toBe("boom");
+    expect(sanitizeMailError(undefined)).toBe("Unbekannter Fehler");
   });
 });
 

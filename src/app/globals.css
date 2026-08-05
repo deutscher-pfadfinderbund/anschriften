@@ -26,12 +26,16 @@
  * Grundtokens gemappt und flippen deshalb automatisch mit dem Theme.
  */
 :root {
+  /* Native controls (date pickers, checkboxes, scrollbars) follow the theme. */
+  color-scheme: light dark;
   --paper: #fafaf8;
   --surface: #ffffff;
   --surface-2: #f3f3f0;
   --ink: #232724;
   --ink-soft: #5b625d;
-  --ink-faint: #8e948f;
+  /* Darkened for WCAG AA (~4.8:1 on --surface / --surface-2); ink-faint carries
+   * real content (form labels, column headers, sublines, placeholders). */
+  --ink-faint: #676d68;
   --line: #e5e5e0;
   --line-strong: #cbccc5;
   --fir: #2e5c46;
@@ -75,7 +79,8 @@
     --surface-2: #191d1a;
     --ink: #e5e8e4;
     --ink-soft: #a8afa9;
-    --ink-faint: #6f766f;
+    /* Raised for WCAG AA (~5:1 on the dark surfaces). */
+    --ink-faint: #8a918a;
     --line: #2c312d;
     --line-strong: #3f453f;
     --fir: #85b99a;
@@ -91,12 +96,13 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --paper: #161917;
   --surface: #1d211e;
   --surface-2: #191d1a;
   --ink: #e5e8e4;
   --ink-soft: #a8afa9;
-  --ink-faint: #6f766f;
+  --ink-faint: #8a918a;
   --line: #2c312d;
   --line-strong: #3f453f;
   --fir: #85b99a;
@@ -111,12 +117,13 @@
 }
 
 :root[data-theme="light"] {
+  color-scheme: light;
   --paper: #fafaf8;
   --surface: #ffffff;
   --surface-2: #f3f3f0;
   --ink: #232724;
   --ink-soft: #5b625d;
-  --ink-faint: #8e948f;
+  --ink-faint: #676d68;
   --line: #e5e5e0;
   --line-strong: #cbccc5;
   --fir: #2e5c46;

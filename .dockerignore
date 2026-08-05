@@ -1,4 +1,4 @@
-# Dependencies + build output are reproduced inside the image (npm ci + next build).
+# Dependencies + build output are reproduced inside the image (bun install + next build).
 node_modules
 .next
 out
@@ -15,6 +15,9 @@ coverage
 # Secrets / local env — never bake into the image.
 .env
 .env.*
+
+# Legacy Access database (PII) — must never end up in a build layer.
+*.mdb
 
 # Docs, dev-only setup (local Keycloak realm) and repo meta.
 docs

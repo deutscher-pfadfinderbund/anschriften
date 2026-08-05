@@ -2,6 +2,9 @@ name: "🐳 Docker Build and Push"
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -11,6 +14,30 @@ on:
       - v*
 
 jobs:
+  # PR gate: build the image (no publish) so a change that breaks the Dockerfile
+  # (moved fonts, renamed assets, failing next build) is caught before merge.
+  build-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v7
+        with:
+          platforms: linux/amd64
+          file: Dockerfile
+          context: .
+          push: false
+          pull: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   docker:
     runs-on: ubuntu-latest
     permissions:
@@ -39,6 +66,8 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
             type=sha
 
       - name: Build and push Docker images
@@ -52,7 +81,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-      # Housekeeping: keep the 15 newest ghcr.io versions, never touch `latest`.
+      # Housekeeping: keep the 15 newest ghcr.io versions, never touch `latest`
+      # or any human-readable version tag (`v1.2.3`, `1.2.3`, `1.2`) so releases
+      # stay deployable/rollbackable.
       # Uses the REST API directly instead of actions/delete-package-versions,
       # which bundles an unmaintained os-name that crashes on recent macOS
       # runners (macosRelease() cannot map the Darwin version → build fails).
@@ -74,8 +105,11 @@ jobs:
 
             versions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-            const isProtected = (v) =>
-              (v.metadata?.container?.tags ?? []).includes("latest");
+            const semverTag = /^v?\d+\.\d+(\.\d+)?$/;
+            const isProtected = (v) => {
+              const tags = v.metadata?.container?.tags ?? [];
+              return tags.includes("latest") || tags.some((t) => semverTag.test(t));
+            };
             const deletable = versions.filter((v) => !isProtected(v));
             const toDelete = deletable.slice(keep);
 

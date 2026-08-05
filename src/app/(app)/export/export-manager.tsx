@@ -2,9 +2,13 @@
 
 // Interactive PDF export form (issue #5): pick one of five profiles, toggle the
 // print options and download the generated directory. Neutral surfaces; green
-// (fir) only for the active card and the primary button, per the design rules
+// (fir) only for the active marker and the primary button, per the design rules
 // in AGENTS.md.
 import { useState } from "react";
+import { toast } from "sonner";
+
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const PROFILES = [
   { id: "komplett", label: "Komplett", hint: "Alle Gliederungen und Älterengemeinschaften" },
@@ -26,6 +30,25 @@ const OPTIONS = [
 
 type OptionId = (typeof OPTIONS)[number]["id"];
 
+/** Parse a download filename out of a Content-Disposition header, if present. */
+function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header);
+  return match ? decodeURIComponent(match[1].replace(/"$/, "")) : null;
+}
+
+/** Trigger a browser download for an in-memory blob (keeps the user on the page). */
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function ExportManager() {
   const [profile, setProfile] = useState<string>(PROFILES[0].id);
   const [options, setOptions] = useState<Record<OptionId, boolean>>({
@@ -33,15 +56,36 @@ export function ExportManager() {
     ranks: false,
     memorial: false,
   });
+  const [pending, setPending] = useState(false);
 
   const params = new URLSearchParams({ profile });
   for (const { id } of OPTIONS) if (options[id]) params.set(id, "1");
   const href = `/api/export/pdf?${params.toString()}`;
 
+  // Fetch + blob so a Typst failure surfaces as a toast instead of navigating
+  // away to a bare error page, and so double-clicks can't start parallel runs.
+  async function downloadPdf() {
+    if (pending) return;
+    setPending(true);
+    try {
+      const res = await fetch(href);
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      const filename =
+        filenameFromDisposition(res.headers.get("Content-Disposition")) ??
+        "anschriftenverzeichnis.pdf";
+      triggerBlobDownload(blob, filename);
+    } catch {
+      toast.error("PDF konnte nicht erzeugt werden. Bitte erneut versuchen.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <>
       <section>
-        <h2 className="text-sm font-semibold text-ink">Profil</h2>
+        <h2 className="font-display text-base font-semibold text-ink">Profil</h2>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {PROFILES.map((p) => {
             const active = profile === p.id;
@@ -54,7 +98,7 @@ export function ExportManager() {
                 className={[
                   "rounded-lg border px-4 py-3 text-left transition-colors",
                   active
-                    ? "border-fir bg-fir-tint"
+                    ? "border-fir bg-surface"
                     : "border-line bg-surface hover:border-line-strong",
                 ].join(" ")}
               >
@@ -76,18 +120,16 @@ export function ExportManager() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-ink">Optionen</h2>
+        <h2 className="font-display text-base font-semibold text-ink">Optionen</h2>
         <div className="mt-3 space-y-2">
           {OPTIONS.map((o) => (
             <label
               key={o.id}
               className="flex cursor-pointer items-center gap-3 rounded-lg border border-line bg-surface px-4 py-2.5"
             >
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={options[o.id]}
-                onChange={(e) => setOptions((prev) => ({ ...prev, [o.id]: e.target.checked }))}
-                className="h-4 w-4 accent-fir"
+                onCheckedChange={(v) => setOptions((prev) => ({ ...prev, [o.id]: v === true }))}
               />
               <span className="text-sm text-ink">{o.label}</span>
             </label>
@@ -96,12 +138,9 @@ export function ExportManager() {
       </section>
 
       <div className="mt-8 flex items-center gap-4">
-        <a
-          href={href}
-          className="inline-flex items-center rounded-lg bg-fir px-5 py-2.5 text-sm font-semibold text-on-fir transition-colors hover:bg-fir-deep"
-        >
-          PDF erzeugen
-        </a>
+        <Button onClick={downloadPdf} disabled={pending}>
+          {pending ? "PDF wird erzeugt …" : "PDF erzeugen"}
+        </Button>
         <span className="text-xs text-ink-faint">Die Erzeugung kann einige Sekunden dauern.</span>
       </div>
     </>

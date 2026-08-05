@@ -35,8 +35,21 @@ export async function compilePdf(data: ProfileData): Promise<Buffer> {
 
     await execFileAsync(
       "typst",
-      ["compile", "--root", tmp, "--font-path", FONT_DIR, "main.typ", "out.pdf"],
-      { cwd: tmp, maxBuffer: 128 * 1024 * 1024 },
+      [
+        "compile",
+        "--root",
+        tmp,
+        "--font-path",
+        FONT_DIR,
+        // Render with the bundled fonts only, so a dev box with a fuller Fira Sans installed
+        // produces the same output as the container (issue #17, docs/typst-spike.md).
+        "--ignore-system-fonts",
+        "main.typ",
+        "out.pdf",
+      ],
+      // A wedged compile must not pin the request forever and leak a child process holding
+      // the confidential temp dir; hard-kill after 60s (issue #2).
+      { cwd: tmp, maxBuffer: 128 * 1024 * 1024, timeout: 60_000, killSignal: "SIGKILL" },
     );
 
     return await fs.readFile(path.join(tmp, "out.pdf"));

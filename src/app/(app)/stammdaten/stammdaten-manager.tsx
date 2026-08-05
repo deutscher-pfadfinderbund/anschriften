@@ -25,7 +25,13 @@ import type { OfficeListRule, OfficeRow, RankRow } from "@/db/queries";
 
 type OfficeForm = { id: number | null; name: string; rank: string };
 type RankForm = { id: number | null; name: string; sortOrder: string };
-type DeleteTarget = { type: "office" | "rank"; id: number; name: string; blocked: boolean };
+type DeleteTarget = {
+  type: "office" | "rank";
+  id: number;
+  name: string;
+  blocked: boolean;
+  blockedMessage?: string;
+};
 
 function LabeledInput({
   id,
@@ -149,6 +155,11 @@ export function StammdatenManager({
               </Button>
             </div>
             <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
+              {offices.length === 0 ? (
+                <p className="p-6 text-center text-sm text-ink-faint">
+                  Noch keine Ämter angelegt.
+                </p>
+              ) : (
               <ul>
                 {offices.map((o) => (
                   <li
@@ -172,7 +183,7 @@ export function StammdatenManager({
                         ))}
                       </span>
                     ) : null}
-                    <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
+                    <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -186,14 +197,26 @@ export function StammdatenManager({
                         size="icon-sm"
                         aria-label="Löschen"
                         className="text-ink-faint hover:text-crit"
-                        onClick={() =>
+                        onClick={() => {
+                          const usedByPersons = (officeUsage[o.id] ?? 0) > 0;
+                          const rules = officeListRules[o.id] ?? [];
+                          const blocked = usedByPersons || rules.length > 0;
                           setDeleteTarget({
                             type: "office",
                             id: o.id,
                             name: o.name,
-                            blocked: (officeUsage[o.id] ?? 0) > 0,
-                          })
-                        }
+                            blocked,
+                            // A rule-only usage would otherwise show an enabled button
+                            // that the server then refuses — explain it up front.
+                            blockedMessage: !blocked
+                              ? undefined
+                              : usedByPersons
+                                ? "Dieses Amt ist noch Personen zugeordnet und kann nicht gelöscht werden."
+                                : `Dieses Amt wird noch als Verteiler-Regel verwendet (${rules
+                                    .map((r) => r.listName)
+                                    .join(", ")}) und kann nicht gelöscht werden. Bitte zuerst die Regel im Verteiler entfernen.`,
+                          });
+                        }}
                       >
                         <Trash2 className="size-3.5" />
                       </Button>
@@ -201,6 +224,7 @@ export function StammdatenManager({
                   </li>
                 ))}
               </ul>
+              )}
             </div>
           </TabsContent>
 
@@ -213,6 +237,11 @@ export function StammdatenManager({
               </Button>
             </div>
             <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
+              {ranks.length === 0 ? (
+                <p className="p-6 text-center text-sm text-ink-faint">
+                  Noch keine Stände angelegt.
+                </p>
+              ) : (
               <ul>
                 {ranks.map((r) => (
                   <li
@@ -221,7 +250,7 @@ export function StammdatenManager({
                   >
                     <MonoBadge>{r.sortOrder}</MonoBadge>
                     <span className="text-ink">{r.name}</span>
-                    <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
+                    <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -250,6 +279,7 @@ export function StammdatenManager({
                   </li>
                 ))}
               </ul>
+              )}
             </div>
           </TabsContent>
         </Tabs>
@@ -311,7 +341,8 @@ export function StammdatenManager({
         description={`„${deleteTarget?.name}“ wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
         blockedMessage={
           deleteTarget?.blocked
-            ? "Dieser Eintrag ist noch Personen zugeordnet und kann nicht gelöscht werden."
+            ? deleteTarget.blockedMessage ??
+              "Dieser Eintrag ist noch Personen zugeordnet und kann nicht gelöscht werden."
             : undefined
         }
         pending={isPending}

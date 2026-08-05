@@ -1,9 +1,12 @@
 import { listOffices, listRanks, officeListRules, officeUsage, rankUsage } from "@/db/queries";
 import type { OfficeListRule } from "@/db/queries";
+import { requirePageSession } from "@/lib/auth-helpers";
 
 import { StammdatenManager } from "./stammdaten-manager";
 
 export default async function StammdatenPage() {
+  // Authoritative gate: the layout is not re-rendered on RSC navigations.
+  await requirePageSession();
   const [offices, ranks, officeUse, rankUse, officeRules] = await Promise.all([
     listOffices(),
     listRanks(),

@@ -5,10 +5,10 @@ import { birthYear, fold, formatDate, formatName } from "./format";
 // All test data below is fictitious.
 
 describe("fold", () => {
-  it("strips umlaut diacritics to the base letter (not ae/oe/ue) and lower-cases", () => {
-    expect(fold("Müller")).toBe("muller");
-    expect(fold("Örni")).toBe("orni");
-    expect(fold("Bär")).toBe("bar");
+  it("folds umlauts the phone-book way (ae/oe/ue) and lower-cases", () => {
+    expect(fold("Müller")).toBe("mueller");
+    expect(fold("Örni")).toBe("oerni");
+    expect(fold("Bär")).toBe("baer");
   });
 
   it("expands ß to ss", () => {
@@ -16,9 +16,23 @@ describe("fold", () => {
     expect(fold("Straße")).toBe("strasse");
   });
 
-  it("removes generic accents", () => {
+  it("removes generic (non-umlaut) accents", () => {
     expect(fold("Éléonore")).toBe("eleonore");
     expect(fold("café")).toBe("cafe");
+  });
+
+  it("folds decomposed (combining-diacritic) umlauts identically to composed ones", () => {
+    // "Öhmann" written as O + combining diaeresis must fold like the precomposed form.
+    expect(fold("Öhmann")).toBe(fold("Öhmann"));
+    expect(fold("Öhmann")).toBe("oehmann");
+    expect(fold("Müller")).toBe("mueller");
+  });
+
+  it("orders names by the DIN 5007-2 phone-book key", () => {
+    const names = ["Zeder", "Öhmann", "Aal", "Müller", "Muhs", "Munz"];
+    const sorted = [...names].sort((a, b) => fold(a).localeCompare(fold(b), "de"));
+    // ae-fold: Müller -> "mueller" sorts before Muhs/Munz because 'e' < 'h' < 'n'.
+    expect(sorted).toEqual(["Aal", "Müller", "Muhs", "Munz", "Öhmann", "Zeder"]);
   });
 
   it("trims surrounding whitespace", () => {

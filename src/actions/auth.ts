@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { account } from "@/db/auth-schema";
 import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/auth-helpers";
 
 const KEYCLOAK_ISSUER = process.env.KEYCLOAK_ISSUER ?? "";
 const APP_URL = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
@@ -17,23 +18,22 @@ const APP_URL = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
  * skip the confirmation prompt, then it redirects back to /login.
  */
 export async function logout() {
+  // Defense in depth, consistent with every other action: no session, nothing
+  // to log out (throws "Nicht angemeldet.").
+  const session = await requireSession();
   const requestHeaders = await headers();
-  const session = await auth.api.getSession({ headers: requestHeaders });
 
-  let idTokenHint: string | undefined;
-  if (session) {
-    const [keycloakAccount] = await db
-      .select({ idToken: account.idToken })
-      .from(account)
-      .where(
-        and(
-          eq(account.userId, session.user.id),
-          eq(account.providerId, "keycloak"),
-        ),
-      )
-      .limit(1);
-    idTokenHint = keycloakAccount?.idToken ?? undefined;
-  }
+  const [keycloakAccount] = await db
+    .select({ idToken: account.idToken })
+    .from(account)
+    .where(
+      and(
+        eq(account.userId, session.user.id),
+        eq(account.providerId, "keycloak"),
+      ),
+    )
+    .limit(1);
+  const idTokenHint: string | undefined = keycloakAccount?.idToken ?? undefined;
 
   await auth.api.signOut({ headers: requestHeaders });
 

@@ -29,7 +29,6 @@ export type PersonAssignment = {
   section: string;
   officeId: number | null;
   officeName: string | null;
-  officeRank: number;
 };
 
 export type PersonListRow = {
@@ -113,7 +112,6 @@ export async function listPersons(): Promise<PersonListRow[]> {
       section: a.group.section,
       officeId: a.officeId,
       officeName: a.office?.name ?? null,
-      officeRank: a.office?.rank ?? 999,
     })),
     effectiveListIds: listIdsByPerson.get(p.id) ?? [],
   }));
@@ -696,9 +694,21 @@ export type PersonOption = {
   email: string | null;
 };
 
+/** German collation on last name → first name → scout name (nulls sort last). */
+function byGermanName(
+  a: { lastName: string | null; firstName: string | null; scoutName: string | null },
+  b: { lastName: string | null; firstName: string | null; scoutName: string | null },
+): number {
+  return (
+    (a.lastName ?? "").localeCompare(b.lastName ?? "", "de") ||
+    (a.firstName ?? "").localeCompare(b.firstName ?? "", "de") ||
+    (a.scoutName ?? "").localeCompare(b.scoutName ?? "", "de")
+  );
+}
+
 /** Minimal person list for the "add members" combobox. */
 export async function listPersonOptions(): Promise<PersonOption[]> {
-  return db
+  const rows = await db
     .select({
       id: persons.id,
       firstName: persons.firstName,
@@ -706,8 +716,10 @@ export async function listPersonOptions(): Promise<PersonOption[]> {
       scoutName: persons.scoutName,
       email: persons.email,
     })
-    .from(persons)
-    .orderBy(asc(persons.lastName), asc(persons.firstName), asc(persons.scoutName));
+    .from(persons);
+  // Sort in TS with German collation: the DB cluster's C-collation sorts umlauts after Z
+  // and uppercase before lowercase, which does not match the directory's German order.
+  return rows.sort(byGermanName);
 }
 
 /** Name of a single distribution list (for the CSV download filename), or null. */
@@ -742,14 +754,13 @@ export async function personsForCsvByList(listId: number): Promise<CsvPerson[]> 
   return personsForCsvByIds([...members.keys()]);
 }
 
-/** CSV export rows for an explicit selection of person ids. */
+/** CSV export rows for an explicit selection of person ids, ordered like the directory. */
 export async function personsForCsvByIds(ids: number[]): Promise<CsvPerson[]> {
   if (ids.length === 0) return [];
-  return db
-    .select(csvColumns)
-    .from(persons)
-    .where(inArray(persons.id, ids))
-    .orderBy(asc(persons.lastName), asc(persons.firstName), asc(persons.scoutName));
+  const rows = await db.select(csvColumns).from(persons).where(inArray(persons.id, ids));
+  // Sort in TS with German collation (see listPersonOptions): the DB cluster's
+  // C-collation would place umlauts after Z, so the CSV must not rely on SQL order.
+  return rows.sort(byGermanName);
 }
 
 // --- mail module (issue #19) ---

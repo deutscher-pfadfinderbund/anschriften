@@ -60,7 +60,11 @@ export async function deleteOffice(id: number): Promise<ActionResult> {
     .from(assignments)
     .where(eq(assignments.officeId, id));
   if (Number(n) > 0)
-    return { ok: false, message: "Amt ist noch Personen zugeordnet und kann nicht gelöscht werden." };
+    return {
+      ok: false,
+      message:
+        "Amt ist noch Personen zugeordnet (auch frühere Ämter in der Historie zählen) und kann nicht gelöscht werden.",
+    };
   // Distribution-list office rules reference the office with onDelete: cascade — deleting
   // it would silently drop the rules and change who gets future mailings, so block it here.
   const [{ n: rules }] = await db

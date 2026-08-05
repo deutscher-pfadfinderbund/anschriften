@@ -1,16 +1,21 @@
 "use server";
 
 import { and, eq, isNull, ne } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 
 import { db } from "@/db";
 import { assignments, distributionListMembers, persons } from "@/db/schema";
-import { isUniqueViolation } from "@/lib/action-helpers";
+import {
+  isForeignKeyViolation,
+  isUniqueViolation,
+  revalidatePersonPaths,
+  todayIso,
+} from "@/lib/action-helpers";
 import { actorName, requireSession } from "@/lib/auth-helpers";
 import {
   cleanPersonInput,
   parsePersonInput,
   resolveTenureEnd,
+  validatePersonDates,
   validateTenure,
   type FieldErrors,
   type PersonInput,
@@ -21,20 +26,6 @@ import {
  * message (e.g. a holder-warning follow-up whose target vanished). Caught in savePerson.
  */
 class SaveAbort extends Error {}
-
-const todayIso = (): string => new Date().toISOString().slice(0, 10);
-
-/**
- * Revalidate every page whose data reflects a person + assignment change: the directory
- * ("/"), the Verteiler badges, and the Stammdaten/Gliederungen delete guards fed by
- * groupUsage/officeUsage (see src/db/queries.ts).
- */
-function refresh(): void {
-  revalidatePath("/");
-  revalidatePath("/verteiler");
-  revalidatePath("/stammdaten");
-  revalidatePath("/gliederungen");
-}
 
 export type SaveResult =
   | { ok: true; id: number }
@@ -51,6 +42,11 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
   // Re-validate the cleaned payload (empty PLZ/e-mail become null → no false errors).
   const revalidated = parsePersonInput(data);
   if (!revalidated.ok) return { ok: false, errors: revalidated.errors };
+
+  // Validate the person's own life dates (Geburts-/Sterbedatum) — the schema only bounds
+  // their length, so a malformed or out-of-order date would otherwise reach the DB.
+  const dateError = validatePersonDates(data.birthDate ?? null, data.deathDate ?? null);
+  if (dateError) return { ok: false, errors: {}, message: dateError };
 
   // Validate every tenure; a row with an end date is a finished (past) office.
   for (const a of data.assignments) {
@@ -86,7 +82,15 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
     id = await db.transaction(async (tx) => {
       let personId = data.id;
       if (personId) {
-        await tx.update(persons).set(fields).where(eq(persons.id, personId));
+        // Guard against a concurrent delete: an UPDATE that matches no row would
+        // otherwise report success (and any FK insert below would blow up as a raw 500).
+        const updated = await tx
+          .update(persons)
+          .set(fields)
+          .where(eq(persons.id, personId))
+          .returning({ id: persons.id });
+        if (updated.length === 0)
+          throw new SaveAbort("Diese Anschrift wurde zwischenzeitlich gelöscht. Bitte Seite neu laden.");
       } else {
         const [row] = await tx.insert(persons).values(fields).returning({ id: persons.id });
         personId = row.id;
@@ -179,10 +183,17 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
         errors: {},
         message: "Diese Amt-Gliederungs-Kombination ist bereits aktiv zugeordnet.",
       };
+    // A referenced row (the person, a group or office) vanished mid-transaction.
+    if (isForeignKeyViolation(err))
+      return {
+        ok: false,
+        errors: {},
+        message: "Diese Anschrift wurde zwischenzeitlich gelöscht. Bitte Seite neu laden.",
+      };
     throw err;
   }
 
-  refresh();
+  revalidatePersonPaths();
   return { ok: true, id };
 }
 
@@ -190,6 +201,6 @@ export async function deletePerson(id: number): Promise<{ ok: true }> {
   await requireSession();
   // Memberships cascade with the person, so the list counts change too.
   await db.delete(persons).where(eq(persons.id, id));
-  refresh();
+  revalidatePersonPaths();
   return { ok: true };
 }

@@ -111,7 +111,7 @@ function RuleSection({
   rows: RuleRow[];
   options: { value: string; label: string }[];
   onAdd: (id: number) => void;
-  onRemove: (id: number) => void;
+  onRemove: (row: RuleRow) => void;
   emptyRules: string;
   addAriaLabel: string;
   addPlaceholder: string;
@@ -141,9 +141,9 @@ function RuleSection({
                   variant="ghost"
                   size="icon-sm"
                   aria-label={`Regel „${r.name}“ entfernen`}
-                  className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100"
+                  className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100 group-focus-within/rule:opacity-100 focus-visible:opacity-100"
                   disabled={disabled}
-                  onClick={() => onRemove(r.id)}
+                  onClick={() => onRemove(r)}
                 >
                   <X className="size-4" />
                 </Button>
@@ -201,6 +201,10 @@ export function VerteilerManager({
   const [addOpen, setAddOpen] = useState(false);
   const [addSelection, setAddSelection] = useState<Set<number>>(new Set());
   const [composeOpen, setComposeOpen] = useState(false);
+  // Removing a rule can change many people's membership at once → confirm first.
+  const [ruleRemoval, setRuleRemoval] = useState<
+    { kind: "office" | "rank" | "group"; id: number; name: string } | null
+  >(null);
 
   // Reconcile the selection with the (possibly refreshed) server data: keep the
   // chosen list if it still exists, otherwise fall back to the first one.
@@ -301,6 +305,25 @@ export function VerteilerManager({
     startTransition(async () => {
       const res = await removeMember(activeList.id, personId);
       if (!res.ok) return void toast.error(res.message);
+      toast.success("Mitglied aus dem Verteiler entfernt.");
+      router.refresh();
+    });
+  }
+
+  /** Run the confirmed rule removal (office/rank/group) and toast the result. */
+  function confirmRuleRemoval() {
+    if (!activeList || !ruleRemoval) return;
+    const { kind, id, name } = ruleRemoval;
+    startTransition(async () => {
+      const res =
+        kind === "office"
+          ? await removeOfficeRule(activeList.id, id)
+          : kind === "rank"
+            ? await removeRankRule(activeList.id, id)
+            : await removeGroupRule(activeList.id, id);
+      if (!res.ok) return void toast.error(res.message);
+      toast.success(`Regel „${name}“ entfernt.`);
+      setRuleRemoval(null);
       router.refresh();
     });
   }
@@ -325,15 +348,6 @@ export function VerteilerManager({
     });
   }
 
-  function handleRemoveRule(officeId: number) {
-    if (!activeList) return;
-    startTransition(async () => {
-      const res = await removeOfficeRule(activeList.id, officeId);
-      if (!res.ok) return void toast.error(res.message);
-      router.refresh();
-    });
-  }
-
   // Stände not yet a rule on the active list — the "+ Stand hinzufügen" combobox.
   const ruleRankOptions = useMemo(() => {
     if (!activeList) return [];
@@ -352,15 +366,6 @@ export function VerteilerManager({
     });
   }
 
-  function handleRemoveRankRule(rankId: number) {
-    if (!activeList) return;
-    startTransition(async () => {
-      const res = await removeRankRule(activeList.id, rankId);
-      if (!res.ok) return void toast.error(res.message);
-      router.refresh();
-    });
-  }
-
   // Gliederungen not yet a rule on the active list — the "+ Gliederung hinzufügen" combobox.
   const ruleGroupOptions = useMemo(() => {
     if (!activeList) return [];
@@ -375,15 +380,6 @@ export function VerteilerManager({
       if (!res.ok) return void toast.error(res.message);
       const name = groups.find((g) => g.id === groupId)?.name ?? "Gliederung";
       toast.success(`Regel „${name}“ hinzugefügt.`);
-      router.refresh();
-    });
-  }
-
-  function handleRemoveGroupRule(groupId: number) {
-    if (!activeList) return;
-    startTransition(async () => {
-      const res = await removeGroupRule(activeList.id, groupId);
-      if (!res.ok) return void toast.error(res.message);
       router.refresh();
     });
   }
@@ -416,7 +412,7 @@ export function VerteilerManager({
                         className={cn(
                           "flex w-full items-center gap-2 border-l-2 px-3.5 py-2 text-left text-[13.5px] transition-colors",
                           active
-                            ? "border-fir bg-fir-tint font-medium text-ink"
+                            ? "border-fir bg-surface-2 font-medium text-ink"
                             : "border-transparent text-ink-soft hover:bg-sel hover:text-ink",
                         )}
                       >
@@ -607,7 +603,7 @@ export function VerteilerManager({
                 rows={activeList.officeRules.map((r) => ({ id: r.officeId, name: r.officeName }))}
                 options={ruleOfficeOptions}
                 onAdd={handleAddRule}
-                onRemove={handleRemoveRule}
+                onRemove={(row) => setRuleRemoval({ kind: "office", id: row.id, name: row.name })}
                 emptyRules="Noch keine Amts-Regel."
                 addAriaLabel="Amt als Regel hinzufügen"
                 addPlaceholder="+ Amt hinzufügen"
@@ -623,7 +619,7 @@ export function VerteilerManager({
                 rows={activeList.rankRules.map((r) => ({ id: r.rankId, name: r.rankName }))}
                 options={ruleRankOptions}
                 onAdd={handleAddRankRule}
-                onRemove={handleRemoveRankRule}
+                onRemove={(row) => setRuleRemoval({ kind: "rank", id: row.id, name: row.name })}
                 emptyRules="Noch keine Stand-Regel."
                 addAriaLabel="Stand als Regel hinzufügen"
                 addPlaceholder="+ Stand hinzufügen"
@@ -639,7 +635,7 @@ export function VerteilerManager({
                 rows={activeList.groupRules.map((r) => ({ id: r.groupId, name: r.groupName }))}
                 options={ruleGroupOptions}
                 onAdd={handleAddGroupRule}
-                onRemove={handleRemoveGroupRule}
+                onRemove={(row) => setRuleRemoval({ kind: "group", id: row.id, name: row.name })}
                 emptyRules="Noch keine Gliederungs-Regel."
                 addAriaLabel="Gliederung als Regel hinzufügen"
                 addPlaceholder="+ Gliederung hinzufügen"
@@ -675,7 +671,7 @@ export function VerteilerManager({
                           <div className="truncate text-ink">
                             {formatName(m)}
                             {m.scoutName && (m.lastName || m.firstName) ? (
-                              <span className="ml-1.5 font-normal text-fir">„{m.scoutName}“</span>
+                              <span className="ml-1.5 font-normal text-ink-soft">„{m.scoutName}“</span>
                             ) : null}
                           </div>
                           <div className="mt-0.5 flex flex-wrap items-center gap-1">
@@ -733,7 +729,7 @@ export function VerteilerManager({
                             variant="ghost"
                             size="icon-sm"
                             aria-label={`${formatName(m)} entfernen`}
-                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/row:opacity-100"
+                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100"
                             disabled={isPending}
                             onClick={() => handleRemove(m.personId)}
                           >
@@ -837,6 +833,23 @@ export function VerteilerManager({
         confirmLabel="Endgültig löschen"
         pending={isPending}
         onConfirm={confirmDelete}
+      />
+
+      {/* Rule removal confirmation — can change many memberships at once */}
+      <ConfirmDeleteDialog
+        open={ruleRemoval != null}
+        onOpenChange={(o) => !o && setRuleRemoval(null)}
+        title="Regel entfernen?"
+        description={
+          <>
+            Die automatische Regel „{ruleRemoval?.name}“ wird aus diesem Verteiler entfernt.
+            Dadurch kann sich die Mitgliedschaft mehrerer Personen ändern. Manuell hinzugefügte
+            Mitglieder bleiben erhalten.
+          </>
+        }
+        confirmLabel="Regel entfernen"
+        pending={isPending}
+        onConfirm={confirmRuleRemoval}
       />
 
       {/* Add members dialog */}

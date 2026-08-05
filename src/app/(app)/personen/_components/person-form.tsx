@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarOff, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -95,7 +95,7 @@ export function PersonForm({
 
   const [phones, setPhones] = useState<PhoneRow[]>(() => {
     const existing = person?.phones ?? [];
-    if (existing.length === 0) return [{ key: "p0", label: "mobil", number: "" }];
+    if (existing.length === 0) return [{ key: "p0", label: "Mobil", number: "" }];
     return existing.map((p, i) => ({ key: `p${i}`, label: p.label, number: p.number }));
   });
 
@@ -129,6 +129,56 @@ export function PersonForm({
   }, [person?.ruleMemberships]);
 
   const [errors, setErrors] = useState<FieldErrors>({});
+
+  // Data-loss guard: compare a snapshot of all editable fields against the state
+  // captured on first render. Kept simple on purpose — a false positive only costs
+  // an extra confirm, it never discards input silently.
+  const snapshot = JSON.stringify({
+    salutation,
+    title,
+    firstName,
+    lastName,
+    scoutName,
+    birthDate,
+    deathDate,
+    rankId,
+    street,
+    addressExtra,
+    postalCode,
+    city,
+    email,
+    notes,
+    doNotPrint,
+    phones: phones.map((p) => ({ label: p.label, number: p.number })),
+    assignments: assignments.map((a) => ({
+      groupId: a.groupId,
+      officeId: a.officeId,
+      startDate: a.startDate,
+      endDate: a.endDate,
+    })),
+    listIds: [...listIds].sort((x, y) => x - y),
+  });
+  // Capture the first-render snapshot in lazy state (not a ref): reading state
+  // during render is allowed, and it must never change after mount.
+  const [initialSnapshot] = useState(snapshot);
+  const dirty = snapshot !== initialSnapshot;
+
+  // Warn on a full page unload (reload / tab close) while there are unsaved edits.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  /** Cancel/leave: confirm before discarding unsaved input. */
+  function handleCancel() {
+    if (dirty && !window.confirm("Ungespeicherte Änderungen verwerfen?")) return;
+    router.push("/");
+  }
 
   // Office history (issue #22). Ended tenures are read straight from the server props
   // and refreshed via router.refresh() after each history mutation, so unsaved edits to
@@ -305,7 +355,7 @@ export function PersonForm({
     if (!histForm || !person) return;
     if (histForm.groupId == null) return void toast.error("Bitte eine Gliederung wählen.");
     if (!histForm.endUnknown && !histForm.endDate)
-      return void toast.error("Bitte ein Bis-Datum angeben oder „Datum unbekannt“ wählen.");
+      return void toast.error("Bitte ein Bis-Datum angeben oder „Ende unbekannt“ wählen.");
     startHistory(async () => {
       const common = {
         groupId: histForm.groupId as number,
@@ -451,7 +501,7 @@ export function PersonForm({
                 <Field label="Straße" htmlFor="f-str">
                   <Input id="f-str" value={street} onChange={(e) => setStreet(e.target.value)} />
                 </Field>
-                <Field label="Adresszusatz" htmlFor="f-zusatz">
+                <Field label="Anschriftenzusatz" htmlFor="f-zusatz">
                   <Input id="f-zusatz" value={addressExtra} onChange={(e) => setAddressExtra(e.target.value)} placeholder="c/o, Hinterhaus …" />
                 </Field>
               </div>
@@ -754,7 +804,7 @@ export function PersonForm({
           <Button onClick={handleSave} disabled={isPending}>
             {isPending ? "Speichern …" : "Speichern"}
           </Button>
-          <Button variant="outline" onClick={() => router.push("/")} disabled={isPending}>
+          <Button variant="outline" onClick={handleCancel} disabled={isPending}>
             Abbrechen
           </Button>
           {mode === "edit" && person ? (

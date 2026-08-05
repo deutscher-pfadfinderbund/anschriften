@@ -34,11 +34,22 @@
   }
   let namecell = if e.label != none [#strong(e.name)#label(e.label)] else [#strong(e.name)]
 
+  // Phone numbers as compact "Label: number" strings (issue #8): every number keeps its label
+  // so mobil/privat/dienstlich are distinguishable. The first two sit beside the street/PLZ
+  // rows as before; any further numbers follow on their own full-width rows — none is dropped.
+  let fmt-phone(p) = if p.label != none [#p.label: #p.number] else [#p.number]
+  let phones = e.phones.map(fmt-phone)
+  let phone0 = if phones.len() > 0 { phones.at(0) } else { [] }
+  let phone1 = if phones.len() > 1 { phones.at(1) } else { [] }
+
   let rows = ()
   rows.push((namecell, [#e.detail]))
   if e.extra != none { rows.push((grid.cell(colspan: 2)[#e.extra],)) }
-  rows.push(([#e.street], [#e.phoneStreet]))
-  rows.push(([#e.city], [#e.phoneCity]))
+  rows.push(([#e.street], phone0))
+  rows.push(([#e.city], phone1))
+  if phones.len() > 2 {
+    for p in phones.slice(2) { rows.push((grid.cell(colspan: 2)[#p],)) }
+  }
   if e.email != none { rows.push((grid.cell(colspan: 2)[#e.email],)) }
   if e.birth != none { rows.push((grid.cell(colspan: 2)[#emph[(\* #e.birth)]],)) }
 

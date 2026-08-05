@@ -50,7 +50,7 @@ export function HistoryDialog({
           </DialogTitle>
           <DialogDescription>
             Ein bereits beendetes Amt für die rückwirkende Erfassung. Bis-Datum angeben
-            oder „Datum unbekannt“ wählen; das Von-Datum ist optional.
+            oder „Ende unbekannt“ wählen; das Von-Datum ist optional.
           </DialogDescription>
         </DialogHeader>
         {form ? (

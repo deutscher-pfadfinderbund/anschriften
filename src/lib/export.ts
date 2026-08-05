@@ -31,13 +31,14 @@ export type CsvPerson = {
 
 /**
  * RFC-4180 field: quote when the value contains `"`, `;`, CR or LF; double inner quotes.
- * Values starting with =, +, -, @ or tab get an apostrophe prefix so spreadsheet
- * apps render them as text instead of executing them as a formula (CSV injection —
- * person data is not trusted input).
+ * Values starting with =, + or @ get an apostrophe prefix so spreadsheet apps render them as
+ * text instead of executing them as a formula (CSV injection — person data is not trusted
+ * input). A leading `-` or tab is NOT guarded: those are not formula triggers on import and the
+ * apostrophe would corrupt legitimate values like "- kein Briefkasten" (issue #13).
  */
 function csvField(value: string | null | undefined): string {
   let s = (value ?? "").trim();
-  if (/^[=+\-@\t]/.test(s)) s = `'${s}`;
+  if (/^[=+@]/.test(s)) s = `'${s}`;
   return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

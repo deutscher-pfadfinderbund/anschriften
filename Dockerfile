@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1a: Install dependencies with bun (the project's package manager).
 # ---------------------------------------------------------------------------
-FROM oven/bun:1 AS deps
+FROM oven/bun:1.2 AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
@@ -87,5 +87,7 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
 
-# Apply migrations (no-op until any exist), then start the server.
-CMD ["sh", "-c", "node scripts/migrate.mjs && node server.js"]
+# Apply migrations, then start the server. `exec` hands PID 1 to node so it
+# receives SIGTERM directly (graceful shutdown); the `&&` still aborts startup
+# if the migration step fails.
+CMD ["sh", "-c", "node scripts/migrate.mjs && exec node server.js"]

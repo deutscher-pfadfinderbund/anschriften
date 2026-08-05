@@ -179,7 +179,7 @@ export function GliederungenManager({
                     {group.kind ? <span>{group.kind}</span> : null}
                     <span>{SECTION_LABELS[group.section] ?? group.section}</span>
                   </span>
-                  <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
+                  <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
                     <Button variant="ghost" size="icon-sm" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
                       <Pencil className="size-3.5" />
                     </Button>

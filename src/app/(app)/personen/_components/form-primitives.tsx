@@ -67,7 +67,7 @@ export function Panel({
 }
 
 /**
- * "Bis"-Datum plus a "Datum unbekannt" checkbox (issue #26). Ticking it disables the
+ * "Bis"-Datum plus an "Ende unbekannt" checkbox (issue #26). Ticking it disables the
  * date field; the server then records end_date = today and end_unknown = true.
  */
 export function EndDateChoice({
@@ -96,7 +96,7 @@ export function EndDateChoice({
       </Field>
       <label className="flex items-center gap-2 text-[13px] text-ink-soft">
         <Checkbox checked={endUnknown} onCheckedChange={(v) => onUnknown(v === true)} />
-        Datum unbekannt
+        Ende unbekannt
       </label>
     </div>
   );

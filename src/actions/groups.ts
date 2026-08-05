@@ -58,7 +58,26 @@ export async function updateGroup(id: number, raw: GroupInput): Promise<ActionRe
   const by = actorName(session);
   const parsed = groupSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  if (parsed.data.parentId === id) return { ok: false, message: "Eine Gliederung kann nicht ihr eigenes Elternteil sein." };
+  // Reject a parent that is the group itself or one of its descendants: such a cycle
+  // would drop the whole branch from every view (list, comboboxes, filters) and could
+  // not be repaired through the UI. Walk up from the proposed parent — cheap, a handful
+  // of rows — and refuse if we reach this group.
+  if (parsed.data.parentId != null) {
+    const rows = await db.select({ id: groups.id, parentId: groups.parentId }).from(groups);
+    const parentById = new Map(rows.map((r) => [r.id, r.parentId]));
+    const seen = new Set<number>();
+    let cursor: number | null = parsed.data.parentId;
+    while (cursor != null) {
+      if (cursor === id)
+        return {
+          ok: false,
+          message: "Eine Gliederung kann nicht sich selbst oder einer ihrer Untergliederungen untergeordnet werden.",
+        };
+      if (seen.has(cursor)) break; // pre-existing cycle elsewhere — stop instead of looping
+      seen.add(cursor);
+      cursor = parentById.get(cursor) ?? null;
+    }
+  }
   try {
     await db.update(groups).set({ ...parsed.data, updatedBy: by, updatedAt: new Date() }).where(eq(groups.id, id));
   } catch (err) {
@@ -84,7 +103,11 @@ export async function deleteGroup(id: number): Promise<ActionResult> {
     .from(assignments)
     .where(eq(assignments.groupId, id));
   if (Number(assignmentCount) > 0)
-    return { ok: false, message: "Gliederung ist noch Personen zugeordnet und kann nicht gelöscht werden." };
+    return {
+      ok: false,
+      message:
+        "Gliederung ist noch Personen zugeordnet (auch frühere Ämter in der Historie zählen) und kann nicht gelöscht werden.",
+    };
 
   // Distribution-list group rules reference the group with onDelete: cascade — deleting
   // it would silently drop the rules and change who gets future mailings, so block it here.

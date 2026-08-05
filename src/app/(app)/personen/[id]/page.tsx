@@ -7,6 +7,7 @@ import {
   listOffices,
   listRanks,
 } from "@/db/queries";
+import { requirePageSession } from "@/lib/auth-helpers";
 
 import { PersonForm } from "../_components/person-form";
 
@@ -15,6 +16,8 @@ export default async function EditPersonPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // Authoritative gate: the layout is not re-rendered on RSC navigations.
+  await requirePageSession();
   const { id } = await params;
   const personId = Number(id);
   if (!Number.isInteger(personId) || personId <= 0) notFound();
