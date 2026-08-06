@@ -56,7 +56,8 @@ export function Combobox({
           aria-expanded={open}
           aria-label={ariaLabel}
           className={cn(
-            "h-9 w-full justify-between font-normal",
+            // h-8 matches Input and SelectTrigger so mixed rows share a baseline.
+            "h-8 w-full justify-between font-normal",
             !selected && "text-ink-faint",
             className,
           )}

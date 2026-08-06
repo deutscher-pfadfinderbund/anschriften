@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import {
   listDistributionListSummaries,
   listGroups,
@@ -8,6 +10,8 @@ import { requirePageSession } from "@/lib/auth-helpers";
 import { isMailEnabled } from "@/lib/mail";
 
 import { PersonsTable } from "./_components/persons-table";
+
+export const metadata: Metadata = { title: "Verzeichnis" };
 
 // Server Component: load every person with assignments in one shot and hand the
 // full set to the client table, which filters/sorts client-side (no pagination).

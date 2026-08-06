@@ -1,8 +1,12 @@
+import type { Metadata } from "next";
+
 import { listOffices, listRanks, officeListRules, officeUsage, rankUsage } from "@/db/queries";
 import type { OfficeListRule } from "@/db/queries";
 import { requirePageSession } from "@/lib/auth-helpers";
 
 import { StammdatenManager } from "./stammdaten-manager";
+
+export const metadata: Metadata = { title: "Ämter & Stände" };
 
 export default async function StammdatenPage() {
   // Authoritative gate: the layout is not re-rendered on RSC navigations.

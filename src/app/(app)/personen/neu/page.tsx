@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import {
   listDistributionListSummaries,
   listGroups,
@@ -8,6 +10,8 @@ import {
 import { requirePageSession } from "@/lib/auth-helpers";
 
 import { PersonForm } from "../_components/person-form";
+
+export const metadata: Metadata = { title: "Neue Anschrift" };
 
 export default async function NewPersonPage() {
   // Authoritative gate: the layout is not re-rendered on RSC navigations.

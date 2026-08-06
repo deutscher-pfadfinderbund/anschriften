@@ -42,6 +42,7 @@ function NavItem({ entry, active }: { entry: NavEntry; active: boolean }) {
       aria-current={active ? "page" : undefined}
       className={cn(
         "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] transition-colors",
+        "outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active
           ? "bg-ink font-medium text-paper"
           : "text-ink-soft hover:bg-sel hover:text-ink",
@@ -95,7 +96,7 @@ export function Sidebar({ userName }: { userName: string }) {
             type="submit"
             title="Abmelden"
             aria-label="Abmelden"
-            className="rounded-md p-1.5 text-ink-faint transition-colors hover:bg-sel hover:text-ink"
+            className="rounded-md p-1.5 text-ink-faint outline-none transition-colors hover:bg-sel hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
           >
             <LogOut className="size-4" />
           </button>

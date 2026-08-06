@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import {
   listDistributionLists,
   listGroups,
@@ -10,6 +12,8 @@ import { requirePageSession } from "@/lib/auth-helpers";
 import { isMailEnabled } from "@/lib/mail";
 
 import { VerteilerManager } from "./verteiler-manager";
+
+export const metadata: Metadata = { title: "Verteiler" };
 
 // Server Component: load every list with its members plus a minimal person index
 // for the "add members" picker, then hand it all to the client manager.

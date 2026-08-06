@@ -1,4 +1,8 @@
+import type { Metadata } from "next";
+
 import { LoginButton } from "./login-button";
+
+export const metadata: Metadata = { title: "Anmelden" };
 
 export default async function LoginPage({
   searchParams,

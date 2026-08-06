@@ -9,7 +9,11 @@ const firaSans = Fira_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Anschriftenverzeichnis — Deutscher Pfadfinderbund",
+  // Every page exports its own short title; the template appends the app name.
+  title: {
+    default: "Anschriftenverzeichnis — Deutscher Pfadfinderbund",
+    template: "%s — Anschriftenverzeichnis",
+  },
   description: "Bundesanschriftenverzeichnis des Deutschen Pfadfinderbundes",
 };
 

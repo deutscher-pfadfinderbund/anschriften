@@ -2,13 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Award, Briefcase, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { createOffice, deleteOffice, updateOffice } from "@/actions/offices";
 import { createRank, deleteRank, updateRank } from "@/actions/ranks";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { EmptyState } from "@/components/empty-state";
 import { FormLabel } from "@/components/form-label";
+import { MonoBadge } from "@/components/mono-badge";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,14 +62,6 @@ function LabeledInput({
         className={numeric ? "tabular-nums" : undefined}
       />
     </div>
-  );
-}
-
-function MonoBadge({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="min-w-8 rounded-[3px] border border-line bg-surface-2 px-1.5 py-px text-right font-mono text-[11px] tabular-nums text-ink-faint">
-      {children}
-    </span>
   );
 }
 
@@ -156,9 +150,11 @@ export function StammdatenManager({
             </div>
             <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
               {offices.length === 0 ? (
-                <p className="p-6 text-center text-sm text-ink-faint">
-                  Noch keine Ämter angelegt.
-                </p>
+                <EmptyState
+                  icon={Briefcase}
+                  title="Noch keine Ämter angelegt."
+                  description="Lege über „Neues Amt“ das erste Amt an — Ämter stehen danach im Anschriften-Editor und als Verteiler-Regel zur Auswahl."
+                />
               ) : (
               <ul>
                 {offices.map((o) => (
@@ -238,9 +234,11 @@ export function StammdatenManager({
             </div>
             <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
               {ranks.length === 0 ? (
-                <p className="p-6 text-center text-sm text-ink-faint">
-                  Noch keine Stände angelegt.
-                </p>
+                <EmptyState
+                  icon={Award}
+                  title="Noch keine Stände angelegt."
+                  description="Lege über „Neuer Stand“ den ersten Stand an — Stände stehen danach im Anschriften-Editor und als Verteiler-Regel zur Auswahl."
+                />
               ) : (
               <ul>
                 {ranks.map((r) => (

@@ -600,7 +600,7 @@ export function PersonForm({
               <button
                 type="button"
                 onClick={() => setPhones((rows) => [...rows, { key: nextKey(), label: "Telefon", number: "" }])}
-                className="mt-2 inline-flex items-center gap-1 text-[13px] text-ink-soft transition-colors hover:text-fir"
+                className="mt-2 inline-flex items-center gap-1 rounded-md text-[13px] text-ink-soft outline-none transition-colors hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Plus className="size-3.5" />
                 weitere Nummer
@@ -718,7 +718,7 @@ export function PersonForm({
                     { key: nextKey(), id: null, groupId: null, officeId: null, startDate: "", endDate: "" },
                   ])
                 }
-                className="mt-2.5 w-full rounded-md border border-dashed border-line-strong py-2 text-[13px] text-ink-soft transition-colors hover:border-fir hover:text-fir"
+                className="mt-2.5 w-full rounded-md border border-dashed border-line-strong py-2 text-[13px] text-ink-soft outline-none transition-colors hover:border-fir hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
               >
                 + Amt hinzufügen
               </button>

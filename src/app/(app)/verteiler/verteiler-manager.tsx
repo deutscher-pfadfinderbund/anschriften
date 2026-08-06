@@ -38,6 +38,7 @@ import {
 import { Combobox } from "@/components/combobox";
 import { ComposeMailDialog } from "@/components/compose-mail-dialog";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { EmptyState } from "@/components/empty-state";
 import { FormLabel } from "@/components/form-label";
 import { MultiSelectList } from "@/components/multi-select-list";
 import { PageHeader } from "@/components/page-header";
@@ -394,11 +395,11 @@ export function VerteilerManager({
         <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[260px_1fr]">
           {/* Left: list of distribution lists */}
           <section className="rounded-lg border border-line bg-surface shadow-sm">
-            <div className="border-b border-line px-4 py-3 font-display text-[15.5px] font-semibold text-ink">
+            <div className="border-b border-line px-[18px] py-3 font-display text-[15.5px] font-semibold text-ink">
               Verteiler
             </div>
             {lists.length === 0 ? (
-              <p className="px-4 py-4 text-[13px] text-ink-faint">Noch keine Verteiler.</p>
+              <p className="px-[18px] py-4 text-[13px] text-ink-faint">Noch keine Verteiler.</p>
             ) : (
               <ul className="py-1.5">
                 {lists.map((l) => {
@@ -410,7 +411,9 @@ export function VerteilerManager({
                         onClick={() => setSelectedListId(l.id)}
                         aria-current={active ? "true" : undefined}
                         className={cn(
-                          "flex w-full items-center gap-2 border-l-2 px-3.5 py-2 text-left text-[13.5px] transition-colors",
+                          // pl-4 plus the 2px marker border adds up to the app-wide 18px gutter.
+                          "flex w-full items-center gap-2 border-l-2 py-2 pr-[18px] pl-4 text-left text-[13.5px] transition-colors",
+                          "outline-none focus-visible:ring-2 focus-visible:ring-ring",
                           active
                             ? "border-fir bg-surface-2 font-medium text-ink"
                             : "border-transparent text-ink-soft hover:bg-sel hover:text-ink",
@@ -426,7 +429,7 @@ export function VerteilerManager({
                 })}
               </ul>
             )}
-            <div className="border-t border-line p-2.5">
+            <div className="border-t border-line px-[18px] py-2.5">
               <button
                 type="button"
                 onClick={() => setListForm({ id: null, name: "", description: "" })}
@@ -517,7 +520,8 @@ export function VerteilerManager({
                         type="button"
                         onClick={() => setSeparator("; ")}
                         className={cn(
-                          "rounded-[5px] px-2 py-0.5 transition-colors",
+                          "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
+                          "focus-visible:ring-2 focus-visible:ring-ring",
                           separator === "; "
                             ? "bg-ink font-medium text-paper"
                             : "text-ink-soft hover:text-ink",
@@ -529,7 +533,8 @@ export function VerteilerManager({
                         type="button"
                         onClick={() => setSeparator(", ")}
                         className={cn(
-                          "rounded-[5px] px-2 py-0.5 transition-colors",
+                          "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
+                          "focus-visible:ring-2 focus-visible:ring-ring",
                           separator === ", "
                             ? "bg-ink font-medium text-paper"
                             : "text-ink-soft hover:text-ink",
@@ -656,10 +661,11 @@ export function VerteilerManager({
                   </Button>
                 </div>
                 {members.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-ink-faint">
-                    <Users className="size-6 opacity-40" />
-                    <p className="text-[13px]">Noch keine Mitglieder in diesem Verteiler.</p>
-                  </div>
+                  <EmptyState
+                    icon={Users}
+                    title="Noch keine Mitglieder in diesem Verteiler."
+                    description="Anschriften einzeln hinzufügen oder oben eine automatische Regel nach Amt, Stand oder Gliederung anlegen."
+                  />
                 ) : (
                   <ul>
                     {members.map((m) => (
@@ -750,21 +756,19 @@ export function VerteilerManager({
               </section>
             </div>
           ) : (
-            <section className="grid place-items-center rounded-lg border border-dashed border-line-strong bg-surface px-6 py-16 text-center">
-              <div>
-                <Mail className="mx-auto mb-3 size-7 text-ink-faint opacity-50" />
-                <p className="text-[14px] text-ink">Noch kein Verteiler angelegt.</p>
-                <p className="mt-1 text-[13px] text-ink-faint">
-                  Lege einen neuen Verteiler an, um E-Mail-Listen und CSV-Exporte zu erzeugen.
-                </p>
-                <Button
-                  className="mt-4"
-                  onClick={() => setListForm({ id: null, name: "", description: "" })}
-                >
-                  <Plus className="size-4" />
-                  Neuer Verteiler
-                </Button>
-              </div>
+            <section className="rounded-lg border border-dashed border-line-strong bg-surface">
+              <EmptyState
+                className="py-16"
+                icon={Mail}
+                title="Noch kein Verteiler angelegt."
+                description="Lege einen neuen Verteiler an, um E-Mail-Listen und CSV-Exporte zu erzeugen."
+                action={
+                  <Button onClick={() => setListForm({ id: null, name: "", description: "" })}>
+                    <Plus className="size-4" />
+                    Neuer Verteiler
+                  </Button>
+                }
+              />
             </section>
           )}
         </div>
