@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { birthYear, fold, formatDate, formatName } from "./format";
+import {
+  PHONE_LABELS,
+  birthYear,
+  canonicalPhoneLabel,
+  fold,
+  formatDate,
+  formatName,
+  phoneLabelOptions,
+} from "./format";
 
 // All test data below is fictitious.
 
@@ -81,6 +89,58 @@ describe("formatDate", () => {
   it("returns non-ISO input unchanged", () => {
     expect(formatDate("not-a-date")).toBe("not-a-date");
     expect(formatDate("24.06.2019")).toBe("24.06.2019");
+  });
+});
+
+describe("canonicalPhoneLabel", () => {
+  it("keeps an exact curated label unchanged", () => {
+    for (const l of PHONE_LABELS) expect(canonicalPhoneLabel(l)).toBe(l);
+  });
+
+  it("maps case and whitespace variants onto the curated spelling", () => {
+    expect(canonicalPhoneLabel("mobil")).toBe("Mobil");
+    expect(canonicalPhoneLabel("MOBIL")).toBe("Mobil");
+    expect(canonicalPhoneLabel(" Privat ")).toBe("Privat");
+    expect(canonicalPhoneLabel("dienstlich")).toBe("Dienstlich");
+    expect(canonicalPhoneLabel("telefon")).toBe("Telefon");
+  });
+
+  it("preserves an unknown label (trimmed) instead of dropping it", () => {
+    expect(canonicalPhoneLabel("Büro")).toBe("Büro");
+    expect(canonicalPhoneLabel("Handy")).toBe("Handy");
+    expect(canonicalPhoneLabel(" dienstl. ")).toBe("dienstl.");
+    expect(canonicalPhoneLabel("Tel. Arbeit")).toBe("Tel. Arbeit");
+  });
+
+  it("returns an empty string for empty, whitespace-only or missing input", () => {
+    expect(canonicalPhoneLabel("")).toBe("");
+    expect(canonicalPhoneLabel("   ")).toBe("");
+    expect(canonicalPhoneLabel(null)).toBe("");
+    expect(canonicalPhoneLabel(undefined)).toBe("");
+  });
+});
+
+describe("phoneLabelOptions", () => {
+  it("offers just the curated list for a known label", () => {
+    expect(phoneLabelOptions("Mobil")).toEqual([...PHONE_LABELS]);
+    expect(phoneLabelOptions("mobil")).toEqual([...PHONE_LABELS]);
+  });
+
+  it("appends an unknown label so the select never renders blank", () => {
+    expect(phoneLabelOptions("Büro")).toEqual([...PHONE_LABELS, "Büro"]);
+    expect(phoneLabelOptions(" Handy ")).toEqual([...PHONE_LABELS, "Handy"]);
+  });
+
+  it("always contains the canonicalised current label", () => {
+    for (const raw of ["mobil", " Privat ", "Büro", "dienstl."]) {
+      expect(phoneLabelOptions(raw)).toContain(canonicalPhoneLabel(raw));
+    }
+  });
+
+  it("falls back to the curated list for an empty label", () => {
+    expect(phoneLabelOptions("")).toEqual([...PHONE_LABELS]);
+    expect(phoneLabelOptions(null)).toEqual([...PHONE_LABELS]);
+    expect(phoneLabelOptions(undefined)).toEqual([...PHONE_LABELS]);
   });
 });
 

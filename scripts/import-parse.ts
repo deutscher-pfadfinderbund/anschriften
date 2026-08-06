@@ -1,6 +1,7 @@
 // Pure parsing/mapping helpers for the Access import (issue #2).
 // Kept free of DB and I/O so they can be unit-tested with fictitious data.
 
+import { canonicalPhoneLabel } from "../src/lib/format";
 import { RANK_UNRANKED } from "../src/lib/rank";
 
 export type Section =
@@ -99,7 +100,12 @@ export interface PhoneInput {
   bezeichner: string;
 }
 
-/** Build the phones jsonb array: join area code + number with a space, drop empties, label fallback "Telefon". */
+/**
+ * Build the phones jsonb array: join area code + number with a space, drop empties,
+ * label fallback "Telefon". The free-text `bezeichner` runs through the same
+ * canonicalisation the editor uses, so "mobil"/"MOBIL" land on the curated spelling
+ * while genuinely different labels ("Büro") are kept verbatim.
+ */
 export function buildPhones(inputs: PhoneInput[]): { label: string; number: string }[] {
   const phones: { label: string; number: string }[] = [];
   for (const { vorwahl, nummer, bezeichner } of inputs) {
@@ -108,7 +114,7 @@ export function buildPhones(inputs: PhoneInput[]): { label: string; number: stri
       .filter((p) => p.length > 0)
       .join(" ");
     if (!number) continue;
-    const label = (bezeichner ?? "").trim() || "Telefon";
+    const label = canonicalPhoneLabel(bezeichner) || "Telefon";
     phones.push({ label, number });
   }
   return phones;

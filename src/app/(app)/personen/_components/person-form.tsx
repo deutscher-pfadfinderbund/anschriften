@@ -30,7 +30,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import type { GroupRow, HistoricalAssignment, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
 import { findSimilarPersons, type PersonCandidate } from "@/lib/duplicate-persons";
-import { PHONE_LABELS, SALUTATIONS, formatDate, formatDateTime, formatName } from "@/lib/format";
+import {
+  SALUTATIONS,
+  canonicalPhoneLabel,
+  formatDate,
+  formatDateTime,
+  formatName,
+  phoneLabelOptions,
+} from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 import type { FieldErrors, PersonInput } from "@/lib/person-schema";
 import { cn } from "@/lib/utils";
@@ -101,7 +108,14 @@ export function PersonForm({
   const [phones, setPhones] = useState<PhoneRow[]>(() => {
     const existing = person?.phones ?? [];
     if (existing.length === 0) return [{ key: "p0", label: "Mobil", number: "" }];
-    return existing.map((p, i) => ({ key: `p${i}`, label: p.label, number: p.number }));
+    // Imported labels are free text ("mobil", " Privat "). Canonicalise once on load so
+    // the select shows the curated option and an untouched row saves the clean spelling;
+    // labels outside the list ("Büro") survive verbatim and get their own option below.
+    return existing.map((p, i) => ({
+      key: `p${i}`,
+      label: canonicalPhoneLabel(p.label),
+      number: p.number,
+    }));
   });
 
   const [assignments, setAssignments] = useState<AssignmentRow[]>(() => {
@@ -571,7 +585,7 @@ export function PersonForm({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {PHONE_LABELS.map((l) => (
+                        {phoneLabelOptions(p.label).map((l) => (
                           <SelectItem key={l} value={l}>
                             {l}
                           </SelectItem>
@@ -649,7 +663,9 @@ export function PersonForm({
                             onChange={(e) => updateAssignment(a.key, { startDate: e.target.value })}
                           />
                         </Field>
-                        <Field label="bis (für frühere Ämter)">
+                        {/* Short label so all four captions stay single-line and the
+                            controls line up; the panel hint explains what „bis“ does. */}
+                        <Field label="bis">
                           <Input
                             type="date"
                             aria-label="Amt bis"
