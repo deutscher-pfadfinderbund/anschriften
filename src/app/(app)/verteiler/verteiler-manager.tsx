@@ -443,9 +443,11 @@ export function VerteilerManager({
             </div>
           </section>
 
-          {/* Right: detail */}
+          {/* Right: detail. min-w-0 so a long, unbreakable e-mail address cannot
+              widen the 1fr column past the viewport (grid items default to
+              min-width:auto, which made the whole page scroll sideways). */}
           {activeList ? (
-            <div className="flex flex-col gap-[18px]">
+            <div className="flex min-w-0 flex-col gap-[18px]">
               <section className="rounded-lg border border-line bg-surface shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-[18px] py-3.5">
                   <div className="min-w-0">
