@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarOff, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -28,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { GroupRow, HistoricalAssignment, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
+import { findSimilarPersons, type PersonCandidate } from "@/lib/duplicate-persons";
 import { PHONE_LABELS, SALUTATIONS, formatDate, formatDateTime, formatName } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 import type { FieldErrors, PersonInput } from "@/lib/person-schema";
@@ -62,6 +64,7 @@ export function PersonForm({
   offices,
   ranks,
   distributionLists,
+  existingPersons = [],
 }: {
   mode: "create" | "edit";
   person?: PersonEditData;
@@ -69,6 +72,8 @@ export function PersonForm({
   offices: OfficeRow[];
   ranks: RankRow[];
   distributionLists: { id: number; name: string }[];
+  /** Existing persons' names — only used for the non-blocking duplicate hint in create mode. */
+  existingPersons?: PersonCandidate[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -232,6 +237,14 @@ export function PersonForm({
     }
     return dups;
   }, [assignments]);
+
+  // Non-blocking duplicate hint (create mode only): softly warn when a similarly-named
+  // person already exists so the same anschrift is not entered twice. Advisory only —
+  // it never disables saving. In edit mode this stays empty and nothing is rendered.
+  const similarPersons = useMemo(() => {
+    if (mode !== "create") return [];
+    return findSimilarPersons({ firstName, lastName, scoutName }, existingPersons);
+  }, [mode, firstName, lastName, scoutName, existingPersons]);
 
   const heading =
     mode === "edit" && person
@@ -486,6 +499,26 @@ export function PersonForm({
                   <Input id="f-geb" type="date" value={birthDate ?? ""} onChange={(e) => setBirthDate(e.target.value)} />
                 </Field>
               </div>
+              {similarPersons.length > 0 ? (
+                <div className="mb-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-[13px] text-ink-soft">
+                  <p>Ähnliche Einträge vorhanden – bitte prüfen, ob die Person schon existiert:</p>
+                  <ul className="mt-1 flex flex-col gap-0.5">
+                    {similarPersons.map((p) => (
+                      <li key={p.id}>
+                        <Link
+                          href={`/personen/${p.id}`}
+                          target="_blank"
+                          rel="noopener"
+                          className="text-fir underline-offset-2 hover:underline"
+                        >
+                          {formatName(p)}
+                          {p.scoutName && (p.lastName || p.firstName) ? ` „${p.scoutName}“` : ""}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <Field label="Anmerkung" htmlFor="f-anm">
                 <Textarea
                   id="f-anm"

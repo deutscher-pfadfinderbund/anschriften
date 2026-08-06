@@ -158,17 +158,19 @@ export async function sendListMail(input: SendListMailInput): Promise<SendListMa
     });
     return { ok: true, chunks: chunks.length, recipientCount };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    // SMTP rejections often echo recipient addresses (PII). Sanitize once and use
+    // the same masked string both for the log AND for the result the caller shows
+    // in a toast — the raw error must never reach the client.
+    const safeError = sanitizeMailError(err);
     await db.insert(mailLog).values({
       sentBy: input.sentBy,
       listId: input.listId ?? null,
       subject: input.subject,
       recipientCount,
       status: "failed",
-      // Never persist recipient addresses from SMTP rejections (PII).
-      error: sanitizeMailError(err),
+      error: safeError,
     });
-    return { ok: false, error: message };
+    return { ok: false, error: safeError };
   } finally {
     transport.close();
   }
