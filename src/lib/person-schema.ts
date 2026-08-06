@@ -160,9 +160,7 @@ export const personInputSchema = z
     }
   });
 
-export type PhoneInput = z.infer<typeof phoneInputSchema>;
 export type AssignmentInput = z.infer<typeof assignmentInputSchema>;
-export type EndPreviousInput = z.infer<typeof endPreviousInputSchema>;
 export type PersonInput = z.infer<typeof personInputSchema>;
 
 export type FieldErrors = Record<string, string>;
