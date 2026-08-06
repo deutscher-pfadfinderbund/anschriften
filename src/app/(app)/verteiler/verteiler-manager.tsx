@@ -130,23 +130,25 @@ function RuleSection({
         {rows.length === 0 ? (
           <p className="mb-3 text-[13px] text-ink-soft">{emptyRules}</p>
         ) : (
-          <ul className="mb-3 flex flex-col gap-1.5">
+          /* Chips sized to their content: a rule is one short word, so full-width
+             rows would stack up as mostly empty bars. */
+          <ul className="mb-3 flex flex-wrap gap-1.5">
             {rows.map((r) => (
               <li
                 key={r.id}
-                className="group/rule flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[13.5px]"
+                className="flex max-w-full items-center gap-1.5 rounded-md border border-line bg-surface-2 py-1 pr-1 pl-2.5 text-[13.5px]"
               >
                 <Icon className="size-3.5 shrink-0 text-ink-faint" />
-                <span className="min-w-0 flex-1 truncate text-ink">{r.name}</span>
+                <span className="min-w-0 truncate text-ink">{r.name}</span>
                 <Button
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon-xs"
                   aria-label={`Regel „${r.name}“ entfernen`}
-                  className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100 group-focus-within/rule:opacity-100 focus-visible:opacity-100"
+                  className="shrink-0 text-ink-faint hover:text-crit"
                   disabled={disabled}
                   onClick={() => onRemove(r)}
                 >
-                  <X className="size-4" />
+                  <X className="size-3.5" />
                 </Button>
               </li>
             ))}
@@ -522,8 +524,10 @@ export function VerteilerManager({
                         className={cn(
                           "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
                           "focus-visible:ring-2 focus-visible:ring-ring",
+                          // Same "active" language as the nav and the tabs:
+                          // neutral surface, fir text — never a filled pill.
                           separator === "; "
-                            ? "bg-ink font-medium text-paper"
+                            ? "bg-surface-2 font-medium text-fir"
                             : "text-ink-soft hover:text-ink",
                         )}
                       >
@@ -536,7 +540,7 @@ export function VerteilerManager({
                           "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
                           "focus-visible:ring-2 focus-visible:ring-ring",
                           separator === ", "
-                            ? "bg-ink font-medium text-paper"
+                            ? "bg-surface-2 font-medium text-fir"
                             : "text-ink-soft hover:text-ink",
                         )}
                       >

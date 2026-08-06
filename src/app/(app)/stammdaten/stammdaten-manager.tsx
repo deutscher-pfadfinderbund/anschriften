@@ -24,6 +24,18 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { OfficeListRule, OfficeRow, RankRow } from "@/db/queries";
+import { RANK_UNRANKED } from "@/lib/rank";
+
+/** Rank input value for the form: the sentinel is shown as an empty field. */
+function rankToInput(rank: number): string {
+  return rank === RANK_UNRANKED ? "" : String(rank);
+}
+
+/** …and back: an empty field means "ohne Rang", i.e. the sentinel — never 0. */
+function inputToRank(value: string): number {
+  const trimmed = value.trim();
+  return trimmed === "" ? RANK_UNRANKED : Number(trimmed) || 0;
+}
 
 type OfficeForm = { id: number | null; name: string; rank: string };
 type RankForm = { id: number | null; name: string; sortOrder: string };
@@ -42,6 +54,7 @@ function LabeledInput({
   onChange,
   type = "text",
   numeric = false,
+  placeholder,
 }: {
   id: string;
   label: string;
@@ -49,6 +62,7 @@ function LabeledInput({
   onChange: (v: string) => void;
   type?: string;
   numeric?: boolean;
+  placeholder?: string;
 }) {
   return (
     <div>
@@ -59,6 +73,7 @@ function LabeledInput({
         min={type === "number" ? 0 : undefined}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
         className={numeric ? "tabular-nums" : undefined}
       />
     </div>
@@ -81,13 +96,15 @@ export function StammdatenManager({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
+  // Controlled so the header row can show the action for the visible tab.
+  const [tab, setTab] = useState<"offices" | "ranks">("offices");
   const [officeForm, setOfficeForm] = useState<OfficeForm | null>(null);
   const [rankForm, setRankForm] = useState<RankForm | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
   function submitOffice() {
     if (!officeForm) return;
-    const payload = { name: officeForm.name, rank: Number(officeForm.rank) || 0 };
+    const payload = { name: officeForm.name, rank: inputToRank(officeForm.rank) };
     startTransition(async () => {
       const res = officeForm.id != null ? await updateOffice(officeForm.id, payload) : await createOffice(payload);
       if (!res.ok) return void toast.error(res.message);
@@ -134,20 +151,28 @@ export function StammdatenManager({
         subtitle="Lookup-Listen für den Editor · Rang und Sortierung steuern die Reihenfolge im PDF"
       />
       <div className="px-6 pt-[18px] pb-10">
-        <Tabs defaultValue="offices">
-          <TabsList className="mb-4">
-            <TabsTrigger value="offices">Ämter ({offices.length})</TabsTrigger>
-            <TabsTrigger value="ranks">Stände ({ranks.length})</TabsTrigger>
-          </TabsList>
-
-          {/* Ämter */}
-          <TabsContent value="offices">
-            <div className="mb-3 flex justify-end">
-              <Button onClick={() => setOfficeForm({ id: null, name: "", rank: "999" })}>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "offices" | "ranks")}>
+          {/* One clean header row: tabs left, the action for the visible tab right. */}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <TabsList>
+              <TabsTrigger value="offices">Ämter ({offices.length})</TabsTrigger>
+              <TabsTrigger value="ranks">Stände ({ranks.length})</TabsTrigger>
+            </TabsList>
+            {tab === "offices" ? (
+              <Button onClick={() => setOfficeForm({ id: null, name: "", rank: "" })}>
                 <Plus className="size-4" />
                 Neues Amt
               </Button>
-            </div>
+            ) : (
+              <Button onClick={() => setRankForm({ id: null, name: "", sortOrder: "0" })}>
+                <Plus className="size-4" />
+                Neuer Stand
+              </Button>
+            )}
+          </div>
+
+          {/* Ämter */}
+          <TabsContent value="offices">
             <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
               {offices.length === 0 ? (
                 <EmptyState
@@ -160,63 +185,72 @@ export function StammdatenManager({
                 {offices.map((o) => (
                   <li
                     key={o.id}
-                    className="group/row flex items-center gap-2.5 border-b border-line px-[18px] py-2 text-[13.5px] last:border-b-0 hover:bg-sel"
+                    className="group/row border-b border-line last:border-b-0 hover:bg-sel"
                   >
-                    <MonoBadge>{o.rank}</MonoBadge>
-                    <span className="text-ink">{o.name}</span>
-                    {(officeListRules[o.id] ?? []).length > 0 ? (
-                      <span
-                        className="flex flex-wrap items-center gap-1"
-                        title="Inhaber dieses Amts sind automatisch in diesen Verteilern."
-                      >
-                        {officeListRules[o.id].map((r) => (
-                          <span
-                            key={r.listId}
-                            className="rounded-[4px] border border-brass/40 bg-brass-tint px-1.5 py-px text-[10.5px] text-ink-soft"
-                          >
-                            {r.listName}
-                          </span>
-                        ))}
+                    {/* max-w keeps name and actions in one readable band instead of
+                        stretching across the whole viewport. */}
+                    <div className="flex max-w-3xl items-center gap-2.5 px-[18px] py-1.5 text-[13.5px]">
+                      {/* RANK_UNRANKED is an internal sentinel — never show the raw 999. */}
+                      <MonoBadge title={o.rank === RANK_UNRANKED ? "ohne Rang" : undefined}>
+                        {o.rank === RANK_UNRANKED ? "—" : o.rank}
+                      </MonoBadge>
+                      <span className="truncate text-ink">{o.name}</span>
+                      {(officeListRules[o.id] ?? []).length > 0 ? (
+                        <span
+                          className="flex flex-wrap items-center gap-1"
+                          title="Inhaber dieses Amts sind automatisch in diesen Verteilern."
+                        >
+                          {officeListRules[o.id].map((r) => (
+                            <span
+                              key={r.listId}
+                              className="rounded-[4px] border border-brass/40 bg-brass-tint px-1.5 py-px text-[10.5px] text-ink-soft"
+                            >
+                              {r.listName}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
+                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label="Bearbeiten"
+                          onClick={() =>
+                            setOfficeForm({ id: o.id, name: o.name, rank: rankToInput(o.rank) })
+                          }
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label="Löschen"
+                          className="text-ink-faint hover:text-crit"
+                          onClick={() => {
+                            const usedByPersons = (officeUsage[o.id] ?? 0) > 0;
+                            const rules = officeListRules[o.id] ?? [];
+                            const blocked = usedByPersons || rules.length > 0;
+                            setDeleteTarget({
+                              type: "office",
+                              id: o.id,
+                              name: o.name,
+                              blocked,
+                              // A rule-only usage would otherwise show an enabled button
+                              // that the server then refuses — explain it up front.
+                              blockedMessage: !blocked
+                                ? undefined
+                                : usedByPersons
+                                  ? "Dieses Amt ist noch Personen zugeordnet und kann nicht gelöscht werden."
+                                  : `Dieses Amt wird noch als Verteiler-Regel verwendet (${rules
+                                      .map((r) => r.listName)
+                                      .join(", ")}) und kann nicht gelöscht werden. Bitte zuerst die Regel im Verteiler entfernen.`,
+                            });
+                          }}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
                       </span>
-                    ) : null}
-                    <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Bearbeiten"
-                        onClick={() => setOfficeForm({ id: o.id, name: o.name, rank: String(o.rank) })}
-                      >
-                        <Pencil className="size-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Löschen"
-                        className="text-ink-faint hover:text-crit"
-                        onClick={() => {
-                          const usedByPersons = (officeUsage[o.id] ?? 0) > 0;
-                          const rules = officeListRules[o.id] ?? [];
-                          const blocked = usedByPersons || rules.length > 0;
-                          setDeleteTarget({
-                            type: "office",
-                            id: o.id,
-                            name: o.name,
-                            blocked,
-                            // A rule-only usage would otherwise show an enabled button
-                            // that the server then refuses — explain it up front.
-                            blockedMessage: !blocked
-                              ? undefined
-                              : usedByPersons
-                                ? "Dieses Amt ist noch Personen zugeordnet und kann nicht gelöscht werden."
-                                : `Dieses Amt wird noch als Verteiler-Regel verwendet (${rules
-                                    .map((r) => r.listName)
-                                    .join(", ")}) und kann nicht gelöscht werden. Bitte zuerst die Regel im Verteiler entfernen.`,
-                          });
-                        }}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </span>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -226,12 +260,6 @@ export function StammdatenManager({
 
           {/* Stände */}
           <TabsContent value="ranks">
-            <div className="mb-3 flex justify-end">
-              <Button onClick={() => setRankForm({ id: null, name: "", sortOrder: "0" })}>
-                <Plus className="size-4" />
-                Neuer Stand
-              </Button>
-            </div>
             <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
               {ranks.length === 0 ? (
                 <EmptyState
@@ -244,36 +272,40 @@ export function StammdatenManager({
                 {ranks.map((r) => (
                   <li
                     key={r.id}
-                    className="group/row flex items-center gap-2.5 border-b border-line px-[18px] py-2 text-[13.5px] last:border-b-0 hover:bg-sel"
+                    className="group/row border-b border-line last:border-b-0 hover:bg-sel"
                   >
-                    <MonoBadge>{r.sortOrder}</MonoBadge>
-                    <span className="text-ink">{r.name}</span>
-                    <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Bearbeiten"
-                        onClick={() => setRankForm({ id: r.id, name: r.name, sortOrder: String(r.sortOrder) })}
-                      >
-                        <Pencil className="size-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Löschen"
-                        className="text-ink-faint hover:text-crit"
-                        onClick={() =>
-                          setDeleteTarget({
-                            type: "rank",
-                            id: r.id,
-                            name: r.name,
-                            blocked: (rankUsage[r.id] ?? 0) > 0,
-                          })
-                        }
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </span>
+                    <div className="flex max-w-3xl items-center gap-2.5 px-[18px] py-1.5 text-[13.5px]">
+                      <MonoBadge>{r.sortOrder}</MonoBadge>
+                      <span className="truncate text-ink">{r.name}</span>
+                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label="Bearbeiten"
+                          onClick={() =>
+                            setRankForm({ id: r.id, name: r.name, sortOrder: String(r.sortOrder) })
+                          }
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label="Löschen"
+                          className="text-ink-faint hover:text-crit"
+                          onClick={() =>
+                            setDeleteTarget({
+                              type: "rank",
+                              id: r.id,
+                              name: r.name,
+                              blocked: (rankUsage[r.id] ?? 0) > 0,
+                            })
+                          }
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </span>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -288,12 +320,23 @@ export function StammdatenManager({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{officeForm?.id != null ? "Amt bearbeiten" : "Neues Amt"}</DialogTitle>
-            <DialogDescription>Der Rang steuert die Reihenfolge der Ämter im PDF (kleiner = weiter oben).</DialogDescription>
+            <DialogDescription>
+              Der Rang steuert die Reihenfolge der Ämter im PDF (kleiner = weiter oben). Leer
+              lassen für „ohne Rang“ — diese Ämter stehen am Ende.
+            </DialogDescription>
           </DialogHeader>
           {officeForm ? (
             <div className="flex flex-col gap-3">
               <LabeledInput id="o-name" label="Name" value={officeForm.name} onChange={(v) => setOfficeForm({ ...officeForm, name: v })} />
-              <LabeledInput id="o-rank" label="Rang" type="number" numeric value={officeForm.rank} onChange={(v) => setOfficeForm({ ...officeForm, rank: v })} />
+              <LabeledInput
+                id="o-rank"
+                label="Rang"
+                type="number"
+                numeric
+                placeholder="ohne Rang"
+                value={officeForm.rank}
+                onChange={(v) => setOfficeForm({ ...officeForm, rank: v })}
+              />
             </div>
           ) : null}
           <DialogFooter>

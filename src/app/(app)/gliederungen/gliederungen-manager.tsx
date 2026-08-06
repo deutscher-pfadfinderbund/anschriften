@@ -172,31 +172,41 @@ export function GliederungenManager({
           ) : (
             <ul className="py-1.5">
               {ordered.map(({ group, depth }) => (
-                <li
-                  key={group.id}
-                  className="group/row flex items-center gap-2 px-[18px] py-1.5 text-[13.5px] hover:bg-sel"
-                  style={{ paddingLeft: `${18 + depth * 16}px` }}
-                >
-                  <MonoBadge>{group.sortKey}</MonoBadge>
-                  <span className="text-ink">{group.name}</span>
-                  <span className="ml-auto flex items-center gap-2 text-[11px] uppercase tracking-[0.06em] text-ink-faint">
-                    {group.kind ? <span>{group.kind}</span> : null}
-                    <span>{SECTION_LABELS[group.section] ?? group.section}</span>
-                  </span>
-                  <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
-                    <Button variant="ghost" size="icon-sm" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
-                      <Pencil className="size-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Löschen"
-                      className="text-ink-faint hover:text-crit"
-                      onClick={() => setDeleteTarget(group)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </span>
+                <li key={group.id} className="group/row hover:bg-sel">
+                  {/* max-w keeps name and labels in one readable band instead of
+                      stretching them to opposite ends of a wide viewport. */}
+                  <div
+                    className="flex max-w-3xl items-center gap-2 px-[18px] py-1.5 text-[13.5px]"
+                    style={{ paddingLeft: `${18 + depth * 16}px` }}
+                  >
+                    <MonoBadge>{group.sortKey}</MonoBadge>
+                    <span className="truncate text-ink">{group.name}</span>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-faint">
+                      {group.kind ? (
+                        <>
+                          <span>{group.kind}</span>
+                          <span aria-hidden className="text-line-strong">
+                            ·
+                          </span>
+                        </>
+                      ) : null}
+                      <span>{SECTION_LABELS[group.section] ?? group.section}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+                      <Button variant="ghost" size="icon-xs" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Löschen"
+                        className="text-ink-faint hover:text-crit"
+                        onClick={() => setDeleteTarget(group)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>

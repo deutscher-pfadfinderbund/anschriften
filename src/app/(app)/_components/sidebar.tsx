@@ -41,11 +41,13 @@ function NavItem({ entry, active }: { entry: NavEntry; active: boolean }) {
       href={entry.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13.5px] transition-colors",
+        // pl-2 plus the 2px marker border keeps the label on the same x as px-2.5.
+        "flex w-full items-center gap-2.5 rounded-md border-l-2 py-2 pr-2.5 pl-2 text-[13.5px] transition-colors",
         "outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        // One "active" language app-wide: neutral surface, fir marker, fir text.
         active
-          ? "bg-ink font-medium text-paper"
-          : "text-ink-soft hover:bg-sel hover:text-ink",
+          ? "border-fir bg-surface font-medium text-fir"
+          : "border-transparent text-ink-soft hover:bg-sel hover:text-ink",
       )}
     >
       <Icon className="size-[15px] shrink-0 opacity-80" />
