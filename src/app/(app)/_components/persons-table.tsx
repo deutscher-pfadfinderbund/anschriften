@@ -486,7 +486,9 @@ export function PersonsTable({
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
+        {/* overflow-x-auto, not -hidden: the table has a min width, so on narrow
+            viewports the right-hand columns must stay reachable by scrolling. */}
+        <div className="overflow-x-auto rounded-lg border border-line bg-surface shadow-sm">
           <Table className="min-w-[880px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">

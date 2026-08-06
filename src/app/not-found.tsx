@@ -16,7 +16,7 @@ export default function NotFound() {
         </h1>
         <p className="mt-3 text-sm text-ink-soft">
           Diese Seite oder dieser Eintrag existiert nicht (mehr). Möglicherweise wurde er
-          gelöscht oder die Adresse ist nicht korrekt.
+          gelöscht oder der Link ist nicht korrekt.
         </p>
         <div className="mt-6">
           <Button asChild>
