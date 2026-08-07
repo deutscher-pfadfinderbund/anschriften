@@ -203,6 +203,21 @@ function joinNonEmpty(parts: (string | null | undefined)[], sep = " "): string {
   return parts.map((p) => (p ?? "").trim()).filter((p) => p.length > 0).join(sep);
 }
 
+/**
+ * Compare two already-normalized multi-field sort keys field by field with the German
+ * collation. Fields must be compared on their own — concatenating them into one string with a
+ * separator lets the separator take part in the comparison. Under the de collation `" " < "#"`,
+ * so `"habicht ii#marcel"` would sort before `"habicht#hans-juergen"` and the register would
+ * print the numbered Fahrtenname „Habicht II" ahead of „Habicht" (issue #8).
+ */
+export function compareSortKeys(a: string[], b: string[]): number {
+  for (let i = 0; i < a.length; i += 1) {
+    const cmp = (a[i] ?? "").localeCompare(b[i] ?? "", "de");
+    if (cmp !== 0) return cmp;
+  }
+  return 0;
+}
+
 function nullIfEmpty(value: string | null | undefined): string | null {
   const v = (value ?? "").trim();
   return v.length > 0 ? v : null;
@@ -468,7 +483,7 @@ function buildRegister(
   assignmentsByPerson: Map<number, DataAssignment[]>,
   anchored: Set<number>,
 ): RegisterEntry[] {
-  const rows: { key: string; entry: RegisterEntry }[] = [];
+  const rows: { key: string[]; entry: RegisterEntry }[] = [];
 
   for (const pid of anchored) {
     const p = personById.get(pid);
@@ -484,26 +499,33 @@ function buildRegister(
       officeById,
     );
 
+    // The register must show the very same name as the group tree, academic title included
+    // (`personDisplayName` renders "Dr. Annegret Öhmann-Weiß"). The title is a name prefix, so
+    // it goes in front of the first token that is actually printed — never into the sort key.
+    const titled = (name: string) => joinNonEmpty([p.title, name]);
+
     let lead: string;
     let rest: string;
     if (scout) {
       lead = `${scout},`;
-      rest = ` ${joinNonEmpty([first, last])}${breadcrumb}`;
+      rest = ` ${titled(joinNonEmpty([first, last]))}${breadcrumb}`;
     } else if (first) {
-      lead = first;
+      lead = titled(first);
       rest = ` ${last}${breadcrumb}`;
     } else {
       // Neither Fahrtenname nor Vorname: lead with the surname so the entry does not sort to
       // the top with an empty bold lead (issue #9).
-      lead = last;
+      lead = titled(last);
       rest = breadcrumb;
     }
 
-    const key = normalizeSortKey(`${scout || first || last}#${first}#${last}`);
+    // Primary field (Fahrtenname else Vorname else Nachname) first, then the tiebreakers —
+    // compared separately, see `compareSortKeys`.
+    const key = [scout || first || last, first, last].map(normalizeSortKey);
     rows.push({ key, entry: { label: `p${pid}`, lead, rest } });
   }
 
-  rows.sort((a, b) => a.key.localeCompare(b.key, "de"));
+  rows.sort((a, b) => compareSortKeys(a.key, b.key));
   return rows.map((r) => r.entry);
 }
 
@@ -608,7 +630,10 @@ function buildKanzlei(
       },
     });
   }
-  // "Kanzlerin des Bundes" before "Kanzler des Bundes"
+  // Deterministic cover order: sort the offices alphabetically, which puts "Kanzler des Bundes"
+  // before "Kanzlerin des Bundes" (the shorter string wins as a prefix). Order is presentation
+  // only — both entries are always printed — so the stable, data-independent rule is preferred
+  // over hard-coding a precedence between the two offices.
   result.sort((a, b) => a.office.localeCompare(b.office, "de"));
   return result.map((r) => r.entry);
 }

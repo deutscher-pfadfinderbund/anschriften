@@ -360,6 +360,75 @@ describe("name register", () => {
     expect(anton.rest.startsWith(" Zebra")).toBe(true); // no scout: rest begins with last name
   });
 
+  it("sorts a numbered Fahrtenname after its unnumbered namesake", () => {
+    // The sort key must compare Fahrtenname, Vorname and Nachname as separate fields. Joined
+    // into one string with a separator, the separator joins the comparison: under the German
+    // collation " " < "#", so "habicht ii#marcel" sorted BEFORE "habicht#hans-juergen" and the
+    // register printed „Habicht II" ahead of „Habicht".
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, firstName: "Marcel", lastName: "Übelacker", scoutName: "Habicht II" }),
+        person({ id: 2, firstName: "Hans-Jürgen", lastName: "Brandmüller", scoutName: "Habicht" }),
+        person({ id: 3, firstName: "Volker", lastName: "Ahrensbök", scoutName: "Möwe II" }),
+        person({ id: 4, firstName: "Beate", lastName: "Schönherr", scoutName: "Möwe" }),
+      ],
+      assignments: [
+        { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: null },
+        { id: 2, personId: 2, groupId: 1, officeId: 2, endDate: null },
+        { id: 3, personId: 3, groupId: 1, officeId: 3, endDate: null },
+        { id: 4, personId: 4, groupId: 1, officeId: 7, endDate: null },
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    expect(data.register.map((r) => r.lead)).toEqual([
+      "Habicht,",
+      "Habicht II,",
+      "Möwe,",
+      "Möwe II,",
+    ]);
+  });
+
+  it("keeps the academic title in the register, exactly as the group tree prints it", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({
+          id: 1,
+          title: "Dr.",
+          firstName: "Annegret",
+          lastName: "Öhmann-Weiß",
+          scoutName: "Silberdistel",
+        }),
+        person({ id: 2, title: "Prof.", firstName: "Bernd", lastName: "Kranz" }), // no scout name
+        person({ id: 3, title: "Dr.", lastName: "Zufall" }), // neither scout name nor Vorname
+      ],
+      assignments: [
+        { id: 1, personId: 1, groupId: 1, officeId: 2, endDate: null },
+        { id: 2, personId: 2, groupId: 1, officeId: 1, endDate: null },
+        { id: 3, personId: 3, groupId: 1, officeId: 3, endDate: null },
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    expect(allEntries(data.sections).map((e) => e.name)).toContain("Dr. Annegret Öhmann-Weiß");
+
+    const silberdistel = data.register.find((r) => r.lead === "Silberdistel,")!;
+    expect(silberdistel.rest.startsWith(" Dr. Annegret Öhmann-Weiß")).toBe(true);
+    // Without a Fahrtenname the title joins the bold lead so the printed name stays complete…
+    expect(data.register.map((r) => r.lead)).toContain("Prof. Bernd");
+    expect(data.register.map((r) => r.lead)).toContain("Dr. Zufall");
+    // …but the title never takes part in the sorting: Bernd (b) still precedes Silberdistel (s).
+    expect(data.register.map((r) => r.lead)).toEqual([
+      "Prof. Bernd",
+      "Silberdistel,",
+      "Dr. Zufall",
+    ]);
+  });
+
   it("builds a parent/group/office breadcrumb and skips the Bundesführung group name", () => {
     const raw: RawData = {
       ranks: RANKS,
