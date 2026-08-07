@@ -35,15 +35,15 @@ export function MobileNav({ userName }: { userName: string }) {
             <Menu className="size-5" />
           </button>
         </DialogTrigger>
-        {/* Left-anchored, full-height variant of the shared dialog. The last
-            class keeps the nav rows thumb-friendly (~44px) without touching
-            the desktop rail. */}
+        {/* Left-anchored, full-height variant of the shared dialog. The nav rows
+            size themselves (see NavItem in sidebar.tsx) — nothing here reaches
+            into the shared SidebarContent. */}
         <DialogContent
           aria-describedby={undefined}
           // max-h-none/overflow-hidden opt out of DialogContent's viewport cap:
           // the drawer is meant to be exactly full height and scrolls inside its
           // own <nav>, so the shared max-h would leave a 2rem gap at the bottom.
-          className="top-0 left-0 flex h-dvh max-h-none w-72 max-w-[85vw] translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-r border-line bg-surface-2 p-0 ring-0 data-open:zoom-in-100 data-open:slide-in-from-left data-closed:zoom-out-100 data-closed:slide-out-to-left sm:max-w-[85vw] [&_nav_a]:py-3"
+          className="top-0 left-0 flex h-dvh max-h-none w-72 max-w-[85vw] translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-r border-line bg-surface-2 p-0 ring-0 data-open:zoom-in-100 data-open:slide-in-from-left data-closed:zoom-out-100 data-closed:slide-out-to-left"
         >
           {/* The drawer repeats the wordmark, so a visible title would be noise. */}
           <DialogTitle className="sr-only">Navigation</DialogTitle>

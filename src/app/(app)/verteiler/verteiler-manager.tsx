@@ -66,18 +66,9 @@ import type {
 } from "@/db/queries";
 import { buildBcc, type BccSeparator } from "@/lib/export";
 import { formatDateTime, formatName } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { HOVER_REVEAL, TOUCH_HIT_Y, cn } from "@/lib/utils";
 
 type ListFormState = { id: number | null; name: string; description: string };
-
-/**
- * Stretched, invisible tap band for the Semikolon/Komma toggles — the same trick
- * the Checkbox primitive uses. Vertical only: the two buttons sit flush against
- * each other, so a horizontal inset would make their hit areas overlap. Emitted
- * only for a coarse pointer, so the mouse layout is byte-for-byte unchanged.
- */
-const SEPARATOR_TOUCH_HIT =
-  "pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2";
 
 /** "Nachname, Vorname" plus the scout name when both are present. */
 function memberLabel(m: {
@@ -535,12 +526,9 @@ export function VerteilerManager({
                         type="button"
                         onClick={() => setSeparator("; ")}
                         className={cn(
-                          "pointer-coarse:relative rounded-[5px] px-2 py-0.5 outline-none transition-colors",
+                          "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
                           "focus-visible:ring-2 focus-visible:ring-ring",
-                          // ~20px tall; the stretched ::after raises the tap band to
-                          // ~36px on touch. No x-inset — the two toggles sit flush
-                          // against each other and would otherwise overlap.
-                          SEPARATOR_TOUCH_HIT,
+                          TOUCH_HIT_Y,
                           // Same "active" language as the nav and the tabs:
                           // neutral surface, fir text — never a filled pill.
                           separator === "; "
@@ -554,9 +542,9 @@ export function VerteilerManager({
                         type="button"
                         onClick={() => setSeparator(", ")}
                         className={cn(
-                          "pointer-coarse:relative rounded-[5px] px-2 py-0.5 outline-none transition-colors",
+                          "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
                           "focus-visible:ring-2 focus-visible:ring-ring",
-                          SEPARATOR_TOUCH_HIT,
+                          TOUCH_HIT_Y,
                           separator === ", "
                             ? "bg-surface-2 font-medium text-fir"
                             : "text-ink-soft hover:text-ink",
@@ -752,16 +740,12 @@ export function VerteilerManager({
                             <span className="text-ink-faint">— ohne E-Mail</span>
                           )}
                         </div>
-                        {/* Keyed on the input mode, not on width: a touch device has no
-                            :hover at any viewport size, so the action stays visible
-                            there. Only a fine pointer (mouse) gets the dense
-                            hover-reveal — unchanged on desktop. */}
                         {m.manual ? (
                           <Button
                             variant="ghost"
                             size="icon-sm"
                             aria-label={`${formatName(m)} entfernen`}
-                            className="shrink-0 text-ink-faint opacity-100 transition-opacity hover:text-crit pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100 pointer-fine:focus-visible:opacity-100"
+                            className={cn("shrink-0 text-ink-faint hover:text-crit", HOVER_REVEAL)}
                             disabled={isPending}
                             onClick={() => handleRemove(m.personId)}
                           >

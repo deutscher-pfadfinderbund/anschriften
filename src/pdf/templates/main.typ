@@ -55,8 +55,8 @@
 #let street-line(s) = {
   let parts = s.split(" ").filter(p => p != "")
   if parts.len() >= 3 {
-    parts.slice(0, parts.len() - 2).join(" ") + " "
-    box[#parts.slice(parts.len() - 2).join(" ")]
+    parts.slice(0, -2).join(" ") + " "
+    box[#parts.slice(-2).join(" ")]
   } else {
     s
   }

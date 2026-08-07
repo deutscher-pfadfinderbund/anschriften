@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+import { TOUCH_HIT, cn } from "@/lib/utils";
+
 /** Shared topbar: display-serif title with an optional subtitle and back link. */
 export function PageHeader({
   title,
@@ -20,9 +22,10 @@ export function PageHeader({
       {backHref ? (
         <Link
           href={backHref}
-          // The link is only ~19px tall; on touch it gets an invisible band so
-          // it is comfortably tappable (same trick as the checkbox labels).
-          className="pointer-coarse:relative mb-2 inline-flex items-center gap-1 text-[12.5px] text-ink-soft transition-colors hover:text-fir pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2"
+          className={cn(
+            TOUCH_HIT,
+            "mb-2 inline-flex items-center gap-1 text-[12.5px] text-ink-soft transition-colors hover:text-fir",
+          )}
         >
           <ArrowLeft className="size-3.5" />
           {backLabel ?? "Zurück"}

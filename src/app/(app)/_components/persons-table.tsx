@@ -8,6 +8,7 @@ import {
   type Row,
   type RowSelectionState,
   type SortingState,
+  type Table as TableInstance,
   flexRender,
   getCoreRowModel,
   getSortedRowModel,
@@ -81,6 +82,48 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 }
 
 type Indexed = PersonListRow & { _search: string };
+
+/** The Fahrtenname is an addition to a real name, never the label on its own. */
+function showScout(p: PersonListRow): boolean {
+  return !!p.scoutName && !!(p.lastName || p.firstName);
+}
+
+/** Second line under the name: „Stand · *Geburtsjahr“, whichever is present. */
+function nameSubline(p: PersonListRow): string {
+  const year = birthYear(p.birthDate);
+  return [p.rankName, year ? `*${year}` : null].filter(Boolean).join(" · ");
+}
+
+/**
+ * „nicht abdrucken“ / „verstorben“ markers, shared by the table cell and the
+ * card. Only the wrapper layout differs per branch, so it comes from the caller.
+ */
+function PersonFlags({ person, className }: { person: PersonListRow; className?: string }) {
+  if (!person.doNotPrint && !person.deathDate) return null;
+  return (
+    <div className={className}>
+      {person.doNotPrint ? (
+        <span className="inline-block rounded-[4px] bg-crit-tint px-1.5 py-px text-[10.5px] font-semibold text-crit">
+          nicht abdrucken
+        </span>
+      ) : null}
+      {person.deathDate ? <span className="text-[11px] text-ink-faint">verstorben</span> : null}
+    </div>
+  );
+}
+
+/** Header checkbox with the tri-state ("some rows" → indeterminate) logic. */
+function SelectAllCheckbox({ table }: { table: TableInstance<Indexed> }) {
+  return (
+    <Checkbox
+      aria-label="Alle auswählen"
+      checked={
+        table.getIsAllRowsSelected() ? true : table.getIsSomeRowsSelected() ? "indeterminate" : false
+      }
+      onCheckedChange={(v) => table.toggleAllRowsSelected(v === true)}
+    />
+  );
+}
 
 export function PersonsTable({
   persons,
@@ -156,17 +199,7 @@ export function PersonsTable({
         enableSorting: false,
         header: ({ table }) => (
           <div onClick={(e) => e.stopPropagation()} className="flex items-center">
-            <Checkbox
-              aria-label="Alle auswählen"
-              checked={
-                table.getIsAllRowsSelected()
-                  ? true
-                  : table.getIsSomeRowsSelected()
-                    ? "indeterminate"
-                    : false
-              }
-              onCheckedChange={(v) => table.toggleAllRowsSelected(v === true)}
-            />
+            <SelectAllCheckbox table={table} />
           </div>
         ),
         cell: ({ row }) => (
@@ -185,10 +218,7 @@ export function PersonsTable({
         header: "Name",
         cell: ({ row }) => {
           const p = row.original;
-          const showScout = !!p.scoutName && !!(p.lastName || p.firstName);
-          const sub = [p.rankName, birthYear(p.birthDate) ? `*${birthYear(p.birthDate)}` : null]
-            .filter(Boolean)
-            .join(" · ");
+          const sub = nameSubline(p);
           return (
             <div>
               <Link
@@ -197,7 +227,7 @@ export function PersonsTable({
                 className="rounded-sm font-medium whitespace-nowrap text-ink outline-none transition-colors hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {formatName(p)}
-                {showScout ? (
+                {showScout(p) ? (
                   <span className="ml-1.5 font-normal text-ink-soft">„{p.scoutName}“</span>
                 ) : null}
               </Link>
@@ -282,22 +312,9 @@ export function PersonsTable({
         id: "flags",
         header: "Kennzeichen",
         enableSorting: false,
-        cell: ({ row }) => {
-          const p = row.original;
-          if (!p.doNotPrint && !p.deathDate) return null;
-          return (
-            <div className="flex flex-col items-start gap-1">
-              {p.doNotPrint ? (
-                <span className="inline-block rounded-[4px] bg-crit-tint px-1.5 py-px text-[10.5px] font-semibold text-crit">
-                  nicht abdrucken
-                </span>
-              ) : null}
-              {p.deathDate ? (
-                <span className="text-[11px] text-ink-faint">verstorben</span>
-              ) : null}
-            </div>
-          );
-        },
+        cell: ({ row }) => (
+          <PersonFlags person={row.original} className="flex flex-col items-start gap-1" />
+        ),
       },
     ],
     [],
@@ -389,7 +406,7 @@ export function PersonsTable({
       />
       <div className="px-6 pt-[18px] pb-10">
         <div className="mb-3 flex flex-wrap items-center gap-2.5">
-          <div className="relative w-full flex-1 sm:w-auto sm:max-w-[380px] sm:basis-[260px]">
+          <div className="relative flex-1 sm:max-w-[380px] sm:basis-[260px]">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-faint" />
             <Input
               type="search"
@@ -558,7 +575,7 @@ export function PersonsTable({
               )}
             </TableBody>
           </Table>
-          <div className="flex items-center justify-between border-t border-line px-4 py-2.5 text-[12.5px] tabular-nums text-ink-faint">
+          <div className="flex items-center border-t border-line px-4 py-2.5 text-[12.5px] tabular-nums text-ink-faint">
             <ResultSummary total={persons.length} shown={rows.length} selected={selectedCount} />
           </div>
         </div>
@@ -577,17 +594,7 @@ export function PersonsTable({
           ) : (
             <>
               <div className="flex items-center gap-3 border-b border-line-strong bg-surface-2 px-3 py-2">
-                <Checkbox
-                  aria-label="Alle auswählen"
-                  checked={
-                    table.getIsAllRowsSelected()
-                      ? true
-                      : table.getIsSomeRowsSelected()
-                        ? "indeterminate"
-                        : false
-                  }
-                  onCheckedChange={(v) => table.toggleAllRowsSelected(v === true)}
-                />
+                <SelectAllCheckbox table={table} />
                 <span className="text-[11px] font-semibold tracking-[0.09em] uppercase text-ink-faint">
                   Alle auswählen
                 </span>
@@ -599,7 +606,7 @@ export function PersonsTable({
               </ul>
             </>
           )}
-          <div className="flex items-center justify-between border-t border-line px-3 py-2.5 text-[12.5px] tabular-nums text-ink-faint">
+          <div className="flex items-center border-t border-line px-3 py-2.5 text-[12.5px] tabular-nums text-ink-faint">
             <ResultSummary total={persons.length} shown={rows.length} selected={selectedCount} />
           </div>
         </div>
@@ -716,10 +723,7 @@ function EmptyResult({
  */
 function PersonCard({ row }: { row: Row<Indexed> }) {
   const p = row.original;
-  const showScout = !!p.scoutName && !!(p.lastName || p.firstName);
-  const sub = [p.rankName, birthYear(p.birthDate) ? `*${birthYear(p.birthDate)}` : null]
-    .filter(Boolean)
-    .join(" · ");
+  const sub = nameSubline(p);
   const offices = p.assignments.filter((a) => a.officeName);
   const groupNames = distinct(p.assignments.map((a) => a.groupName));
   const phone = p.phones[0];
@@ -740,7 +744,7 @@ function PersonCard({ row }: { row: Row<Indexed> }) {
             className="rounded-sm font-medium text-ink outline-none transition-colors before:absolute before:inset-0 hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
           >
             {formatName(p)}
-            {showScout ? (
+            {showScout(p) ? (
               <span className="ml-1.5 font-normal text-ink-soft">„{p.scoutName}“</span>
             ) : null}
           </Link>
@@ -782,16 +786,7 @@ function PersonCard({ row }: { row: Row<Indexed> }) {
             </div>
           ) : null}
 
-          {p.doNotPrint || p.deathDate ? (
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {p.doNotPrint ? (
-                <span className="inline-block rounded-[4px] bg-crit-tint px-1.5 py-px text-[10.5px] font-semibold text-crit">
-                  nicht abdrucken
-                </span>
-              ) : null}
-              {p.deathDate ? <span className="text-[11px] text-ink-faint">verstorben</span> : null}
-            </div>
-          ) : null}
+          <PersonFlags person={p} className="mt-1.5 flex flex-wrap items-center gap-1.5" />
         </div>
       </div>
     </li>

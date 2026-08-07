@@ -210,7 +210,7 @@ function joinNonEmpty(parts: (string | null | undefined)[], sep = " "): string {
  * so `"habicht ii#marcel"` would sort before `"habicht#hans-juergen"` and the register would
  * print the numbered Fahrtenname „Habicht II" ahead of „Habicht" (issue #8).
  */
-export function compareSortKeys(a: string[], b: string[]): number {
+function compareSortKeys(a: string[], b: string[]): number {
   for (let i = 0; i < a.length; i += 1) {
     const cmp = (a[i] ?? "").localeCompare(b[i] ?? "", "de");
     if (cmp !== 0) return cmp;
@@ -430,7 +430,7 @@ export function buildProfileData(
   // ended (holder-warning flow), so they carry no ACTIVE assignment. Source scope from ALL
   // assignments — active or ended — so the very people the page is for do not drop off
   // (issue #1). do_not_print is still honoured. Sorted with the shared ae-folded key so ä
-  // collates as "ae", matching the register (issue #4b).
+  // collates as "ae" (issue #4b).
   const memorial: string[] = [];
   if (options.withMemorial) {
     const dead = raw.persons.filter((p) => !p.doNotPrint && p.deathDate);
@@ -441,13 +441,17 @@ export function buildProfileData(
         return g != null && includedSections.has(g.section);
       }),
     );
-    inScope.sort((a, b) =>
-      normalizeSortKey(joinNonEmpty([a.lastName, a.firstName])).localeCompare(
-        normalizeSortKey(joinNonEmpty([b.lastName, b.firstName])),
-        "de",
-      ),
-    );
-    for (const p of inScope) {
+    // Nachname, then Vorname — compared as SEPARATE fields (see `compareSortKeys`), exactly
+    // like the register. Joining them into one string lets the separator take part in the
+    // comparison, which reorders multi-word surnames („Meyer auf der Heide" ahead of „Meyer")
+    // and numbered names („Habicht II" ahead of „Habicht") against the register. Keys are
+    // normalized once per person (decorate–sort–undecorate) instead of inside the comparator.
+    const decorated = inScope.map((p) => ({
+      p,
+      key: [normalizeSortKey(p.lastName ?? ""), normalizeSortKey(p.firstName ?? "")],
+    }));
+    decorated.sort((a, b) => compareSortKeys(a.key, b.key));
+    for (const { p } of decorated) {
       const base = personDisplayName(p);
       const scout = nullIfEmpty(p.scoutName);
       memorial.push(scout ? `${base} (${scout})` : base);
@@ -502,13 +506,15 @@ function buildRegister(
     // The register must show the very same name as the group tree, academic title included
     // (`personDisplayName` renders "Dr. Annegret Öhmann-Weiß"). The title is a name prefix, so
     // it goes in front of the first token that is actually printed — never into the sort key.
+    // The two branches below print only PART of the name in the bold lead, which
+    // `personDisplayName` cannot express, so they prefix the title themselves.
     const titled = (name: string) => joinNonEmpty([p.title, name]);
 
     let lead: string;
     let rest: string;
     if (scout) {
       lead = `${scout},`;
-      rest = ` ${titled(joinNonEmpty([first, last]))}${breadcrumb}`;
+      rest = ` ${personDisplayName(p)}${breadcrumb}`;
     } else if (first) {
       lead = titled(first);
       rest = ` ${last}${breadcrumb}`;

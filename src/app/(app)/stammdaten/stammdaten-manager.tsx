@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { OfficeListRule, OfficeRow, RankRow } from "@/db/queries";
 import { RANK_UNRANKED } from "@/lib/rank";
+import { HOVER_REVEAL, cn } from "@/lib/utils";
 
 /** Rank input value for the form: the sentinel is shown as an empty field. */
 function rankToInput(rank: number): string {
@@ -214,11 +215,7 @@ export function StammdatenManager({
                           ))}
                         </span>
                       ) : null}
-                      {/* Keyed on the input mode, not on width: a touch device has no
-                          :hover at any viewport size, so the actions stay visible
-                          there. Only a fine pointer (mouse) gets the dense
-                          hover-reveal — unchanged on desktop. */}
-                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100">
+                      <span className={cn("ml-auto flex shrink-0 items-center gap-0.5", HOVER_REVEAL)}>
                         <Button
                           variant="ghost"
                           size="icon-xs"
@@ -282,14 +279,14 @@ export function StammdatenManager({
                     key={r.id}
                     className="group/row border-b border-line last:border-b-0 hover:bg-sel"
                   >
-                    <div className="flex max-w-3xl flex-wrap items-center gap-2.5 px-[18px] py-1.5 text-[13.5px] sm:flex-nowrap">
+                    {/* No wrapping here (unlike Ämter/Gliederungen): the row has no
+                        full-width child, so badge + actions always share one line. */}
+                    <div className="flex max-w-3xl items-center gap-2.5 px-[18px] py-1.5 text-[13.5px]">
                       <MonoBadge>{r.sortOrder}</MonoBadge>
+                      {/* flex-1 below sm (fills the line and wraps the text),
+                          the original shrink-and-truncate from sm: up. */}
                       <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{r.name}</span>
-                      {/* Keyed on the input mode, not on width: a touch device has no
-                          :hover at any viewport size, so the actions stay visible
-                          there. Only a fine pointer (mouse) gets the dense
-                          hover-reveal — unchanged on desktop. */}
-                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100">
+                      <span className={cn("ml-auto flex shrink-0 items-center gap-0.5", HOVER_REVEAL)}>
                         <Button
                           variant="ghost"
                           size="icon-xs"

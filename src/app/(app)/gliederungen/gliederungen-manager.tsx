@@ -32,6 +32,7 @@ import {
 import type { GroupRow } from "@/db/queries";
 import { SECTION_LABELS, SECTION_ORDER } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
+import { HOVER_REVEAL, cn } from "@/lib/utils";
 
 export type GroupUsage = Record<number, { assignments: number; children: number }>;
 
@@ -185,7 +186,7 @@ export function GliederungenManager({
                     {/* flex-1 below sm (fills the line and wraps the text),
                         the original shrink-and-truncate from sm: up. */}
                     <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{group.name}</span>
-                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-faint max-sm:order-last max-sm:ml-0 max-sm:w-full">
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-faint max-sm:order-last max-sm:w-full">
                       {group.kind ? (
                         <>
                           <span>{group.kind}</span>
@@ -196,11 +197,7 @@ export function GliederungenManager({
                       ) : null}
                       <span>{SECTION_LABELS[group.section] ?? group.section}</span>
                     </span>
-                    {/* Keyed on the input mode, not on width: a touch device has no
-                        :hover at any viewport size, so the actions stay visible
-                        there. Only a fine pointer (mouse) gets the dense
-                        hover-reveal — unchanged on desktop. */}
-                    <span className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100">
+                    <span className={cn("flex shrink-0 items-center gap-0.5", HOVER_REVEAL)}>
                       <Button variant="ghost" size="icon-xs" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
                         <Pencil className="size-3.5" />
                       </Button>

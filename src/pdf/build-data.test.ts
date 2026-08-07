@@ -676,6 +676,37 @@ describe("issue #1 — deceased members stay on the memorial after their tenure 
     expect(data.memorial.some((m) => m.includes("Heim"))).toBe(false);
   });
 
+  it("sorts the memorial by Nachname/Vorname as separate fields, like the register", () => {
+    // Same trap as the register (see „issue #8" above): joining Nachname and Vorname into one
+    // string lets the separator join the comparison. Joined, "meyer auf der heide anna" beats
+    // "meyer christa" ('a' < 'c') and "habicht ii aaron" beats "habicht zoe" ('i' < 'z') — both
+    // wrong, and both inconsistent with the register on the very same people.
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, firstName: "Christa", lastName: "Meyer", deathDate: "2024-01-01" }),
+        person({ id: 2, firstName: "Anna", lastName: "Meyer auf der Heide", deathDate: "2024-01-02" }),
+        person({ id: 3, firstName: "Aaron", lastName: "Habicht II", deathDate: "2024-01-03" }),
+        person({ id: 4, firstName: "Zoe", lastName: "Habicht", deathDate: "2024-01-04" }),
+      ],
+      assignments: [
+        { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: "2024-01-01" },
+        { id: 2, personId: 2, groupId: 1, officeId: 2, endDate: "2024-01-02" },
+        { id: 3, personId: 3, groupId: 1, officeId: 3, endDate: "2024-01-03" },
+        { id: 4, personId: 4, groupId: 1, officeId: 7, endDate: "2024-01-04" },
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", ALL_OPTIONS);
+    expect(data.memorial).toEqual([
+      "Zoe Habicht",
+      "Aaron Habicht II",
+      "Christa Meyer",
+      "Anna Meyer auf der Heide",
+    ]);
+  });
+
   it("excludes a deceased person whose memberships are all out of the profile scope", () => {
     const raw: RawData = {
       ranks: RANKS,

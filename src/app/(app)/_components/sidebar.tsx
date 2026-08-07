@@ -73,6 +73,10 @@ function NavItem({
       className={cn(
         // pl-2 plus the 2px marker border keeps the label on the same x as px-2.5.
         "flex w-full items-center gap-2.5 rounded-md border-l-2 py-2 pr-2.5 pl-2 text-[13.5px] transition-colors",
+        // Thumb-friendly rows wherever the primary pointer is a finger — keyed on
+        // the input mode, not on "is inside the drawer", so a touch laptop gets
+        // them in the desktop rail too. A mouse keeps py-2 at every width.
+        "pointer-coarse:py-3",
         "outline-none focus-visible:ring-2 focus-visible:ring-ring",
         // One "active" language app-wide: neutral surface, fir marker, fir text.
         active

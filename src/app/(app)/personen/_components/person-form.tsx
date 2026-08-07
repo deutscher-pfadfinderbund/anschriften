@@ -40,7 +40,7 @@ import {
 } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 import type { FieldErrors, PersonInput } from "@/lib/person-schema";
-import { cn } from "@/lib/utils";
+import { TOUCH_HIT, cn } from "@/lib/utils";
 
 import { EndTenureDialog, type EndTarget } from "./end-tenure-dialog";
 import {
@@ -620,10 +620,12 @@ export function PersonForm({
               <button
                 type="button"
                 onClick={() => setPhones((rows) => [...rows, { key: nextKey(), label: "Telefon", number: "" }])}
-                // ~20px text row; the stretched ::after raises the tap band to ~36px
-                // on touch. The larger top margin keeps that band clear of the last
-                // phone input. Neither rule is emitted for a mouse.
-                className="pointer-coarse:relative mt-2 inline-flex items-center gap-1 rounded-md text-[13px] text-ink-soft outline-none transition-colors hover:text-fir focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:mt-3 pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2"
+                // The larger top margin keeps the tap band clear of the last phone
+                // input; like the band itself it is not emitted for a mouse.
+                className={cn(
+                  TOUCH_HIT,
+                  "mt-2 inline-flex items-center gap-1 rounded-md text-[13px] text-ink-soft outline-none transition-colors hover:text-fir focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:mt-3",
+                )}
               >
                 <Plus className="size-3.5" />
                 weitere Nummer
@@ -689,7 +691,7 @@ export function PersonForm({
                             />
                           </Field>
                         </div>
-                        <div className="flex items-center justify-end sm:justify-start">
+                        <div className="flex items-center max-sm:justify-end">
                           {a.id != null ? (
                             <Button
                               type="button"
@@ -814,11 +816,8 @@ export function PersonForm({
                       <label
                         key={l.id}
                         className={cn(
-                          // The label row is only ~20px tall; the stretched ::after
-                          // raises the tap band to ~36px on touch (same trick as the
-                          // Checkbox primitive) and is not emitted for a mouse.
-                          "pointer-coarse:relative flex items-center gap-2.5 text-[13.5px]",
-                          "pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2",
+                          TOUCH_HIT,
+                          "flex items-center gap-2.5 text-[13.5px]",
                           isRuleBased ? "cursor-default text-ink-faint" : "cursor-pointer text-ink",
                         )}
                         title={
@@ -855,7 +854,7 @@ export function PersonForm({
               )}
             </Panel>
             <Panel title="Druck & Gedenken">
-              <label className="pointer-coarse:relative flex items-start justify-between gap-3 pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2">
+              <label className={cn(TOUCH_HIT, "flex items-start justify-between gap-3")}>
                 <span className="text-[13.5px] text-ink">
                   Nicht abdrucken
                   <span className="mt-0.5 block text-xs text-ink-faint">Erscheint in keinem PDF-Verzeichnis</span>
