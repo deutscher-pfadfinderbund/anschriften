@@ -174,14 +174,18 @@ export function GliederungenManager({
               {ordered.map(({ group, depth }) => (
                 <li key={group.id} className="group/row hover:bg-sel">
                   {/* max-w keeps name and labels in one readable band instead of
-                      stretching them to opposite ends of a wide viewport. */}
+                      stretching them to opposite ends of a wide viewport. Below `sm`
+                      the row wraps and Art/Bereich move to a second line, so the
+                      Gliederungs-Name is readable in full instead of „Gau F…“. */}
                   <div
-                    className="flex max-w-3xl items-center gap-2 px-[18px] py-1.5 text-[13.5px]"
+                    className="flex max-w-3xl flex-wrap items-center gap-2 px-[18px] py-1.5 text-[13.5px] sm:flex-nowrap"
                     style={{ paddingLeft: `${18 + depth * 16}px` }}
                   >
                     <MonoBadge>{group.sortKey}</MonoBadge>
-                    <span className="truncate text-ink">{group.name}</span>
-                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-faint">
+                    {/* flex-1 below sm (fills the line and wraps the text),
+                        the original shrink-and-truncate from sm: up. */}
+                    <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{group.name}</span>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-faint max-sm:order-last max-sm:ml-0 max-sm:w-full">
                       {group.kind ? (
                         <>
                           <span>{group.kind}</span>
@@ -192,9 +196,11 @@ export function GliederungenManager({
                       ) : null}
                       <span>{SECTION_LABELS[group.section] ?? group.section}</span>
                     </span>
-                    {/* Always visible on touch (no :hover, and tapping a plain row
-                        focuses nothing) — hover-reveal only from sm: up. */}
-                    <span className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100 sm:group-focus-within/row:opacity-100">
+                    {/* Keyed on the input mode, not on width: a touch device has no
+                        :hover at any viewport size, so the actions stay visible
+                        there. Only a fine pointer (mouse) gets the dense
+                        hover-reveal — unchanged on desktop. */}
+                    <span className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100">
                       <Button variant="ghost" size="icon-xs" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
                         <Pencil className="size-3.5" />
                       </Button>

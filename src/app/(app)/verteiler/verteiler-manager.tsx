@@ -70,6 +70,15 @@ import { cn } from "@/lib/utils";
 
 type ListFormState = { id: number | null; name: string; description: string };
 
+/**
+ * Stretched, invisible tap band for the Semikolon/Komma toggles — the same trick
+ * the Checkbox primitive uses. Vertical only: the two buttons sit flush against
+ * each other, so a horizontal inset would make their hit areas overlap. Emitted
+ * only for a coarse pointer, so the mouse layout is byte-for-byte unchanged.
+ */
+const SEPARATOR_TOUCH_HIT =
+  "pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2";
+
 /** "Nachname, Vorname" plus the scout name when both are present. */
 function memberLabel(m: {
   firstName: string | null;
@@ -514,7 +523,9 @@ export function VerteilerManager({
                     </p>
                   ) : null}
 
-                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  {/* Extra bottom margin on touch so the toggles' stretched tap
+                      bands (below) stay clear of the Textarea. */}
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 pointer-coarse:mb-3">
                     <Label className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint">
                       <Mail className="size-3.5" />
                       BCC-Vorschau
@@ -524,8 +535,12 @@ export function VerteilerManager({
                         type="button"
                         onClick={() => setSeparator("; ")}
                         className={cn(
-                          "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
+                          "relative rounded-[5px] px-2 py-0.5 outline-none transition-colors",
                           "focus-visible:ring-2 focus-visible:ring-ring",
+                          // ~20px tall; the stretched ::after raises the tap band to
+                          // ~36px on touch. No x-inset — the two toggles sit flush
+                          // against each other and would otherwise overlap.
+                          SEPARATOR_TOUCH_HIT,
                           // Same "active" language as the nav and the tabs:
                           // neutral surface, fir text — never a filled pill.
                           separator === "; "
@@ -539,8 +554,9 @@ export function VerteilerManager({
                         type="button"
                         onClick={() => setSeparator(", ")}
                         className={cn(
-                          "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
+                          "relative rounded-[5px] px-2 py-0.5 outline-none transition-colors",
                           "focus-visible:ring-2 focus-visible:ring-ring",
+                          SEPARATOR_TOUCH_HIT,
                           separator === ", "
                             ? "bg-surface-2 font-medium text-fir"
                             : "text-ink-soft hover:text-ink",
@@ -736,14 +752,16 @@ export function VerteilerManager({
                             <span className="text-ink-faint">— ohne E-Mail</span>
                           )}
                         </div>
-                        {/* Always visible on touch (no :hover, and tapping a plain row
-                            focuses nothing) — hover-reveal only from sm: up. */}
+                        {/* Keyed on the input mode, not on width: a touch device has no
+                            :hover at any viewport size, so the action stays visible
+                            there. Only a fine pointer (mouse) gets the dense
+                            hover-reveal — unchanged on desktop. */}
                         {m.manual ? (
                           <Button
                             variant="ghost"
                             size="icon-sm"
                             aria-label={`${formatName(m)} entfernen`}
-                            className="shrink-0 text-ink-faint opacity-100 transition-opacity hover:text-crit sm:opacity-0 sm:group-hover/row:opacity-100 sm:group-focus-within/row:opacity-100 focus-visible:opacity-100"
+                            className="shrink-0 text-ink-faint opacity-100 transition-opacity hover:text-crit pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100 pointer-fine:focus-visible:opacity-100"
                             disabled={isPending}
                             onClick={() => handleRemove(m.personId)}
                           >
@@ -879,7 +897,9 @@ export function VerteilerManager({
               Anschriften suchen und auswählen. Bereits enthaltene Mitglieder werden ausgeblendet.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-md border border-line">
+          {/* min-w-0: grid items default to min-width:auto, so without it this
+              box would again be sized by the member list's min-content. */}
+          <div className="min-w-0 rounded-md border border-line">
             <MultiSelectList
               options={addOptions}
               selected={addSelection}

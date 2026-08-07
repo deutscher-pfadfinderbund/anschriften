@@ -620,7 +620,10 @@ export function PersonForm({
               <button
                 type="button"
                 onClick={() => setPhones((rows) => [...rows, { key: nextKey(), label: "Telefon", number: "" }])}
-                className="mt-2 inline-flex items-center gap-1 rounded-md text-[13px] text-ink-soft outline-none transition-colors hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
+                // ~20px text row; the stretched ::after raises the tap band to ~36px
+                // on touch. The larger top margin keeps that band clear of the last
+                // phone input. Neither rule is emitted for a mouse.
+                className="relative mt-2 inline-flex items-center gap-1 rounded-md text-[13px] text-ink-soft outline-none transition-colors hover:text-fir focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:mt-3 pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2"
               >
                 <Plus className="size-3.5" />
                 weitere Nummer
@@ -798,7 +801,9 @@ export function PersonForm({
                   Noch keine Verteiler angelegt. Unter „Verteiler“ lassen sich welche erstellen.
                 </p>
               ) : (
-                <div className="flex flex-col gap-2">
+                /* Wider gap on touch so the labels' stretched tap bands (below)
+                   abut instead of overlapping — 20px row + 2 × 8px = 36px. */
+                <div className="flex flex-col gap-2 pointer-coarse:gap-4">
                   {distributionLists.map((l) => {
                     const viaRule = ruleReasonsByList.get(l.id);
                     const isRuleBased = viaRule != null;
@@ -809,7 +814,11 @@ export function PersonForm({
                       <label
                         key={l.id}
                         className={cn(
-                          "flex items-center gap-2.5 text-[13.5px]",
+                          // The label row is only ~20px tall; the stretched ::after
+                          // raises the tap band to ~36px on touch (same trick as the
+                          // Checkbox primitive) and is not emitted for a mouse.
+                          "relative flex items-center gap-2.5 text-[13.5px]",
+                          "pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2",
                           isRuleBased ? "cursor-default text-ink-faint" : "cursor-pointer text-ink",
                         )}
                         title={
@@ -846,7 +855,7 @@ export function PersonForm({
               )}
             </Panel>
             <Panel title="Druck & Gedenken">
-              <label className="flex items-start justify-between gap-3">
+              <label className="relative flex items-start justify-between gap-3 pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2">
                 <span className="text-[13.5px] text-ink">
                   Nicht abdrucken
                   <span className="mt-0.5 block text-xs text-ink-faint">Erscheint in keinem PDF-Verzeichnis</span>

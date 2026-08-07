@@ -20,7 +20,9 @@ export function PageHeader({
       {backHref ? (
         <Link
           href={backHref}
-          className="mb-2 inline-flex items-center gap-1 text-[12.5px] text-ink-soft transition-colors hover:text-fir"
+          // The link is only ~19px tall; on touch it gets an invisible band so
+          // it is comfortably tappable (same trick as the checkbox labels).
+          className="relative mb-2 inline-flex items-center gap-1 text-[12.5px] text-ink-soft transition-colors hover:text-fir pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2"
         >
           <ArrowLeft className="size-3.5" />
           {backLabel ?? "Zurück"}

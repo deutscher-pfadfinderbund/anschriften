@@ -74,12 +74,13 @@ function DialogContent({
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            {/* The icon sizes grow to a 44px tap target below sm; pulling the
-                anchor into the corner keeps the glyph optically where it sits
-                on desktop (8px + half of 28px === 0px + half of 44px). */}
+            {/* The icon sizes grow to a 44px tap target on touch devices; pulling
+                the anchor into the corner keeps the glyph optically where it sits
+                with a mouse (8px + half of 28px === 0px + half of 44px). Same
+                `pointer-coarse` key as TOUCH_TARGET in button.tsx. */}
             <Button
               variant="ghost"
-              className="absolute top-2 right-2 max-sm:top-0 max-sm:right-0"
+              className="absolute top-2 right-2 pointer-coarse:top-0 pointer-coarse:right-0"
               size="icon-sm"
             >
               <XIcon

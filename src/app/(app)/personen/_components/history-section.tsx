@@ -39,7 +39,10 @@ export function HistorySection({
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-1.5 text-[13px] font-semibold text-ink-soft transition-colors hover:text-ink"
+        // The stretched ::after raises the ~20px text row to a ~36px tap band on
+        // touch devices (same trick as the Checkbox primitive). Invisible, and it
+        // is not emitted at all for a fine pointer, so desktop is untouched.
+        className="relative flex w-full items-center gap-1.5 text-[13px] font-semibold text-ink-soft transition-colors hover:text-ink pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2"
       >
         {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         Frühere Ämter
@@ -66,9 +69,10 @@ export function HistorySection({
                   <span className="text-ink-faint"> · {h.groupName} · </span>
                   <span className="tabular-nums">{range(h)}</span>
                 </span>
-                {/* Always visible on touch (no :hover, and tapping a plain row
-                    focuses nothing) — hover-reveal only from sm: up. */}
-                <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/hist:opacity-100 sm:group-focus-within/hist:opacity-100">
+                {/* Keyed on the input mode, not on width: a touch device has no
+                    :hover at any viewport size, so the actions stay visible there.
+                    Only a fine pointer (mouse) gets the dense hover-reveal. */}
+                <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/hist:opacity-100 pointer-fine:group-focus-within/hist:opacity-100">
                   <Button
                     type="button"
                     variant="ghost"
@@ -98,7 +102,7 @@ export function HistorySection({
             type="button"
             onClick={onAdd}
             disabled={busy}
-            className="mt-1 inline-flex items-center gap-1 self-start text-[13px] text-ink-soft transition-colors hover:text-fir disabled:opacity-50"
+            className="relative mt-1 inline-flex items-center gap-1 self-start text-[13px] text-ink-soft transition-colors hover:text-fir disabled:opacity-50 pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2"
           >
             <Plus className="size-3.5" />
             Früheres Amt hinzufügen

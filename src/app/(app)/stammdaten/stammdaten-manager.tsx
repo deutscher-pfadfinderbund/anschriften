@@ -188,16 +188,20 @@ export function StammdatenManager({
                     className="group/row border-b border-line last:border-b-0 hover:bg-sel"
                   >
                     {/* max-w keeps name and actions in one readable band instead of
-                        stretching across the whole viewport. */}
-                    <div className="flex max-w-3xl items-center gap-2.5 px-[18px] py-1.5 text-[13.5px]">
+                        stretching across the whole viewport. Below `sm` the row
+                        wraps: the Verteiler chips move to a second line so the Amt
+                        name gets the width it needs instead of ending in „Bund…“. */}
+                    <div className="flex max-w-3xl flex-wrap items-center gap-2.5 px-[18px] py-1.5 text-[13.5px] sm:flex-nowrap">
                       {/* RANK_UNRANKED is an internal sentinel — never show the raw 999. */}
                       <MonoBadge title={o.rank === RANK_UNRANKED ? "ohne Rang" : undefined}>
                         {o.rank === RANK_UNRANKED ? "—" : o.rank}
                       </MonoBadge>
-                      <span className="truncate text-ink">{o.name}</span>
+                      {/* flex-1 below sm (fills the line and wraps the text),
+                          the original shrink-and-truncate from sm: up. */}
+                      <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{o.name}</span>
                       {(officeListRules[o.id] ?? []).length > 0 ? (
                         <span
-                          className="flex flex-wrap items-center gap-1"
+                          className="flex flex-wrap items-center gap-1 max-sm:order-last max-sm:w-full"
                           title="Inhaber dieses Amts sind automatisch in diesen Verteilern."
                         >
                           {officeListRules[o.id].map((r) => (
@@ -210,9 +214,11 @@ export function StammdatenManager({
                           ))}
                         </span>
                       ) : null}
-                      {/* Always visible on touch (no :hover, and tapping a plain row
-                          focuses nothing) — hover-reveal only from sm: up. */}
-                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100 sm:group-focus-within/row:opacity-100">
+                      {/* Keyed on the input mode, not on width: a touch device has no
+                          :hover at any viewport size, so the actions stay visible
+                          there. Only a fine pointer (mouse) gets the dense
+                          hover-reveal — unchanged on desktop. */}
+                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100">
                         <Button
                           variant="ghost"
                           size="icon-xs"
@@ -276,12 +282,14 @@ export function StammdatenManager({
                     key={r.id}
                     className="group/row border-b border-line last:border-b-0 hover:bg-sel"
                   >
-                    <div className="flex max-w-3xl items-center gap-2.5 px-[18px] py-1.5 text-[13.5px]">
+                    <div className="flex max-w-3xl flex-wrap items-center gap-2.5 px-[18px] py-1.5 text-[13.5px] sm:flex-nowrap">
                       <MonoBadge>{r.sortOrder}</MonoBadge>
-                      <span className="truncate text-ink">{r.name}</span>
-                      {/* Always visible on touch (no :hover, and tapping a plain row
-                          focuses nothing) — hover-reveal only from sm: up. */}
-                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100 sm:group-focus-within/row:opacity-100">
+                      <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{r.name}</span>
+                      {/* Keyed on the input mode, not on width: a touch device has no
+                          :hover at any viewport size, so the actions stay visible
+                          there. Only a fine pointer (mouse) gets the dense
+                          hover-reveal — unchanged on desktop. */}
+                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100">
                         <Button
                           variant="ghost"
                           size="icon-xs"

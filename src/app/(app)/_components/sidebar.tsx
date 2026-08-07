@@ -39,8 +39,14 @@ export function Wordmark({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "flex items-center font-display font-semibold leading-tight text-ink",
+        "flex items-center font-display font-semibold text-ink",
         className,
+        // Must stay AFTER `className`: callers pass a font size (text-[19px] in the
+        // rail, text-[17px] in the mobile top bar) and tailwind-merge treats a
+        // font-size utility as overriding `leading-*`. In the base string the
+        // leading would be dropped from the merge and the wordmark would inherit
+        // the body line-height instead of 1.25.
+        "leading-tight",
       )}
     >
       <span className="mr-[7px] inline-block size-[9px] -translate-y-px rotate-45 bg-fir" />
