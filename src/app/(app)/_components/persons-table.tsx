@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import {
   type ColumnDef,
+  type Row,
   type RowSelectionState,
   type SortingState,
   flexRender,
@@ -388,7 +389,7 @@ export function PersonsTable({
       />
       <div className="px-6 pt-[18px] pb-10">
         <div className="mb-3 flex flex-wrap items-center gap-2.5">
-          <div className="relative max-w-[380px] flex-1 basis-[260px]">
+          <div className="relative w-full flex-1 sm:w-auto sm:max-w-[380px] sm:basis-[260px]">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-faint" />
             <Input
               type="search"
@@ -401,7 +402,7 @@ export function PersonsTable({
           </div>
 
           <Select value={groupFilter} onValueChange={setGroupFilter}>
-            <SelectTrigger className="w-[220px]" aria-label="Gliederung filtern">
+            <SelectTrigger className="w-full sm:w-[220px]" aria-label="Gliederung filtern">
               <SelectValue placeholder="Alle Gliederungen" />
             </SelectTrigger>
             <SelectContent className="max-h-[360px]">
@@ -411,7 +412,7 @@ export function PersonsTable({
           </Select>
 
           <Select value={officeFilter} onValueChange={setOfficeFilter}>
-            <SelectTrigger className="w-[190px]" aria-label="Amt filtern">
+            <SelectTrigger className="w-full sm:w-[190px]" aria-label="Amt filtern">
               <SelectValue placeholder="Alle Ämter" />
             </SelectTrigger>
             <SelectContent className="max-h-[360px]">
@@ -426,7 +427,7 @@ export function PersonsTable({
 
           {distributionLists.length > 0 ? (
             <Select value={listFilter} onValueChange={setListFilter}>
-              <SelectTrigger className="w-[190px]" aria-label="Verteiler filtern">
+              <SelectTrigger className="w-full sm:w-[190px]" aria-label="Verteiler filtern">
                 <SelectValue placeholder="Alle Verteiler" />
               </SelectTrigger>
               <SelectContent className="max-h-[360px]">
@@ -440,7 +441,7 @@ export function PersonsTable({
             </Select>
           ) : null}
 
-          <Button asChild className="ml-auto">
+          <Button asChild className="w-full sm:ml-auto sm:w-auto">
             <Link href="/personen/neu">
               <Plus className="size-4" />
               Neue Person
@@ -486,9 +487,12 @@ export function PersonsTable({
           </div>
         ) : null}
 
-        {/* overflow-x-auto, not -hidden: the table has a min width, so on narrow
-            viewports the right-hand columns must stay reachable by scrolling. */}
-        <div className="overflow-x-auto rounded-lg border border-line bg-surface shadow-sm">
+        {/* Desktop (md and up): the dense table. Below md it is replaced by the
+            card list further down — the 880px min width would otherwise force
+            sideways scrolling on every single row on a phone.
+            overflow-x-auto, not -hidden: between md and 880px the right-hand
+            columns must stay reachable by scrolling. */}
+        <div className="hidden overflow-x-auto rounded-lg border border-line bg-surface shadow-sm md:block">
           <Table className="min-w-[880px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -527,19 +531,11 @@ export function PersonsTable({
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="py-10 text-center text-ink-faint">
-                    {persons.length === 0 ? (
-                      "Noch keine Anschriften erfasst."
-                    ) : filtersActive ? (
-                      <div className="flex flex-col items-center gap-2.5">
-                        <span>Keine Anschriften für die aktuelle Filterung.</span>
-                        <Button variant="outline" size="sm" onClick={resetFilters}>
-                          <X className="size-3.5" />
-                          Filter zurücksetzen
-                        </Button>
-                      </div>
-                    ) : (
-                      "Keine Anschriften gefunden."
-                    )}
+                    <EmptyResult
+                      hasPersons={persons.length > 0}
+                      filtersActive={filtersActive}
+                      onReset={resetFilters}
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -563,10 +559,48 @@ export function PersonsTable({
             </TableBody>
           </Table>
           <div className="flex items-center justify-between border-t border-line px-4 py-2.5 text-[12.5px] tabular-nums text-ink-faint">
-            <span>
-              {persons.length} Anschriften · {rows.length} gefiltert
-              {selectedCount > 0 ? ` · ${selectedCount} ausgewählt` : ""}
-            </span>
+            <ResultSummary total={persons.length} shown={rows.length} selected={selectedCount} />
+          </div>
+        </div>
+
+        {/* Mobile (below md): the very same TanStack rows as a stacked card
+            list, so filtering, sorting and selection cannot drift apart. */}
+        <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm md:hidden">
+          {rows.length === 0 ? (
+            <div className="px-4 py-10 text-center text-[13.5px] text-ink-faint">
+              <EmptyResult
+                hasPersons={persons.length > 0}
+                filtersActive={filtersActive}
+                onReset={resetFilters}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3 border-b border-line-strong bg-surface-2 px-3 py-2">
+                <Checkbox
+                  aria-label="Alle auswählen"
+                  checked={
+                    table.getIsAllRowsSelected()
+                      ? true
+                      : table.getIsSomeRowsSelected()
+                        ? "indeterminate"
+                        : false
+                  }
+                  onCheckedChange={(v) => table.toggleAllRowsSelected(v === true)}
+                />
+                <span className="text-[11px] font-semibold tracking-[0.09em] uppercase text-ink-faint">
+                  Alle auswählen
+                </span>
+              </div>
+              <ul>
+                {rows.map((row) => (
+                  <PersonCard key={row.id} row={row} />
+                ))}
+              </ul>
+            </>
+          )}
+          <div className="flex items-center justify-between border-t border-line px-3 py-2.5 text-[12.5px] tabular-nums text-ink-faint">
+            <ResultSummary total={persons.length} shown={rows.length} selected={selectedCount} />
           </div>
         </div>
       </div>
@@ -625,6 +659,142 @@ export function PersonsTable({
         />
       ) : null}
     </>
+  );
+}
+
+/** Footer count, shared verbatim by the table and the mobile card list. */
+function ResultSummary({
+  total,
+  shown,
+  selected,
+}: {
+  total: number;
+  shown: number;
+  selected: number;
+}) {
+  return (
+    <span>
+      {total} Anschriften · {shown} gefiltert
+      {selected > 0 ? ` · ${selected} ausgewählt` : ""}
+    </span>
+  );
+}
+
+/**
+ * Empty message shared by both branches: distinguishes "nothing captured yet"
+ * from "nothing matches the current filters" (which offers a way back).
+ */
+function EmptyResult({
+  hasPersons,
+  filtersActive,
+  onReset,
+}: {
+  hasPersons: boolean;
+  filtersActive: boolean;
+  onReset: () => void;
+}) {
+  if (!hasPersons) return <>Noch keine Anschriften erfasst.</>;
+  if (filtersActive) {
+    return (
+      <div className="flex flex-col items-center gap-2.5">
+        <span>Keine Anschriften für die aktuelle Filterung.</span>
+        <Button variant="outline" size="sm" onClick={onReset}>
+          <X className="size-3.5" />
+          Filter zurücksetzen
+        </Button>
+      </div>
+    );
+  }
+  return <>Keine Anschriften gefunden.</>;
+}
+
+/**
+ * One person as a stacked card (mobile branch). Driven by the same TanStack row
+ * the table uses, so selection and sorting stay in one place. The name link
+ * spans the card via a ::before overlay so the whole card is tappable; the
+ * checkbox and the mailto link sit above it.
+ */
+function PersonCard({ row }: { row: Row<Indexed> }) {
+  const p = row.original;
+  const showScout = !!p.scoutName && !!(p.lastName || p.firstName);
+  const sub = [p.rankName, birthYear(p.birthDate) ? `*${birthYear(p.birthDate)}` : null]
+    .filter(Boolean)
+    .join(" · ");
+  const offices = p.assignments.filter((a) => a.officeName);
+  const groupNames = distinct(p.assignments.map((a) => a.groupName));
+  const phone = p.phones[0];
+
+  return (
+    <li className="relative border-b border-line last:border-b-0 hover:bg-sel">
+      <div className="flex items-start gap-3 px-3 py-3">
+        <div className="relative z-10 flex items-center pt-0.5">
+          <Checkbox
+            aria-label="Zeile auswählen"
+            checked={row.getIsSelected()}
+            onCheckedChange={(v) => row.toggleSelected(v === true)}
+          />
+        </div>
+        <div className="min-w-0 flex-1 text-[13.5px]">
+          <Link
+            href={`/personen/${p.id}`}
+            className="rounded-sm font-medium text-ink outline-none transition-colors before:absolute before:inset-0 hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {formatName(p)}
+            {showScout ? (
+              <span className="ml-1.5 font-normal text-ink-soft">„{p.scoutName}“</span>
+            ) : null}
+          </Link>
+          {sub ? <div className="text-xs tabular-nums text-ink-faint">{sub}</div> : null}
+
+          {offices.length > 0 ? (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {offices.map((a) => (
+                <Badge
+                  key={a.id}
+                  variant="secondary"
+                  className="rounded-[4px] border border-line font-normal text-ink-soft"
+                >
+                  {a.officeName}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
+          {groupNames.length > 0 ? (
+            <div className="mt-1 text-[12.5px] text-ink-soft">{groupNames.join(" · ")}</div>
+          ) : null}
+
+          {p.email || phone ? (
+            <div className="mt-1.5">
+              {p.email ? (
+                <a
+                  href={`mailto:${p.email}`}
+                  className="relative z-10 break-all text-fir hover:underline"
+                >
+                  {p.email}
+                </a>
+              ) : null}
+              {phone ? (
+                <div className="text-[12.5px] tabular-nums text-ink-soft">
+                  {phone.number}
+                  {phone.label ? ` · ${phone.label}` : ""}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {p.doNotPrint || p.deathDate ? (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {p.doNotPrint ? (
+                <span className="inline-block rounded-[4px] bg-crit-tint px-1.5 py-px text-[10.5px] font-semibold text-crit">
+                  nicht abdrucken
+                </span>
+              ) : null}
+              {p.deathDate ? <span className="text-[11px] text-ink-faint">verstorben</span> : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </li>
   );
 }
 
