@@ -48,19 +48,29 @@ Postmark, Brevo …) ist nur eine `.env`-Änderung.
 
 ## Deployment
 
-Ein Container (`Dockerfile`, multi-stage): Next im `standalone`-Modus, die gepinnte
-Typst-CLI (Fonts + Briefkopf für den PDF-Export eingebacken) und `scripts/migrate.mjs`
-als Entrypoint. Beim Start werden erst die eingecheckten Migrationen aus `drizzle/`
-angewendet (solange noch keine existieren: Warnung + Skip), dann startet der Server.
+`compose.yml` beschreibt den kompletten Produktions-Stack: den App-Container
+(`Dockerfile`, multi-stage: Next im `standalone`-Modus, die gepinnte Typst-CLI mit
+eingebackenen Fonts + Briefkopf, `scripts/migrate.mjs` als Entrypoint), einen
+**Postgres 17 im selben Compose** (Service `db`, kein Host-Port, benanntes Volume
+`db-data`) und einen **Backup-Service** (täglicher `pg_dump` nach `./backups`). Beim
+Start des App-Containers werden erst die eingecheckten Migrationen aus `drizzle/`
+angewendet (per Advisory-Lock serialisiert; fehlt die Migrations-Historie, bricht der
+Start bewusst ab), dann startet der Server.
 
-**Postgres läuft separat** (selbst verwaltet, nicht in `compose.yml`). `DATABASE_URL`
-in `.env` muss darauf zeigen. `compose.yml` enthält nur den App-Service samt
-Traefik-Labels.
+`DATABASE_URL` in `.env` zeigt containerintern auf `db:5432` — Benutzer/Passwort/DB-Name
+müssen mit dem `POSTGRES_*`-Block übereinstimmen (siehe `.env.example`).
 
 ```bash
-cp .env.example .env        # Prod-Werte eintragen (DATABASE_URL, BETTER_AUTH_URL, Keycloak …)
-docker compose up -d --build
+cp .env.example .env             # Prod-Werte eintragen (POSTGRES_*, DATABASE_URL, Keycloak …)
+docker compose pull              # das von der CI gebaute GHCR-Image holen
+docker compose up -d
 ```
+
+Das App-Image wird von der CI nach GHCR gepusht (`ghcr.io/deutscher-pfadfinderbund/anschriften`).
+Im Normalfall daher `docker compose pull` (kein lokaler Build). Ein lokaler Build
+(`docker compose up -d --build`) ist nur für Tests ohne CI-Image oder zum Reproduzieren
+eines Build-Problems nötig. Deploy, Rollback (Pinnen eines Versions-Tags), Restore und
+den Cutover-Ablauf beschreibt der Runbook **[docs/deployment.md](docs/deployment.md)**.
 
 ### Voraussetzungen (Server)
 
@@ -87,9 +97,9 @@ und `ports: ["3000:3000"]` freigeben.
 
 ### Backups
 
-Die App macht keine Backups — das gehört an den separaten Postgres. Empfehlung:
-[`prodrigestivill/postgres-backup-local`](https://github.com/prodrigestivill/docker-postgres-backup-local)
-neben der Datenbank betreiben (täglicher `pg_dump`, Retention z. B. 14 täglich /
-8 wöchentlich, Backup-Volume auf ein Host-Verzeichnis). Restore mit `pg_restore`
-bzw. `psql` gegen denselben Server. Ein Restore sollte vor dem Cutover einmal
-geprobt werden.
+Der `backup`-Service in `compose.yml`
+([`prodrigestivill/postgres-backup-local`](https://github.com/prodrigestivill/docker-postgres-backup-local))
+läuft mit und schreibt täglich einen `pg_dump` nach `./backups` auf dem Host
+(Retention: 14 tägliche / 8 wöchentliche Dumps, konfigurierbar über `BACKUP_*` in
+`.env`). Restore- und Cutover-Prozedur (inkl. Backup-Probe vor dem Go-live) stehen im
+Runbook **[docs/deployment.md](docs/deployment.md)**.

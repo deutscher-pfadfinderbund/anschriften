@@ -434,8 +434,11 @@ describe("options: ranks, birthdays, cover", () => {
     const rita = findNode(data.sections, "Bundesführung")!.entries.find((e) => e.name === "Rita Rang")!;
     expect(rita.detail).toBe("rambo (Späher)");
     expect(rita.birth).toBe("12.03.1985");
-    expect(rita.phoneCity).toBe("030 111"); // primary phone on the PLZ/Ort row
-    expect(rita.phoneStreet).toBe("0173 222"); // secondary phone on the street row
+    // All phones flow through with their labels, in input order (issue #8).
+    expect(rita.phones).toEqual([
+      { label: "Festnetz", number: "030 111" },
+      { label: "Mobil", number: "0173 222" },
+    ]);
     expect(data.date).toBe("04.07.2026");
   });
 
@@ -452,5 +455,191 @@ describe("options: ranks, birthdays, cover", () => {
     expect(data.kanzlei[0].office).toBe("Kanzlerin des Bundes");
     expect(data.kanzlei[0].name).toBe("Heide Ortner");
     expect(data.kanzlei[0].detail).toBeNull(); // cover stays clean
+  });
+});
+
+describe("issue #4 — normalizeSortKey collation", () => {
+  it("collates ae-folded (DIN 5007-2) and NFC-normalizes decomposed umlauts", () => {
+    const names = ["Zeder", "Öhmann", "Aal", "Müller", "Muhs", "Munz"];
+    const sorted = [...names].sort((a, b) =>
+      normalizeSortKey(a).localeCompare(normalizeSortKey(b), "de"),
+    );
+    // Müller -> "mueller" sorts before Muhs/Munz because 'e' < 'h' < 'n'.
+    expect(sorted).toEqual(["Aal", "Müller", "Muhs", "Munz", "Öhmann", "Zeder"]);
+    // "Öhmann" as O + combining diaeresis (U+0308) folds like the precomposed form.
+    expect(normalizeSortKey("Öhmann")).toBe("oehmann");
+    expect(normalizeSortKey("Öhmann")).toBe(normalizeSortKey("Öhmann"));
+  });
+});
+
+describe("issue #6 — a future Amtszeit-bis keeps an officer in print", () => {
+  it("treats an assignment ending today or later as still active", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, firstName: "Future", lastName: "Voll" }),
+        person({ id: 2, firstName: "Past", lastName: "Gone" }),
+      ],
+      assignments: [
+        { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: "2030-01-01" }, // future -> active
+        { id: 2, personId: 2, groupId: 1, officeId: 2, endDate: "2020-01-01" }, // past -> ended
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS, new Date(2026, 6, 4));
+    const names = findNode(data.sections, "Bundesführung")!.entries.map((e) => e.name);
+    expect(names).toEqual(["Future Voll"]);
+    expect(data.register.map((r) => r.rest.trim())).toEqual(["Voll, Bundesvogt"]);
+  });
+
+  it("keeps an assignment active exactly on its end date (boundary)", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [person({ id: 1, firstName: "Edge", lastName: "Case" })],
+      assignments: [{ id: 1, personId: 1, groupId: 1, officeId: 1, endDate: "2026-07-04" }],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS, new Date(2026, 6, 4));
+    expect(findNode(data.sections, "Bundesführung")).toBeDefined();
+  });
+});
+
+describe("issue #7 — a leader office does not hide co-held non-leader offices", () => {
+  it("keeps Beisitzer when the person is also Jungenschaftsführer in a subgroup", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [person({ id: 1, firstName: "Both", lastName: "Offices" })],
+      assignments: [
+        { id: 1, personId: 1, groupId: 3, officeId: 6, endDate: null }, // Jungenschaftsführer (leader)
+        { id: 2, personId: 1, groupId: 3, officeId: 7, endDate: null }, // Beisitzer (non-leader)
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    const entry = findNode(data.sections, "Jungenschaft Hohenlohe")!.entries.find(
+      (e) => e.name === "Both Offices",
+    )!;
+    expect(entry.office).toBe("Beisitzer"); // leader filtered, the rest of the list kept (not null)
+  });
+});
+
+describe("issue #8 — all phones pass through with their labels", () => {
+  it("carries every number with its label, nulls a blank label and drops empty numbers", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({
+          id: 1,
+          firstName: "Many",
+          lastName: "Phones",
+          phones: [
+            { label: "Mobil", number: "0173 1" },
+            { label: "Privat", number: "030 2" },
+            { label: "Dienstlich", number: "089 3" },
+            { label: "", number: "099 4" }, // blank label -> null
+            { label: "Leer", number: "  " }, // empty number -> dropped
+          ],
+        }),
+      ],
+      assignments: [{ id: 1, personId: 1, groupId: 1, officeId: 1, endDate: null }],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    const entry = findNode(data.sections, "Bundesführung")!.entries[0];
+    expect(entry.phones).toEqual([
+      { label: "Mobil", number: "0173 1" },
+      { label: "Privat", number: "030 2" },
+      { label: "Dienstlich", number: "089 3" },
+      { label: null, number: "099 4" },
+    ]);
+  });
+});
+
+describe("issue #9 — a surname-only person sorts by surname with a non-empty lead", () => {
+  it("leads with the surname and sorts on it, not to the top with an empty lead", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, lastName: "Müller" }), // surname only, no Fahrten-/Vorname
+        person({ id: 2, firstName: "Anton", lastName: "Zebra" }),
+      ],
+      assignments: [
+        { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: null },
+        { id: 2, personId: 2, groupId: 1, officeId: 2, endDate: null },
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    // "mueller" sorts after "anton" — not to the very top with an empty bold lead.
+    expect(data.register.map((r) => r.lead)).toEqual(["Anton", "Müller"]);
+    const mueller = data.register.find((r) => r.lead === "Müller")!;
+    expect(mueller.rest).toBe(", Bundesvogt"); // no leading surname repeated, breadcrumb only
+  });
+});
+
+describe("issue #1 — deceased members stay on the memorial after their tenure is ended", () => {
+  it("includes a deceased person whose only assignment carries an end date", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, firstName: "Ver", lastName: "Storben", scoutName: "engel", deathDate: "2024-03-01" }),
+        person({ id: 2, firstName: "Ge", lastName: "Heim", doNotPrint: true, deathDate: "2024-01-01" }),
+      ],
+      assignments: [
+        // Tenure ended when the holder died (holder-warning flow): no active assignment left.
+        { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: "2024-03-01" },
+        { id: 2, personId: 2, groupId: 1, officeId: 2, endDate: "2024-01-01" },
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", ALL_OPTIONS);
+    expect(data.memorial).toContain("Ver Storben (engel)");
+    // Deceased still never appear in the tree or the register.
+    expect(allEntries(data.sections).some((e) => e.name === "Ver Storben")).toBe(false);
+    expect(data.register.some((r) => r.rest.includes("Storben"))).toBe(false);
+    // do_not_print is still honoured on the memorial.
+    expect(data.memorial.some((m) => m.includes("Heim"))).toBe(false);
+  });
+
+  it("excludes a deceased person whose memberships are all out of the profile scope", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [person({ id: 1, firstName: "Wrong", lastName: "Section", deathDate: "2024-03-01" })],
+      // Only a bundesgilde membership; nurBundesaemter excludes that section.
+      assignments: [{ id: 1, personId: 1, groupId: 5, officeId: null, endDate: "2024-03-01" }],
+    };
+    const data = buildProfileData(raw, "nurBundesaemter", ALL_OPTIONS);
+    expect(data.memorial).toEqual([]);
+  });
+});
+
+describe("issue #3 — register breadcrumb dedups groups and lists parent before child", () => {
+  it("prints a shared parent once and orders parent-before-child", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [person({ id: 1, firstName: "Doppel", lastName: "Meier" })],
+      assignments: [
+        // child subgroup (sortKey 0): Knappenmeister in Jungenschaft Hohenlohe
+        { id: 1, personId: 1, groupId: 3, officeId: 5, endDate: null },
+        // parent group (sortKey 110): Gauvogt in Gau Franken
+        { id: 2, personId: 1, groupId: 2, officeId: 4, endDate: null },
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", NO_OPTIONS);
+    expect(data.register).toHaveLength(1);
+    const rest = data.register[0].rest;
+    expect(rest).toBe(" Meier, Gau Franken, Gauvogt, Jungenschaft Hohenlohe, Knappenmeister");
+    // "Gau Franken" is not duplicated, and never appears before its own listing as a child parent.
+    expect(rest.match(/Gau Franken/g)).toHaveLength(1);
   });
 });

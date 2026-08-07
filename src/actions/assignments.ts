@@ -1,13 +1,18 @@
 "use server";
 
 import { and, eq, isNull } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
 import type { ActiveHolder } from "@/db/queries";
 import { assignments, persons } from "@/db/schema";
-import { firstError, type ActionResult } from "@/lib/action-helpers";
+import {
+  firstError,
+  isForeignKeyViolation,
+  revalidatePersonPaths,
+  todayIso,
+  type ActionResult,
+} from "@/lib/action-helpers";
 import { actorName, requireSession } from "@/lib/auth-helpers";
 import { formatName } from "@/lib/format";
 import { resolveTenureEnd } from "@/lib/person-schema";
@@ -23,20 +28,9 @@ const dateField = z
   .nullish()
   .transform((v) => (v && v.length > 0 ? v : null));
 
-/** Server-side "today" as an ISO date — the documented upper bound for "Ende unbekannt". */
-const todayIso = (): string => new Date().toISOString().slice(0, 10);
-
 /** Bump the owning person's audit fields so the change is attributed and lists refresh. */
 async function touchPerson(personId: number, by: string): Promise<void> {
   await db.update(persons).set({ updatedBy: by, updatedAt: new Date() }).where(eq(persons.id, personId));
-}
-
-function refresh(): void {
-  revalidatePath("/");
-  revalidatePath("/verteiler");
-  // groupUsage/officeUsage feed the delete guards on these pages — see src/db/queries.ts.
-  revalidatePath("/stammdaten");
-  revalidatePath("/gliederungen");
 }
 
 // --- end an active tenure ("Amt beenden…") --------------------------------------
@@ -80,7 +74,7 @@ export async function endAssignment(raw: z.infer<typeof endSchema>): Promise<Act
   if (updated.length === 0)
     return { ok: false, message: "Zuordnung wurde zwischenzeitlich geändert. Bitte Seite neu laden." };
   await touchPerson(row.personId, actorName(session));
-  refresh();
+  revalidatePersonPaths();
   return { ok: true };
 }
 
@@ -143,16 +137,23 @@ export async function addHistoricalAssignment(
   const resolved = resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
   if (!resolved.ok) return { ok: false, message: resolved.message };
 
-  await db.insert(assignments).values({
-    personId,
-    groupId,
-    officeId: officeId ?? null,
-    startDate,
-    endDate: resolved.endDate,
-    endUnknown: resolved.endUnknown,
-  });
+  try {
+    await db.insert(assignments).values({
+      personId,
+      groupId,
+      officeId: officeId ?? null,
+      startDate,
+      endDate: resolved.endDate,
+      endUnknown: resolved.endUnknown,
+    });
+  } catch (err) {
+    // Race: the person, group or office was deleted between page load and this call.
+    if (isForeignKeyViolation(err))
+      return { ok: false, message: "Anschrift, Gliederung oder Amt existiert nicht mehr. Bitte Seite neu laden." };
+    throw err;
+  }
   await touchPerson(personId, actorName(session));
-  refresh();
+  revalidatePersonPaths();
   return { ok: true };
 }
 
@@ -176,11 +177,12 @@ export async function updateHistoricalAssignment(
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
   const { assignmentId, groupId, officeId, startDate, endDate, endUnknown } = parsed.data;
 
-  const resolved = resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
-  if (!resolved.ok) return { ok: false, message: resolved.message };
-
   const [row] = await db
-    .select({ personId: assignments.personId, endDate: assignments.endDate })
+    .select({
+      personId: assignments.personId,
+      endDate: assignments.endDate,
+      endUnknown: assignments.endUnknown,
+    })
     .from(assignments)
     .where(eq(assignments.id, assignmentId))
     .limit(1);
@@ -188,19 +190,43 @@ export async function updateHistoricalAssignment(
   if (row.endDate == null)
     return { ok: false, message: "Ein aktives Amt wird über das Formular bearbeitet, nicht hier." };
 
-  await db
-    .update(assignments)
-    .set({
-      groupId,
-      officeId: officeId ?? null,
-      startDate,
-      endDate: resolved.endDate,
-      endUnknown: resolved.endUnknown,
-      updatedAt: new Date(),
-    })
-    .where(eq(assignments.id, assignmentId));
+  // "Ende unbekannt" documents an upper bound (the recording date). If it was already
+  // unknown and the user does not supply a concrete Bis-Datum, keep the recorded bound —
+  // recomputing it would silently move the end forward to today on every edit, weakening
+  // the documented "was over by then at the latest". Only recompute when a date is given
+  // or the unknown flag is being set anew.
+  let resolvedEndDate: string;
+  let resolvedEndUnknown: boolean;
+  if (endUnknown && endDate == null && row.endUnknown) {
+    resolvedEndDate = row.endDate;
+    resolvedEndUnknown = true;
+  } else {
+    const resolved = resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
+    if (!resolved.ok) return { ok: false, message: resolved.message };
+    resolvedEndDate = resolved.endDate;
+    resolvedEndUnknown = resolved.endUnknown;
+  }
+
+  try {
+    await db
+      .update(assignments)
+      .set({
+        groupId,
+        officeId: officeId ?? null,
+        startDate,
+        endDate: resolvedEndDate,
+        endUnknown: resolvedEndUnknown,
+        updatedAt: new Date(),
+      })
+      .where(eq(assignments.id, assignmentId));
+  } catch (err) {
+    // Race: the group or office was deleted between page load and this call.
+    if (isForeignKeyViolation(err))
+      return { ok: false, message: "Gliederung oder Amt existiert nicht mehr. Bitte Seite neu laden." };
+    throw err;
+  }
   await touchPerson(row.personId, actorName(session));
-  refresh();
+  revalidatePersonPaths();
   return { ok: true };
 }
 
@@ -229,6 +255,6 @@ export async function deleteAssignment(raw: z.infer<typeof deleteSchema>): Promi
 
   await db.delete(assignments).where(eq(assignments.id, parsed.data.assignmentId));
   await touchPerson(row.personId, actorName(session));
-  refresh();
+  revalidatePersonPaths();
   return { ok: true };
 }

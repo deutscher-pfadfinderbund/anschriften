@@ -1,6 +1,28 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { bccChunkSize, chunk, isMailEnabled, normalizeRecipients } from "./mail";
+// Mock the SMTP transport and the DB write so the failure path can be exercised
+// without a real SMTP server or database.
+const sendMailMock = vi.fn();
+vi.mock("nodemailer", () => ({
+  default: {
+    createTransport: () => ({ sendMail: sendMailMock, close: () => {} }),
+  },
+}));
+
+const insertValuesMock = vi.fn();
+vi.mock("@/db", () => ({
+  db: { insert: () => ({ values: insertValuesMock }) },
+}));
+vi.mock("@/db/schema", () => ({ mailLog: {} }));
+
+import {
+  bccChunkSize,
+  chunk,
+  isMailEnabled,
+  normalizeRecipients,
+  sanitizeMailError,
+  sendListMail,
+} from "./mail";
 
 describe("chunk", () => {
   it("splits into consecutive chunks of at most size", () => {
@@ -52,6 +74,78 @@ describe("normalizeRecipients", () => {
     ]);
     expect(res.recipients).toEqual(["ok@example.org"]);
     expect(res.skipped).toBe(3);
+  });
+});
+
+describe("sanitizeMailError", () => {
+  it("keeps code + SMTP response code but masks recipient addresses", () => {
+    const err = Object.assign(new Error("550 5.1.1 <opfer@example.org>: Recipient unknown"), {
+      code: "EENVELOPE",
+      responseCode: 550,
+    });
+    const out = sanitizeMailError(err);
+    expect(out).toContain("EENVELOPE");
+    expect(out).toContain("SMTP 550");
+    expect(out).toContain("<redacted>");
+    expect(out).not.toContain("opfer@example.org");
+  });
+
+  it("takes only the first line and never exceeds 500 chars", () => {
+    const out = sanitizeMailError(new Error(`first line ${"x".repeat(1000)}\nsecond line`));
+    expect(out).not.toContain("second line");
+    expect(out.length).toBeLessThanOrEqual(500);
+  });
+
+  it("handles non-Error values", () => {
+    expect(sanitizeMailError("boom")).toBe("boom");
+    expect(sanitizeMailError(undefined)).toBe("Unbekannter Fehler");
+  });
+});
+
+describe("sendListMail failure path masks recipient PII", () => {
+  const saved = { ...process.env };
+  beforeEach(() => {
+    process.env.SMTP_HOST = "localhost";
+    process.env.MAIL_FROM = "Kanzlei <kanzlei@example.org>";
+    sendMailMock.mockReset();
+    insertValuesMock.mockReset();
+  });
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it("sanitizes both the logged and the returned error (no raw recipient address)", async () => {
+    // SMTP rejection that echoes a recipient address, like a real bounce would.
+    sendMailMock.mockRejectedValue(
+      Object.assign(new Error("550 5.1.1 <opfer@example.org>: Recipient unknown"), {
+        code: "EENVELOPE",
+        responseCode: 550,
+      }),
+    );
+
+    const result = await sendListMail({
+      subject: "Test",
+      body: "Hallo",
+      recipients: ["opfer@example.org"],
+      sentBy: "Kanzler",
+      listId: null,
+    });
+
+    // (a) what was written to mail_log.error is sanitized …
+    expect(insertValuesMock).toHaveBeenCalledTimes(1);
+    const logged = insertValuesMock.mock.calls[0][0] as { status: string; error: string };
+    expect(logged.status).toBe("failed");
+    expect(logged.error).not.toContain("opfer@example.org");
+    expect(logged.error).toContain("<redacted>");
+
+    // (b) … and so is what is returned to the caller (which the toast shows).
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected failure");
+    expect(result.error).not.toContain("opfer@example.org");
+    expect(result.error).toContain("<redacted>");
+    expect(result.error).toContain("SMTP 550");
+    // Both surfaces carry the identical sanitized string.
+    expect(result.error).toBe(logged.error);
   });
 });
 

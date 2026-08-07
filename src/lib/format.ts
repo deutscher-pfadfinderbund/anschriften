@@ -1,11 +1,23 @@
 // Pure display + search helpers. No DB, safe on the client.
 
-/** Accent/umlaut-insensitive fold for search (Müller ↔ muller, Weiß ↔ weiss). */
+/**
+ * Canonical German collation fold (DIN 5007-2, phone-book): compose first, then map
+ * ä→ae, ö→oe, ü→ue, ß→ss, strip any remaining accents (café → cafe) and lower-case.
+ * Shared rule with the PDF register (`normalizeSortKey` in build-data.ts) so the on-screen
+ * persons table and the printed book sort identically.
+ */
 export function fold(s: string): string {
   return s
+    .normalize("NFC")
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/Ä/g, "Ae")
+    .replace(/Ö/g, "Oe")
+    .replace(/Ü/g, "Ue")
+    .replace(/ß/g, "ss")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ß/g, "ss")
     .toLowerCase()
     .trim();
 }
@@ -56,8 +68,36 @@ export function formatDateTime(value?: string | Date | null): string {
 /** Salutation options for the editor. Empty string = keine Anrede. */
 export const SALUTATIONS = ["Herr", "Frau"] as const;
 
-/** Phone label options for the dynamic phone list. */
-export const PHONE_LABELS = ["mobil", "privat", "dienstlich", "Telefon"] as const;
+/** Curated phone label options for the dynamic phone list. */
+export const PHONE_LABELS = ["Mobil", "Privat", "Dienstlich", "Telefon"] as const;
+
+/**
+ * Map a stored, free-text phone label onto the curated spelling.
+ *
+ * The Access column `bezeichner` is free text, so imported labels arrive as "mobil",
+ * " Privat " or something entirely different ("Büro", "Handy"). Anything that matches a
+ * curated label after trimming and folding (case + umlauts) becomes that label; anything
+ * else is returned trimmed but otherwise untouched, so no stored value is ever lost.
+ * An empty/missing label stays the empty string.
+ */
+export function canonicalPhoneLabel(raw?: string | null): string {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return "";
+  const key = fold(trimmed);
+  return PHONE_LABELS.find((l) => fold(l) === key) ?? trimmed;
+}
+
+/**
+ * Select options for one phone row. A Radix Select whose value matches no item renders
+ * blank, so a label outside the curated list is appended as its own option — the user
+ * sees exactly what is stored and can keep or replace it.
+ */
+export function phoneLabelOptions(current?: string | null): string[] {
+  const label = canonicalPhoneLabel(current);
+  const curated: string[] = [...PHONE_LABELS];
+  if (!label || curated.includes(label)) return curated;
+  return [...curated, label];
+}
 
 /** Human-readable label for a group section (for tree headers / hints). */
 export const SECTION_LABELS: Record<string, string> = {

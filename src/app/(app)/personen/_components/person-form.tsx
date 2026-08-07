@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarOff, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -28,7 +29,15 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { GroupRow, HistoricalAssignment, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
-import { PHONE_LABELS, SALUTATIONS, formatDate, formatDateTime, formatName } from "@/lib/format";
+import { findSimilarPersons, type PersonCandidate } from "@/lib/duplicate-persons";
+import {
+  SALUTATIONS,
+  canonicalPhoneLabel,
+  formatDate,
+  formatDateTime,
+  formatName,
+  phoneLabelOptions,
+} from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 import type { FieldErrors, PersonInput } from "@/lib/person-schema";
 import { cn } from "@/lib/utils";
@@ -62,6 +71,7 @@ export function PersonForm({
   offices,
   ranks,
   distributionLists,
+  existingPersons = [],
 }: {
   mode: "create" | "edit";
   person?: PersonEditData;
@@ -69,6 +79,8 @@ export function PersonForm({
   offices: OfficeRow[];
   ranks: RankRow[];
   distributionLists: { id: number; name: string }[];
+  /** Existing persons' names — only used for the non-blocking duplicate hint in create mode. */
+  existingPersons?: PersonCandidate[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -95,8 +107,15 @@ export function PersonForm({
 
   const [phones, setPhones] = useState<PhoneRow[]>(() => {
     const existing = person?.phones ?? [];
-    if (existing.length === 0) return [{ key: "p0", label: "mobil", number: "" }];
-    return existing.map((p, i) => ({ key: `p${i}`, label: p.label, number: p.number }));
+    if (existing.length === 0) return [{ key: "p0", label: "Mobil", number: "" }];
+    // Imported labels are free text ("mobil", " Privat "). Canonicalise once on load so
+    // the select shows the curated option and an untouched row saves the clean spelling;
+    // labels outside the list ("Büro") survive verbatim and get their own option below.
+    return existing.map((p, i) => ({
+      key: `p${i}`,
+      label: canonicalPhoneLabel(p.label),
+      number: p.number,
+    }));
   });
 
   const [assignments, setAssignments] = useState<AssignmentRow[]>(() => {
@@ -129,6 +148,56 @@ export function PersonForm({
   }, [person?.ruleMemberships]);
 
   const [errors, setErrors] = useState<FieldErrors>({});
+
+  // Data-loss guard: compare a snapshot of all editable fields against the state
+  // captured on first render. Kept simple on purpose — a false positive only costs
+  // an extra confirm, it never discards input silently.
+  const snapshot = JSON.stringify({
+    salutation,
+    title,
+    firstName,
+    lastName,
+    scoutName,
+    birthDate,
+    deathDate,
+    rankId,
+    street,
+    addressExtra,
+    postalCode,
+    city,
+    email,
+    notes,
+    doNotPrint,
+    phones: phones.map((p) => ({ label: p.label, number: p.number })),
+    assignments: assignments.map((a) => ({
+      groupId: a.groupId,
+      officeId: a.officeId,
+      startDate: a.startDate,
+      endDate: a.endDate,
+    })),
+    listIds: [...listIds].sort((x, y) => x - y),
+  });
+  // Capture the first-render snapshot in lazy state (not a ref): reading state
+  // during render is allowed, and it must never change after mount.
+  const [initialSnapshot] = useState(snapshot);
+  const dirty = snapshot !== initialSnapshot;
+
+  // Warn on a full page unload (reload / tab close) while there are unsaved edits.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  /** Cancel/leave: confirm before discarding unsaved input. */
+  function handleCancel() {
+    if (dirty && !window.confirm("Ungespeicherte Änderungen verwerfen?")) return;
+    router.push("/");
+  }
 
   // Office history (issue #22). Ended tenures are read straight from the server props
   // and refreshed via router.refresh() after each history mutation, so unsaved edits to
@@ -182,6 +251,14 @@ export function PersonForm({
     }
     return dups;
   }, [assignments]);
+
+  // Non-blocking duplicate hint (create mode only): softly warn when a similarly-named
+  // person already exists so the same anschrift is not entered twice. Advisory only —
+  // it never disables saving. In edit mode this stays empty and nothing is rendered.
+  const similarPersons = useMemo(() => {
+    if (mode !== "create") return [];
+    return findSimilarPersons({ firstName, lastName, scoutName }, existingPersons);
+  }, [mode, firstName, lastName, scoutName, existingPersons]);
 
   const heading =
     mode === "edit" && person
@@ -305,7 +382,7 @@ export function PersonForm({
     if (!histForm || !person) return;
     if (histForm.groupId == null) return void toast.error("Bitte eine Gliederung wählen.");
     if (!histForm.endUnknown && !histForm.endDate)
-      return void toast.error("Bitte ein Bis-Datum angeben oder „Datum unbekannt“ wählen.");
+      return void toast.error("Bitte ein Bis-Datum angeben oder „Ende unbekannt“ wählen.");
     startHistory(async () => {
       const common = {
         groupId: histForm.groupId as number,
@@ -436,6 +513,26 @@ export function PersonForm({
                   <Input id="f-geb" type="date" value={birthDate ?? ""} onChange={(e) => setBirthDate(e.target.value)} />
                 </Field>
               </div>
+              {similarPersons.length > 0 ? (
+                <div className="mb-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-[13px] text-ink-soft">
+                  <p>Ähnliche Einträge vorhanden – bitte prüfen, ob die Person schon existiert:</p>
+                  <ul className="mt-1 flex flex-col gap-0.5">
+                    {similarPersons.map((p) => (
+                      <li key={p.id}>
+                        <Link
+                          href={`/personen/${p.id}`}
+                          target="_blank"
+                          rel="noopener"
+                          className="text-fir underline-offset-2 hover:underline"
+                        >
+                          {formatName(p)}
+                          {p.scoutName && (p.lastName || p.firstName) ? ` „${p.scoutName}“` : ""}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <Field label="Anmerkung" htmlFor="f-anm">
                 <Textarea
                   id="f-anm"
@@ -451,7 +548,7 @@ export function PersonForm({
                 <Field label="Straße" htmlFor="f-str">
                   <Input id="f-str" value={street} onChange={(e) => setStreet(e.target.value)} />
                 </Field>
-                <Field label="Adresszusatz" htmlFor="f-zusatz">
+                <Field label="Anschriftenzusatz" htmlFor="f-zusatz">
                   <Input id="f-zusatz" value={addressExtra} onChange={(e) => setAddressExtra(e.target.value)} placeholder="c/o, Hinterhaus …" />
                 </Field>
               </div>
@@ -488,7 +585,7 @@ export function PersonForm({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {PHONE_LABELS.map((l) => (
+                        {phoneLabelOptions(p.label).map((l) => (
                           <SelectItem key={l} value={l}>
                             {l}
                           </SelectItem>
@@ -517,7 +614,7 @@ export function PersonForm({
               <button
                 type="button"
                 onClick={() => setPhones((rows) => [...rows, { key: nextKey(), label: "Telefon", number: "" }])}
-                className="mt-2 inline-flex items-center gap-1 text-[13px] text-ink-soft transition-colors hover:text-fir"
+                className="mt-2 inline-flex items-center gap-1 rounded-md text-[13px] text-ink-soft outline-none transition-colors hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Plus className="size-3.5" />
                 weitere Nummer
@@ -566,7 +663,9 @@ export function PersonForm({
                             onChange={(e) => updateAssignment(a.key, { startDate: e.target.value })}
                           />
                         </Field>
-                        <Field label="bis (für frühere Ämter)">
+                        {/* Short label so all four captions stay single-line and the
+                            controls line up; the panel hint explains what „bis“ does. */}
+                        <Field label="bis">
                           <Input
                             type="date"
                             aria-label="Amt bis"
@@ -635,7 +734,7 @@ export function PersonForm({
                     { key: nextKey(), id: null, groupId: null, officeId: null, startDate: "", endDate: "" },
                   ])
                 }
-                className="mt-2.5 w-full rounded-md border border-dashed border-line-strong py-2 text-[13px] text-ink-soft transition-colors hover:border-fir hover:text-fir"
+                className="mt-2.5 w-full rounded-md border border-dashed border-line-strong py-2 text-[13px] text-ink-soft outline-none transition-colors hover:border-fir hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
               >
                 + Amt hinzufügen
               </button>
@@ -754,7 +853,7 @@ export function PersonForm({
           <Button onClick={handleSave} disabled={isPending}>
             {isPending ? "Speichern …" : "Speichern"}
           </Button>
-          <Button variant="outline" onClick={() => router.push("/")} disabled={isPending}>
+          <Button variant="outline" onClick={handleCancel} disabled={isPending}>
             Abbrechen
           </Button>
           {mode === "edit" && person ? (

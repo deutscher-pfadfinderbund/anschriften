@@ -33,7 +33,7 @@ services:
   #   SMTP:   localhost:1025  (set SMTP_HOST=localhost, SMTP_PORT=1025, no auth)
   #   Web UI: http://localhost:8025  (also serves the JSON API at /api/v1/messages)
   mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.30
     ports:
       - "1025:1025"
       - "8025:8025"

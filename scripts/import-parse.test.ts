@@ -121,6 +121,19 @@ describe("buildPhones", () => {
       buildPhones([{ vorwahl: "0123", nummer: "456789", bezeichner: "Privat" }]),
     ).toEqual([{ label: "Privat", number: "0123 456789" }]);
   });
+  it("canonicalises common free-text spellings but keeps unknown labels", () => {
+    expect(
+      buildPhones([
+        { vorwahl: "0123", nummer: "111", bezeichner: "mobil" },
+        { vorwahl: "0123", nummer: "222", bezeichner: " PRIVAT " },
+        { vorwahl: "0123", nummer: "333", bezeichner: "Büro" },
+      ]),
+    ).toEqual([
+      { label: "Mobil", number: "0123 111" },
+      { label: "Privat", number: "0123 222" },
+      { label: "Büro", number: "0123 333" },
+    ]);
+  });
   it("skips entries without a number and falls back to the default label", () => {
     expect(
       buildPhones([

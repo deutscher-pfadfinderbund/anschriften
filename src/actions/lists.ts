@@ -22,6 +22,17 @@ import { actorName, requireSession } from "@/lib/auth-helpers";
 
 export type CreateListResult = { ok: true; id: number } | { ok: false; message: string };
 
+/**
+ * Attribute a change to a list's contents (members or rules) on the parent list, so
+ * every mutation carries who/when — same contract as createList/updateList.
+ */
+async function touchList(listId: number, by: string): Promise<void> {
+  await db
+    .update(distributionLists)
+    .set({ updatedBy: by, updatedAt: new Date() })
+    .where(eq(distributionLists.id, listId));
+}
+
 const listSchema = z.object({
   name: z
     .string()
@@ -75,8 +86,10 @@ export async function updateList(id: number, raw: ListInput): Promise<ActionResu
     throw err;
   }
   revalidatePath("/verteiler");
-  // Manual memberships also drive the Verteiler badges and list filter on "/".
+  // Manual memberships also drive the Verteiler badges and list filter on "/", and the
+  // office-rule chips on /stammdaten carry the list name.
   revalidatePath("/");
+  revalidatePath("/stammdaten");
   return { ok: true };
 }
 
@@ -85,14 +98,16 @@ export async function deleteList(id: number): Promise<ActionResult> {
   // Memberships cascade via the distribution_list_members FK (onDelete: cascade).
   await db.delete(distributionLists).where(eq(distributionLists.id, id));
   revalidatePath("/verteiler");
-  // Manual memberships also drive the Verteiler badges and list filter on "/".
+  // Manual memberships also drive the Verteiler badges and list filter on "/", and the
+  // office-rule chips on /stammdaten reference the (now removed) list.
   revalidatePath("/");
+  revalidatePath("/stammdaten");
   return { ok: true };
 }
 
 /** Add persons to a list; duplicates are ignored so re-adding is harmless. */
 export async function addMembers(listId: number, personIds: number[]): Promise<ActionResult> {
-  await requireSession();
+  const session = await requireSession();
   const ids = [...new Set(personIds.filter((n) => Number.isInteger(n) && n > 0))];
   if (ids.length === 0) return { ok: true };
   try {
@@ -106,6 +121,7 @@ export async function addMembers(listId: number, personIds: number[]): Promise<A
       return { ok: false, message: "Verteiler oder Anschrift existiert nicht mehr. Bitte Seite neu laden." };
     throw err;
   }
+  await touchList(listId, actorName(session));
   revalidatePath("/verteiler");
   // Manual memberships also drive the Verteiler badges and list filter on "/".
   revalidatePath("/");
@@ -113,7 +129,7 @@ export async function addMembers(listId: number, personIds: number[]): Promise<A
 }
 
 export async function removeMember(listId: number, personId: number): Promise<ActionResult> {
-  await requireSession();
+  const session = await requireSession();
   await db
     .delete(distributionListMembers)
     .where(
@@ -122,6 +138,7 @@ export async function removeMember(listId: number, personId: number): Promise<Ac
         eq(distributionListMembers.personId, personId),
       ),
     );
+  await touchList(listId, actorName(session));
   revalidatePath("/verteiler");
   // Manual memberships also drive the Verteiler badges and list filter on "/".
   revalidatePath("/");
@@ -140,7 +157,7 @@ function revalidateEffectiveMembership() {
 
 /** Bind an office to a list: whoever holds it is then an automatic member. Idempotent. */
 export async function addOfficeRule(listId: number, officeId: number): Promise<ActionResult> {
-  await requireSession();
+  const session = await requireSession();
   if (!Number.isInteger(listId) || listId <= 0)
     return { ok: false, message: "Ungültiger Verteiler." };
   if (!Number.isInteger(officeId) || officeId <= 0)
@@ -156,13 +173,14 @@ export async function addOfficeRule(listId: number, officeId: number): Promise<A
       };
     throw err;
   }
+  await touchList(listId, actorName(session));
   revalidateEffectiveMembership();
   return { ok: true };
 }
 
 /** Remove an office rule from a list. The office holders are no longer auto-included. */
 export async function removeOfficeRule(listId: number, officeId: number): Promise<ActionResult> {
-  await requireSession();
+  const session = await requireSession();
   if (!Number.isInteger(listId) || listId <= 0 || !Number.isInteger(officeId) || officeId <= 0)
     return { ok: false, message: "Ungültige Auswahl." };
   await db
@@ -173,13 +191,14 @@ export async function removeOfficeRule(listId: number, officeId: number): Promis
         eq(distributionListOfficeRules.officeId, officeId),
       ),
     );
+  await touchList(listId, actorName(session));
   revalidateEffectiveMembership();
   return { ok: true };
 }
 
 /** Bind a Stand to a list: everyone carrying it is then an automatic member. Idempotent. */
 export async function addRankRule(listId: number, rankId: number): Promise<ActionResult> {
-  await requireSession();
+  const session = await requireSession();
   if (!Number.isInteger(listId) || listId <= 0)
     return { ok: false, message: "Ungültiger Verteiler." };
   if (!Number.isInteger(rankId) || rankId <= 0)
@@ -194,13 +213,14 @@ export async function addRankRule(listId: number, rankId: number): Promise<Actio
       };
     throw err;
   }
+  await touchList(listId, actorName(session));
   revalidateEffectiveMembership();
   return { ok: true };
 }
 
 /** Remove a rank rule from a list. Persons carrying that Stand are no longer auto-included. */
 export async function removeRankRule(listId: number, rankId: number): Promise<ActionResult> {
-  await requireSession();
+  const session = await requireSession();
   if (!Number.isInteger(listId) || listId <= 0 || !Number.isInteger(rankId) || rankId <= 0)
     return { ok: false, message: "Ungültige Auswahl." };
   await db
@@ -211,13 +231,14 @@ export async function removeRankRule(listId: number, rankId: number): Promise<Ac
         eq(distributionListRankRules.rankId, rankId),
       ),
     );
+  await touchList(listId, actorName(session));
   revalidateEffectiveMembership();
   return { ok: true };
 }
 
 /** Bind a Gliederung to a list: everyone actively assigned to it is an automatic member. Idempotent. */
 export async function addGroupRule(listId: number, groupId: number): Promise<ActionResult> {
-  await requireSession();
+  const session = await requireSession();
   if (!Number.isInteger(listId) || listId <= 0)
     return { ok: false, message: "Ungültiger Verteiler." };
   if (!Number.isInteger(groupId) || groupId <= 0)
@@ -232,13 +253,14 @@ export async function addGroupRule(listId: number, groupId: number): Promise<Act
       };
     throw err;
   }
+  await touchList(listId, actorName(session));
   revalidateEffectiveMembership();
   return { ok: true };
 }
 
 /** Remove a group rule from a list. Members of that Gliederung are no longer auto-included. */
 export async function removeGroupRule(listId: number, groupId: number): Promise<ActionResult> {
-  await requireSession();
+  const session = await requireSession();
   if (!Number.isInteger(listId) || listId <= 0 || !Number.isInteger(groupId) || groupId <= 0)
     return { ok: false, message: "Ungültige Auswahl." };
   await db
@@ -249,6 +271,7 @@ export async function removeGroupRule(listId: number, groupId: number): Promise<
         eq(distributionListGroupRules.groupId, groupId),
       ),
     );
+  await touchList(listId, actorName(session));
   revalidateEffectiveMembership();
   return { ok: true };
 }

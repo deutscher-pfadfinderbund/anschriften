@@ -60,6 +60,25 @@ function distinct(values: string[]): string[] {
   return [...new Set(values)];
 }
 
+/** Parse a download filename out of a Content-Disposition header, if present. */
+function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header);
+  return match ? decodeURIComponent(match[1].replace(/"$/, "")) : null;
+}
+
+/** Trigger a browser download for an in-memory blob (keeps the user on the page). */
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 type Indexed = PersonListRow & { _search: string };
 
 export function PersonsTable({
@@ -87,6 +106,7 @@ export function PersonsTable({
   const [addToListOpen, setAddToListOpen] = useState(false);
   const [targetListId, setTargetListId] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [csvPending, setCsvPending] = useState(false);
 
   const orderedGroups = useMemo(() => orderGroups(groups), [groups]);
 
@@ -115,6 +135,18 @@ export function PersonsTable({
       return true;
     });
   }, [indexed, search, groupFilter, officeFilter, listFilter]);
+
+  const filtersActive =
+    search.trim() !== "" ||
+    groupFilter !== ALL ||
+    officeFilter !== ALL ||
+    listFilter !== ALL;
+  function resetFilters() {
+    setSearch("");
+    setGroupFilter(ALL);
+    setOfficeFilter(ALL);
+    setListFilter(ALL);
+  }
 
   const columns = useMemo<ColumnDef<Indexed>[]>(
     () => [
@@ -158,13 +190,17 @@ export function PersonsTable({
             .join(" · ");
           return (
             <div>
-              <div className="font-medium whitespace-nowrap text-ink">
+              <Link
+                href={`/personen/${p.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="rounded-sm font-medium whitespace-nowrap text-ink outline-none transition-colors hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
+              >
                 {formatName(p)}
                 {showScout ? (
-                  <span className="ml-1.5 font-normal text-fir">„{p.scoutName}“</span>
+                  <span className="ml-1.5 font-normal text-ink-soft">„{p.scoutName}“</span>
                 ) : null}
-              </div>
-              {sub ? <div className="text-xs text-ink-faint">{sub}</div> : null}
+              </Link>
+              {sub ? <div className="text-xs tabular-nums text-ink-faint">{sub}</div> : null}
             </div>
           );
         },
@@ -311,10 +347,22 @@ export function PersonsTable({
     );
   }
 
-  function downloadSelectedCsv() {
-    if (selectedCount === 0) return;
+  async function downloadSelectedCsv() {
+    if (selectedCount === 0 || csvPending) return;
     const ids = selectedPersons.map((p) => p.id).join(",");
-    window.location.href = `/api/export/csv?ids=${ids}`;
+    setCsvPending(true);
+    try {
+      const res = await fetch(`/api/export/csv?ids=${ids}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      const filename =
+        filenameFromDisposition(res.headers.get("Content-Disposition")) ?? "anschriften.csv";
+      triggerBlobDownload(blob, filename);
+    } catch {
+      toast.error("CSV-Export fehlgeschlagen. Bitte erneut versuchen.");
+    } finally {
+      setCsvPending(false);
+    }
   }
 
   function submitAddToList() {
@@ -423,9 +471,9 @@ export function PersonsTable({
               <UserPlus className="size-3.5" />
               Zu Verteiler hinzufügen …
             </Button>
-            <Button size="sm" variant="outline" onClick={downloadSelectedCsv}>
+            <Button size="sm" variant="outline" onClick={downloadSelectedCsv} disabled={csvPending}>
               <Download className="size-3.5" />
-              CSV
+              {csvPending ? "CSV wird erzeugt …" : "CSV"}
             </Button>
             <button
               type="button"
@@ -438,7 +486,9 @@ export function PersonsTable({
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
+        {/* overflow-x-auto, not -hidden: the table has a min width, so on narrow
+            viewports the right-hand columns must stay reachable by scrolling. */}
+        <div className="overflow-x-auto rounded-lg border border-line bg-surface shadow-sm">
           <Table className="min-w-[880px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -477,7 +527,19 @@ export function PersonsTable({
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="py-10 text-center text-ink-faint">
-                    Keine Anschriften gefunden.
+                    {persons.length === 0 ? (
+                      "Noch keine Anschriften erfasst."
+                    ) : filtersActive ? (
+                      <div className="flex flex-col items-center gap-2.5">
+                        <span>Keine Anschriften für die aktuelle Filterung.</span>
+                        <Button variant="outline" size="sm" onClick={resetFilters}>
+                          <X className="size-3.5" />
+                          Filter zurücksetzen
+                        </Button>
+                      </div>
+                    ) : (
+                      "Keine Anschriften gefunden."
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (

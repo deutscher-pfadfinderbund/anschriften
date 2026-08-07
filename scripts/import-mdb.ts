@@ -1,17 +1,22 @@
 /**
  * Import the legacy Access address database into Postgres (issue #2).
  *
- *   npx tsx scripts/import-mdb.ts <path-to.mdb> [--dry-run]
+ *   bun scripts/import-mdb.ts <path-to.mdb> [--dry-run] [--overwrite-assignments]
  *
  * Reads the `Adressen` table via mdbtools (read-only), maps it onto the M2 schema and
  * upserts everything in a single transaction. Idempotent: persons are keyed on legacy_id,
  * their assignments and mailing-list memberships are deleted and recreated, and lookup
  * tables (groups/offices/ranks/lists) are get-or-created by name. --dry-run parses,
  * validates and prints statistics without writing.
+ *
+ * Guard (issue #11): the .mdb only carries person/group/office, so recreating assignments
+ * discards any hand-maintained tenure data (start_date/end_date/end_unknown, issues
+ * #22/#26). A non-dry run therefore ABORTS if any imported person already has an
+ * assignment with such data, unless --overwrite-assignments is passed explicitly.
  */
 import { execFileSync } from "node:child_process";
 import { parse } from "csv-parse/sync";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
@@ -290,7 +295,7 @@ function printStats(model: Model, mode: string) {
   console.log(`    ${[...u.unknownRankOffices].sort().join(" | ") || "-"}`);
 }
 
-async function writeModel(model: Model, databaseUrl: string) {
+async function writeModel(model: Model, databaseUrl: string, overwriteAssignments: boolean) {
   const pool = new Pool({ connectionString: databaseUrl });
   const db = drizzle(pool);
   try {
@@ -425,6 +430,39 @@ async function writeModel(model: Model, databaseUrl: string) {
 
       // --- assignments + memberships: delete for imported persons, then recreate ---
       const importedIds = [...personIdByLegacy.values()];
+
+      // Guard (issue #11): refuse to clobber hand-maintained tenure data. The recreate
+      // below only knows person/group/office, so any existing assignment carrying a
+      // start_date/end_date or the "Ende unbekannt" flag would be lost silently.
+      if (!overwriteAssignments && importedIds.length > 0) {
+        const curated = await tx
+          .select({ personId: assignments.personId })
+          .from(assignments)
+          .where(
+            and(
+              inArray(assignments.personId, importedIds),
+              or(
+                isNotNull(assignments.startDate),
+                isNotNull(assignments.endDate),
+                eq(assignments.endUnknown, true),
+              ),
+            ),
+          );
+        if (curated.length > 0) {
+          const affected = new Set(curated.map((r) => r.personId)).size;
+          console.error(
+            `\nABBRUCH: ${affected} bereits importierte Person(en) haben Amtszeiten mit ` +
+              `Beginn/Ende oder „Ende unbekannt" gepflegt. Ein erneuter Import würde diese ` +
+              `Daten löschen und neu anlegen (nur Person/Gruppe/Amt aus der .mdb).\n` +
+              `ABORT: ${affected} imported person(s) already have hand-maintained tenure data ` +
+              `(start/end date or "end unknown"). Re-running the import would wipe it.\n` +
+              `Zum Erzwingen mit --overwrite-assignments erneut aufrufen. / ` +
+              `Pass --overwrite-assignments to override.`,
+          );
+          throw new Error("import aborted: would overwrite curated assignment tenure data");
+        }
+      }
+
       await tx.delete(assignments).where(inArray(assignments.personId, importedIds));
       await tx.delete(distributionListMembers).where(inArray(distributionListMembers.personId, importedIds));
 
@@ -485,9 +523,10 @@ async function main() {
 
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
+  const overwriteAssignments = args.includes("--overwrite-assignments");
   const mdbPath = args.find((a) => !a.startsWith("--"));
   if (!mdbPath) {
-    console.error("Usage: npx tsx scripts/import-mdb.ts <path-to.mdb> [--dry-run]");
+    console.error("Usage: bun scripts/import-mdb.ts <path-to.mdb> [--dry-run] [--overwrite-assignments]");
     process.exit(1);
   }
 
@@ -532,7 +571,7 @@ async function main() {
     console.error("DATABASE_URL is not set.");
     process.exit(1);
   }
-  await writeModel(model, databaseUrl);
+  await writeModel(model, databaseUrl, overwriteAssignments);
   printStats(model, "written");
 }
 

@@ -38,6 +38,7 @@ import {
 import { Combobox } from "@/components/combobox";
 import { ComposeMailDialog } from "@/components/compose-mail-dialog";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { EmptyState } from "@/components/empty-state";
 import { FormLabel } from "@/components/form-label";
 import { MultiSelectList } from "@/components/multi-select-list";
 import { PageHeader } from "@/components/page-header";
@@ -111,7 +112,7 @@ function RuleSection({
   rows: RuleRow[];
   options: { value: string; label: string }[];
   onAdd: (id: number) => void;
-  onRemove: (id: number) => void;
+  onRemove: (row: RuleRow) => void;
   emptyRules: string;
   addAriaLabel: string;
   addPlaceholder: string;
@@ -129,23 +130,25 @@ function RuleSection({
         {rows.length === 0 ? (
           <p className="mb-3 text-[13px] text-ink-soft">{emptyRules}</p>
         ) : (
-          <ul className="mb-3 flex flex-col gap-1.5">
+          /* Chips sized to their content: a rule is one short word, so full-width
+             rows would stack up as mostly empty bars. */
+          <ul className="mb-3 flex flex-wrap gap-1.5">
             {rows.map((r) => (
               <li
                 key={r.id}
-                className="group/rule flex items-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-1.5 text-[13.5px]"
+                className="flex max-w-full items-center gap-1.5 rounded-md border border-line bg-surface-2 py-1 pr-1 pl-2.5 text-[13.5px]"
               >
                 <Icon className="size-3.5 shrink-0 text-ink-faint" />
-                <span className="min-w-0 flex-1 truncate text-ink">{r.name}</span>
+                <span className="min-w-0 truncate text-ink">{r.name}</span>
                 <Button
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon-xs"
                   aria-label={`Regel „${r.name}“ entfernen`}
-                  className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/rule:opacity-100"
+                  className="shrink-0 text-ink-faint hover:text-crit"
                   disabled={disabled}
-                  onClick={() => onRemove(r.id)}
+                  onClick={() => onRemove(r)}
                 >
-                  <X className="size-4" />
+                  <X className="size-3.5" />
                 </Button>
               </li>
             ))}
@@ -201,6 +204,10 @@ export function VerteilerManager({
   const [addOpen, setAddOpen] = useState(false);
   const [addSelection, setAddSelection] = useState<Set<number>>(new Set());
   const [composeOpen, setComposeOpen] = useState(false);
+  // Removing a rule can change many people's membership at once → confirm first.
+  const [ruleRemoval, setRuleRemoval] = useState<
+    { kind: "office" | "rank" | "group"; id: number; name: string } | null
+  >(null);
 
   // Reconcile the selection with the (possibly refreshed) server data: keep the
   // chosen list if it still exists, otherwise fall back to the first one.
@@ -301,6 +308,25 @@ export function VerteilerManager({
     startTransition(async () => {
       const res = await removeMember(activeList.id, personId);
       if (!res.ok) return void toast.error(res.message);
+      toast.success("Mitglied aus dem Verteiler entfernt.");
+      router.refresh();
+    });
+  }
+
+  /** Run the confirmed rule removal (office/rank/group) and toast the result. */
+  function confirmRuleRemoval() {
+    if (!activeList || !ruleRemoval) return;
+    const { kind, id, name } = ruleRemoval;
+    startTransition(async () => {
+      const res =
+        kind === "office"
+          ? await removeOfficeRule(activeList.id, id)
+          : kind === "rank"
+            ? await removeRankRule(activeList.id, id)
+            : await removeGroupRule(activeList.id, id);
+      if (!res.ok) return void toast.error(res.message);
+      toast.success(`Regel „${name}“ entfernt.`);
+      setRuleRemoval(null);
       router.refresh();
     });
   }
@@ -325,15 +351,6 @@ export function VerteilerManager({
     });
   }
 
-  function handleRemoveRule(officeId: number) {
-    if (!activeList) return;
-    startTransition(async () => {
-      const res = await removeOfficeRule(activeList.id, officeId);
-      if (!res.ok) return void toast.error(res.message);
-      router.refresh();
-    });
-  }
-
   // Stände not yet a rule on the active list — the "+ Stand hinzufügen" combobox.
   const ruleRankOptions = useMemo(() => {
     if (!activeList) return [];
@@ -348,15 +365,6 @@ export function VerteilerManager({
       if (!res.ok) return void toast.error(res.message);
       const name = ranks.find((r) => r.id === rankId)?.name ?? "Stand";
       toast.success(`Regel „${name}“ hinzugefügt.`);
-      router.refresh();
-    });
-  }
-
-  function handleRemoveRankRule(rankId: number) {
-    if (!activeList) return;
-    startTransition(async () => {
-      const res = await removeRankRule(activeList.id, rankId);
-      if (!res.ok) return void toast.error(res.message);
       router.refresh();
     });
   }
@@ -379,15 +387,6 @@ export function VerteilerManager({
     });
   }
 
-  function handleRemoveGroupRule(groupId: number) {
-    if (!activeList) return;
-    startTransition(async () => {
-      const res = await removeGroupRule(activeList.id, groupId);
-      if (!res.ok) return void toast.error(res.message);
-      router.refresh();
-    });
-  }
-
   return (
     <>
       <PageHeader
@@ -398,11 +397,11 @@ export function VerteilerManager({
         <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[260px_1fr]">
           {/* Left: list of distribution lists */}
           <section className="rounded-lg border border-line bg-surface shadow-sm">
-            <div className="border-b border-line px-4 py-3 font-display text-[15.5px] font-semibold text-ink">
+            <div className="border-b border-line px-[18px] py-3 font-display text-[15.5px] font-semibold text-ink">
               Verteiler
             </div>
             {lists.length === 0 ? (
-              <p className="px-4 py-4 text-[13px] text-ink-faint">Noch keine Verteiler.</p>
+              <p className="px-[18px] py-4 text-[13px] text-ink-faint">Noch keine Verteiler.</p>
             ) : (
               <ul className="py-1.5">
                 {lists.map((l) => {
@@ -414,9 +413,11 @@ export function VerteilerManager({
                         onClick={() => setSelectedListId(l.id)}
                         aria-current={active ? "true" : undefined}
                         className={cn(
-                          "flex w-full items-center gap-2 border-l-2 px-3.5 py-2 text-left text-[13.5px] transition-colors",
+                          // pl-4 plus the 2px marker border adds up to the app-wide 18px gutter.
+                          "flex w-full items-center gap-2 border-l-2 py-2 pr-[18px] pl-4 text-left text-[13.5px] transition-colors",
+                          "outline-none focus-visible:ring-2 focus-visible:ring-ring",
                           active
-                            ? "border-fir bg-fir-tint font-medium text-ink"
+                            ? "border-fir bg-surface-2 font-medium text-ink"
                             : "border-transparent text-ink-soft hover:bg-sel hover:text-ink",
                         )}
                       >
@@ -430,7 +431,7 @@ export function VerteilerManager({
                 })}
               </ul>
             )}
-            <div className="border-t border-line p-2.5">
+            <div className="border-t border-line px-[18px] py-2.5">
               <button
                 type="button"
                 onClick={() => setListForm({ id: null, name: "", description: "" })}
@@ -442,9 +443,11 @@ export function VerteilerManager({
             </div>
           </section>
 
-          {/* Right: detail */}
+          {/* Right: detail. min-w-0 so a long, unbreakable e-mail address cannot
+              widen the 1fr column past the viewport (grid items default to
+              min-width:auto, which made the whole page scroll sideways). */}
           {activeList ? (
-            <div className="flex flex-col gap-[18px]">
+            <div className="flex min-w-0 flex-col gap-[18px]">
               <section className="rounded-lg border border-line bg-surface shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-[18px] py-3.5">
                   <div className="min-w-0">
@@ -521,9 +524,12 @@ export function VerteilerManager({
                         type="button"
                         onClick={() => setSeparator("; ")}
                         className={cn(
-                          "rounded-[5px] px-2 py-0.5 transition-colors",
+                          "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
+                          "focus-visible:ring-2 focus-visible:ring-ring",
+                          // Same "active" language as the nav and the tabs:
+                          // neutral surface, fir text — never a filled pill.
                           separator === "; "
-                            ? "bg-ink font-medium text-paper"
+                            ? "bg-surface-2 font-medium text-fir"
                             : "text-ink-soft hover:text-ink",
                         )}
                       >
@@ -533,9 +539,10 @@ export function VerteilerManager({
                         type="button"
                         onClick={() => setSeparator(", ")}
                         className={cn(
-                          "rounded-[5px] px-2 py-0.5 transition-colors",
+                          "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
+                          "focus-visible:ring-2 focus-visible:ring-ring",
                           separator === ", "
-                            ? "bg-ink font-medium text-paper"
+                            ? "bg-surface-2 font-medium text-fir"
                             : "text-ink-soft hover:text-ink",
                         )}
                       >
@@ -607,7 +614,7 @@ export function VerteilerManager({
                 rows={activeList.officeRules.map((r) => ({ id: r.officeId, name: r.officeName }))}
                 options={ruleOfficeOptions}
                 onAdd={handleAddRule}
-                onRemove={handleRemoveRule}
+                onRemove={(row) => setRuleRemoval({ kind: "office", id: row.id, name: row.name })}
                 emptyRules="Noch keine Amts-Regel."
                 addAriaLabel="Amt als Regel hinzufügen"
                 addPlaceholder="+ Amt hinzufügen"
@@ -623,7 +630,7 @@ export function VerteilerManager({
                 rows={activeList.rankRules.map((r) => ({ id: r.rankId, name: r.rankName }))}
                 options={ruleRankOptions}
                 onAdd={handleAddRankRule}
-                onRemove={handleRemoveRankRule}
+                onRemove={(row) => setRuleRemoval({ kind: "rank", id: row.id, name: row.name })}
                 emptyRules="Noch keine Stand-Regel."
                 addAriaLabel="Stand als Regel hinzufügen"
                 addPlaceholder="+ Stand hinzufügen"
@@ -639,7 +646,7 @@ export function VerteilerManager({
                 rows={activeList.groupRules.map((r) => ({ id: r.groupId, name: r.groupName }))}
                 options={ruleGroupOptions}
                 onAdd={handleAddGroupRule}
-                onRemove={handleRemoveGroupRule}
+                onRemove={(row) => setRuleRemoval({ kind: "group", id: row.id, name: row.name })}
                 emptyRules="Noch keine Gliederungs-Regel."
                 addAriaLabel="Gliederung als Regel hinzufügen"
                 addPlaceholder="+ Gliederung hinzufügen"
@@ -660,10 +667,11 @@ export function VerteilerManager({
                   </Button>
                 </div>
                 {members.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-ink-faint">
-                    <Users className="size-6 opacity-40" />
-                    <p className="text-[13px]">Noch keine Mitglieder in diesem Verteiler.</p>
-                  </div>
+                  <EmptyState
+                    icon={Users}
+                    title="Noch keine Mitglieder in diesem Verteiler."
+                    description="Anschriften einzeln hinzufügen oder oben eine automatische Regel nach Amt, Stand oder Gliederung anlegen."
+                  />
                 ) : (
                   <ul>
                     {members.map((m) => (
@@ -675,7 +683,7 @@ export function VerteilerManager({
                           <div className="truncate text-ink">
                             {formatName(m)}
                             {m.scoutName && (m.lastName || m.firstName) ? (
-                              <span className="ml-1.5 font-normal text-fir">„{m.scoutName}“</span>
+                              <span className="ml-1.5 font-normal text-ink-soft">„{m.scoutName}“</span>
                             ) : null}
                           </div>
                           <div className="mt-0.5 flex flex-wrap items-center gap-1">
@@ -733,7 +741,7 @@ export function VerteilerManager({
                             variant="ghost"
                             size="icon-sm"
                             aria-label={`${formatName(m)} entfernen`}
-                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/row:opacity-100"
+                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100"
                             disabled={isPending}
                             onClick={() => handleRemove(m.personId)}
                           >
@@ -754,21 +762,19 @@ export function VerteilerManager({
               </section>
             </div>
           ) : (
-            <section className="grid place-items-center rounded-lg border border-dashed border-line-strong bg-surface px-6 py-16 text-center">
-              <div>
-                <Mail className="mx-auto mb-3 size-7 text-ink-faint opacity-50" />
-                <p className="text-[14px] text-ink">Noch kein Verteiler angelegt.</p>
-                <p className="mt-1 text-[13px] text-ink-faint">
-                  Lege einen neuen Verteiler an, um E-Mail-Listen und CSV-Exporte zu erzeugen.
-                </p>
-                <Button
-                  className="mt-4"
-                  onClick={() => setListForm({ id: null, name: "", description: "" })}
-                >
-                  <Plus className="size-4" />
-                  Neuer Verteiler
-                </Button>
-              </div>
+            <section className="rounded-lg border border-dashed border-line-strong bg-surface">
+              <EmptyState
+                className="py-16"
+                icon={Mail}
+                title="Noch kein Verteiler angelegt."
+                description="Lege einen neuen Verteiler an, um E-Mail-Listen und CSV-Exporte zu erzeugen."
+                action={
+                  <Button onClick={() => setListForm({ id: null, name: "", description: "" })}>
+                    <Plus className="size-4" />
+                    Neuer Verteiler
+                  </Button>
+                }
+              />
             </section>
           )}
         </div>
@@ -837,6 +843,23 @@ export function VerteilerManager({
         confirmLabel="Endgültig löschen"
         pending={isPending}
         onConfirm={confirmDelete}
+      />
+
+      {/* Rule removal confirmation — can change many memberships at once */}
+      <ConfirmDeleteDialog
+        open={ruleRemoval != null}
+        onOpenChange={(o) => !o && setRuleRemoval(null)}
+        title="Regel entfernen?"
+        description={
+          <>
+            Die automatische Regel „{ruleRemoval?.name}“ wird aus diesem Verteiler entfernt.
+            Dadurch kann sich die Mitgliedschaft mehrerer Personen ändern. Manuell hinzugefügte
+            Mitglieder bleiben erhalten.
+          </>
+        }
+        confirmLabel="Regel entfernen"
+        pending={isPending}
+        onConfirm={confirmRuleRemoval}
       />
 
       {/* Add members dialog */}

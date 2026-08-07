@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { isValidDate, parsePersonInput, resolveTenureEnd, validateTenure } from "./person-schema";
+import {
+  isValidDate,
+  parsePersonInput,
+  resolveTenureEnd,
+  validatePersonDates,
+  validateTenure,
+} from "./person-schema";
 
 // Fictional dates only — validation logic for the office-history Amtszeiten (issue #22).
 describe("isValidDate", () => {
@@ -43,6 +49,33 @@ describe("validateTenure", () => {
   it("rejects malformed dates on either bound", () => {
     expect(validateTenure("01.03.2019", null)).toBe("Ungültiges Von-Datum.");
     expect(validateTenure(null, "2019-02-30")).toBe("Ungültiges Bis-Datum.");
+  });
+});
+
+describe("validatePersonDates", () => {
+  it("passes when both dates are null (unknown)", () => {
+    expect(validatePersonDates(null, null)).toBeNull();
+  });
+
+  it("passes with only a birth date or only a death date", () => {
+    expect(validatePersonDates("1950-05-01", null)).toBeNull();
+    expect(validatePersonDates(null, "2020-05-01")).toBeNull();
+  });
+
+  it("passes when the death is on or after the birth", () => {
+    expect(validatePersonDates("1950-05-01", "2020-05-01")).toBeNull();
+    expect(validatePersonDates("1950-05-01", "1950-05-01")).toBeNull();
+  });
+
+  it("rejects a malformed birth or death date with a German message", () => {
+    expect(validatePersonDates("01.05.1950", null)).toBe("Ungültiges Geburtsdatum.");
+    expect(validatePersonDates(null, "2020-02-30")).toBe("Ungültiges Sterbedatum.");
+  });
+
+  it("rejects a death date before the birth date", () => {
+    expect(validatePersonDates("1950-05-01", "1940-05-01")).toBe(
+      "Das Sterbedatum darf nicht vor dem Geburtsdatum liegen.",
+    );
   });
 });
 

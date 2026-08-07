@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import type { z } from "zod";
 
 // Shared helpers for the Server Actions in src/actions/*. Every action file needs the
@@ -6,6 +7,22 @@ import type { z } from "zod";
 
 /** Outcome of a mutation: success, or failure with a user-facing German message. */
 export type ActionResult = { ok: true } | { ok: false; message: string };
+
+/** Server-side "today" as an ISO date (YYYY-MM-DD) — the documented upper bound for "Ende unbekannt". */
+export const todayIso = (): string => new Date().toISOString().slice(0, 10);
+
+/**
+ * Revalidate every page whose data reflects a person + assignment change: the directory
+ * ("/"), the Verteiler badges, and the Stammdaten/Gliederungen delete guards fed by
+ * groupUsage/officeUsage (see src/db/queries.ts). Shared by the person and assignment
+ * actions so their revalidation sets cannot drift apart.
+ */
+export function revalidatePersonPaths(): void {
+  revalidatePath("/");
+  revalidatePath("/verteiler");
+  revalidatePath("/stammdaten");
+  revalidatePath("/gliederungen");
+}
 
 /** First Zod issue as a message, with a German fallback. */
 export function firstError(e: z.ZodError): string {

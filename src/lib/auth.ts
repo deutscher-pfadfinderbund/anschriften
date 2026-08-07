@@ -44,8 +44,12 @@ export const auth = betterAuth({
   // No local accounts — the only way in is Keycloak SSO.
   emailAndPassword: { enabled: false },
   session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // refresh at most once per day
+    // Roles are only checked at login (deliberate simplification per roadmap:
+    // "role removal takes effect at session expiry"). To keep that blast radius
+    // small we cap the session at 1 day. updateAge == expiresIn disables the
+    // sliding refresh, so an active user's session cannot outlive that hard cap.
+    expiresIn: 60 * 60 * 24, // 1 day
+    updateAge: 60 * 60 * 24, // no sliding window: never refreshed before expiry
   },
   plugins: [
     genericOAuth({

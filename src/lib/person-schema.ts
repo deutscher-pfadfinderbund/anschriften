@@ -65,6 +65,22 @@ export function validateTenure(
 }
 
 /**
+ * Validate a person's own life dates (Geburts-/Sterbedatum). Both bounds are optional
+ * (empty/null accepted); when both are set the death must not precede the birth. Pure so
+ * savePerson can share it. Returns a German error message, or null when valid.
+ */
+export function validatePersonDates(
+  birthDate: string | null,
+  deathDate: string | null,
+): string | null {
+  if (birthDate != null && !isValidDate(birthDate)) return "Ungültiges Geburtsdatum.";
+  if (deathDate != null && !isValidDate(deathDate)) return "Ungültiges Sterbedatum.";
+  if (birthDate != null && deathDate != null && deathDate < birthDate)
+    return "Das Sterbedatum darf nicht vor dem Geburtsdatum liegen.";
+  return null;
+}
+
+/**
  * Resolve the end of a tenure being closed ("Amt beenden", "Frühere Ämter", holder
  * warning), given the user's choice of a concrete Bis-Datum *or* "Ende unbekannt".
  * Pure so every server action shares it and it can be unit-tested (issue #26).
@@ -144,9 +160,7 @@ export const personInputSchema = z
     }
   });
 
-export type PhoneInput = z.infer<typeof phoneInputSchema>;
 export type AssignmentInput = z.infer<typeof assignmentInputSchema>;
-export type EndPreviousInput = z.infer<typeof endPreviousInputSchema>;
 export type PersonInput = z.infer<typeof personInputSchema>;
 
 export type FieldErrors = Record<string, string>;

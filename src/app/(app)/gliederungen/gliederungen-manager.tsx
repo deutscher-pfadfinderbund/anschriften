@@ -2,13 +2,15 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { createGroup, deleteGroup, updateGroup } from "@/actions/groups";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { EmptyState } from "@/components/empty-state";
 import { FormLabel } from "@/components/form-label";
+import { MonoBadge } from "@/components/mono-badge";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -162,37 +164,49 @@ export function GliederungenManager({
       <div className="px-6 pt-[18px] pb-10">
         <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
           {ordered.length === 0 ? (
-            <p className="p-6 text-center text-sm text-ink-faint">Noch keine Gliederungen angelegt.</p>
+            <EmptyState
+              icon={Building2}
+              title="Noch keine Gliederungen angelegt."
+              description="Lege über „Neu“ die erste Gliederung an — sie steht danach in allen Gliederungs-Auswahlfeldern zur Verfügung."
+            />
           ) : (
             <ul className="py-1.5">
               {ordered.map(({ group, depth }) => (
-                <li
-                  key={group.id}
-                  className="group/row flex items-center gap-2 px-[18px] py-1.5 text-[13.5px] hover:bg-sel"
-                  style={{ paddingLeft: `${18 + depth * 16}px` }}
-                >
-                  <span className="rounded-[3px] border border-line bg-surface-2 px-1.5 py-px font-mono text-[11px] tabular-nums text-ink-faint">
-                    {group.sortKey}
-                  </span>
-                  <span className="text-ink">{group.name}</span>
-                  <span className="ml-auto flex items-center gap-2 text-[11px] uppercase tracking-[0.06em] text-ink-faint">
-                    {group.kind ? <span>{group.kind}</span> : null}
-                    <span>{SECTION_LABELS[group.section] ?? group.section}</span>
-                  </span>
-                  <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
-                    <Button variant="ghost" size="icon-sm" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
-                      <Pencil className="size-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Löschen"
-                      className="text-ink-faint hover:text-crit"
-                      onClick={() => setDeleteTarget(group)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </span>
+                <li key={group.id} className="group/row hover:bg-sel">
+                  {/* max-w keeps name and labels in one readable band instead of
+                      stretching them to opposite ends of a wide viewport. */}
+                  <div
+                    className="flex max-w-3xl items-center gap-2 px-[18px] py-1.5 text-[13.5px]"
+                    style={{ paddingLeft: `${18 + depth * 16}px` }}
+                  >
+                    <MonoBadge>{group.sortKey}</MonoBadge>
+                    <span className="truncate text-ink">{group.name}</span>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-faint">
+                      {group.kind ? (
+                        <>
+                          <span>{group.kind}</span>
+                          <span aria-hidden className="text-line-strong">
+                            ·
+                          </span>
+                        </>
+                      ) : null}
+                      <span>{SECTION_LABELS[group.section] ?? group.section}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+                      <Button variant="ghost" size="icon-xs" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Löschen"
+                        className="text-ink-faint hover:text-crit"
+                        onClick={() => setDeleteTarget(group)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>

@@ -48,15 +48,26 @@ describe("buildCsv", () => {
     expect(row).toContain('"line1\nline2"');
   });
 
-  it("neutralizes spreadsheet formula starters (CSV injection)", () => {
+  it("neutralizes dangerous formula starters but leaves legitimate values intact (CSV injection)", () => {
     const csv = buildCsv([
-      { ...emptyPerson, firstName: "=1+1", lastName: "@SUM(A1)", scoutName: "+49", city: "-foo" },
+      {
+        ...emptyPerson,
+        firstName: "=1+1",
+        lastName: "@SUM(A1)",
+        scoutName: "+49",
+        city: "-foo",
+        addressExtra: "- kein Briefkasten",
+      },
     ]);
     const row = csv.split("\r\n")[1];
     expect(row).toContain("'=1+1");
     expect(row).toContain("'@SUM(A1)");
     expect(row).toContain("'+49");
-    expect(row).toContain("'-foo");
+    // A leading hyphen is not a formula trigger; the value must survive untouched (issue #13).
+    expect(row).toContain(";-foo;");
+    expect(row).not.toContain("'-foo");
+    expect(row).toContain("- kein Briefkasten");
+    expect(row).not.toContain("'- kein Briefkasten");
     expect(row).not.toMatch(/(^|;)=/);
   });
 });

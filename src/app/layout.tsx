@@ -1,15 +1,29 @@
 import type { Metadata } from "next";
-import { Fira_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const firaSans = Fira_Sans({
+// Fira Sans is vendored (see ./fonts, OFL.txt alongside) instead of pulled from
+// Google. `next/font/google` self-hosts the files but downloads them from
+// fonts.gstatic.com at *build* time, which would make the Docker build depend on
+// reaching Google. These are the same latin-subset woff2 faces, checked in.
+const firaSans = localFont({
   variable: "--font-fira-sans",
-  weight: ["400", "500", "600", "700"],
-  subsets: ["latin"],
+  display: "swap",
+  src: [
+    { path: "./fonts/FiraSans-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/FiraSans-Italic.woff2", weight: "400", style: "italic" },
+    { path: "./fonts/FiraSans-Medium.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/FiraSans-SemiBold.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/FiraSans-Bold.woff2", weight: "700", style: "normal" },
+  ],
 });
 
 export const metadata: Metadata = {
-  title: "Anschriftenverzeichnis — Deutscher Pfadfinderbund",
+  // Every page exports its own short title; the template appends the app name.
+  title: {
+    default: "Anschriftenverzeichnis — Deutscher Pfadfinderbund",
+    template: "%s — Anschriftenverzeichnis",
+  },
   description: "Bundesanschriftenverzeichnis des Deutschen Pfadfinderbundes",
 };
 

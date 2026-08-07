@@ -1,5 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { Button } from "@/components/ui/button";
 import type { HistoricalAssignment } from "@/db/queries";
 
@@ -24,6 +28,12 @@ export function HistorySection({
   range: (h: HistoricalAssignment) => string;
   busy: boolean;
 }) {
+  // Confirm before the irreversible delete (deleteAssignment fires immediately).
+  const [confirmTarget, setConfirmTarget] = useState<HistoricalAssignment | null>(null);
+  const targetLabel = confirmTarget
+    ? `${confirmTarget.officeName ?? "ohne Amt"} · ${confirmTarget.groupName} · ${range(confirmTarget)}`
+    : "";
+
   return (
     <div className="mt-4 border-t border-line pt-3">
       <button
@@ -56,7 +66,7 @@ export function HistorySection({
                   <span className="text-ink-faint"> · {h.groupName} · </span>
                   <span className="tabular-nums">{range(h)}</span>
                 </span>
-                <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/hist:opacity-100">
+                <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/hist:opacity-100 group-focus-within/hist:opacity-100">
                   <Button
                     type="button"
                     variant="ghost"
@@ -74,7 +84,7 @@ export function HistorySection({
                     aria-label="Eintrag löschen"
                     disabled={busy}
                     className="text-ink-faint hover:text-crit"
-                    onClick={() => onDelete(h.id)}
+                    onClick={() => setConfirmTarget(h)}
                   >
                     <Trash2 className="size-3.5" />
                   </Button>
@@ -93,6 +103,24 @@ export function HistorySection({
           </button>
         </div>
       ) : null}
+
+      <ConfirmDeleteDialog
+        open={confirmTarget != null}
+        onOpenChange={(o) => !o && setConfirmTarget(null)}
+        title="Früheres Amt löschen?"
+        description={
+          <>
+            Der Eintrag „{targetLabel}“ wird endgültig aus der Historie entfernt. Diese Aktion
+            kann nicht rückgängig gemacht werden.
+          </>
+        }
+        confirmLabel="Endgültig löschen"
+        pending={busy}
+        onConfirm={() => {
+          if (confirmTarget) onDelete(confirmTarget.id);
+          setConfirmTarget(null);
+        }}
+      />
     </div>
   );
 }

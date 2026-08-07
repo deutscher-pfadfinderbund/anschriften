@@ -85,4 +85,19 @@ describe("orderGroups", () => {
     expect(names(ordered)).toEqual(["Waise", "Wurzel", "Kind"]);
     expect(depths(ordered)).toEqual([0, 0, 1]);
   });
+
+  it("never drops groups caught in a parent cycle (emits them defensively)", () => {
+    // A ↔ B point at each other; C is a real root. Without the guard the cycle would
+    // both vanish from every view and loop forever. All three must still be present.
+    const ordered = orderGroups([
+      g({ id: 1, name: "Alpha", section: "bund", sortKey: 0, parentId: 2 }),
+      g({ id: 2, name: "Beta", section: "bund", sortKey: 0, parentId: 1 }),
+      g({ id: 3, name: "Wurzel", section: "bund", sortKey: 0 }),
+    ]);
+    // The real root comes out first; the cycle members are recovered as top-level roots,
+    // each group appearing exactly once.
+    expect(names(ordered).sort()).toEqual(["Alpha", "Beta", "Wurzel"]);
+    expect(ordered.length).toBe(3);
+    expect(names(ordered)[0]).toBe("Wurzel");
+  });
 });

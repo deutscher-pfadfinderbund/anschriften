@@ -51,11 +51,14 @@ export function ComposeMailDialog({
 }) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  // Second-stage guard before the irreversible send.
+  const [confirming, setConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function reset() {
     setSubject("");
     setBody("");
+    setConfirming(false);
   }
 
   function submit() {
@@ -141,14 +144,39 @@ export function ComposeMailDialog({
             )}
           </p>
         </div>
+        {confirming ? (
+          <div className="rounded-md border border-line bg-surface-2 px-3 py-2 text-[13px] text-ink">
+            Wirklich an{" "}
+            <span className="font-medium">
+              {recipientCount} {recipientCount === 1 ? "Adresse" : "Adressen"}
+            </span>{" "}
+            senden? Der Versand kann nicht rückgängig gemacht werden.
+          </div>
+        ) : null}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Abbrechen
-          </Button>
-          <Button onClick={submit} disabled={!canSend}>
-            <Send className="size-4" />
-            {isPending ? "Wird gesendet …" : "Senden"}
-          </Button>
+          {confirming ? (
+            <>
+              <Button variant="outline" onClick={() => setConfirming(false)} disabled={isPending}>
+                Zurück
+              </Button>
+              <Button onClick={submit} disabled={!canSend}>
+                <Send className="size-4" />
+                {isPending
+                  ? "Wird gesendet …"
+                  : `Jetzt an ${recipientCount} ${recipientCount === 1 ? "Adresse" : "Adressen"} senden`}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+                Abbrechen
+              </Button>
+              <Button onClick={() => setConfirming(true)} disabled={!canSend}>
+                <Send className="size-4" />
+                Senden …
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

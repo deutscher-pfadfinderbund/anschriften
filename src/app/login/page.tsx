@@ -1,4 +1,8 @@
+import type { Metadata } from "next";
+
 import { LoginButton } from "./login-button";
+
+export const metadata: Metadata = { title: "Anmelden" };
 
 export default async function LoginPage({
   searchParams,
@@ -11,6 +15,9 @@ export default async function LoginPage({
     <main className="flex flex-1 items-center justify-center p-6">
       <div className="w-full max-w-sm rounded-xl border border-line bg-surface p-8 shadow-sm">
         <div className="mb-8 text-center">
+          {/* Same Raute as the sidebar wordmark and the favicon — the only mark
+              this product has, so the first screen carries it too. */}
+          <span aria-hidden className="mx-auto mb-4 block size-[11px] rotate-45 bg-fir" />
           <p className="text-[11px] uppercase tracking-widest text-ink-faint">
             Deutscher Pfadfinderbund
           </p>
