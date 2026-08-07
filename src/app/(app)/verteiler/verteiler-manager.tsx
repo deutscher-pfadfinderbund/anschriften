@@ -535,7 +535,7 @@ export function VerteilerManager({
                         type="button"
                         onClick={() => setSeparator("; ")}
                         className={cn(
-                          "relative rounded-[5px] px-2 py-0.5 outline-none transition-colors",
+                          "pointer-coarse:relative rounded-[5px] px-2 py-0.5 outline-none transition-colors",
                           "focus-visible:ring-2 focus-visible:ring-ring",
                           // ~20px tall; the stretched ::after raises the tap band to
                           // ~36px on touch. No x-inset — the two toggles sit flush
@@ -554,7 +554,7 @@ export function VerteilerManager({
                         type="button"
                         onClick={() => setSeparator(", ")}
                         className={cn(
-                          "relative rounded-[5px] px-2 py-0.5 outline-none transition-colors",
+                          "pointer-coarse:relative rounded-[5px] px-2 py-0.5 outline-none transition-colors",
                           "focus-visible:ring-2 focus-visible:ring-ring",
                           SEPARATOR_TOUCH_HIT,
                           separator === ", "
