@@ -552,7 +552,8 @@ export function PersonForm({
                   <Input id="f-zusatz" value={addressExtra} onChange={(e) => setAddressExtra(e.target.value)} placeholder="c/o, Hinterhaus …" />
                 </Field>
               </div>
-              <div className="mb-3 grid grid-cols-[110px_1fr] gap-3">
+              {/* Narrower PLZ track + tighter gap on phones; unchanged from sm: up. */}
+              <div className="mb-3 grid grid-cols-[84px_1fr] gap-2 sm:grid-cols-[110px_1fr] sm:gap-3">
                 <Field label="PLZ" htmlFor="f-plz" error={errors.postalCode}>
                   <Input
                     id="f-plz"
@@ -579,9 +580,14 @@ export function PersonForm({
               <FormLabel>Telefon</FormLabel>
               <div className="flex flex-col gap-2">
                 {phones.map((p) => (
-                  <div key={p.key} className="grid grid-cols-[130px_1fr_auto] items-center gap-2">
+                  /* Phones: label select stacked above the number below sm — the
+                     three-track row leaves the number ~130px on a 390px screen. */
+                  <div
+                    key={p.key}
+                    className="grid grid-cols-[1fr_auto] items-center gap-2 sm:grid-cols-[130px_1fr_auto]"
+                  >
                     <Select value={p.label} onValueChange={(v) => updatePhone(p.key, { label: v })}>
-                      <SelectTrigger className="w-full" aria-label="Art der Nummer">
+                      <SelectTrigger className="col-span-2 w-full sm:col-span-1" aria-label="Art der Nummer">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -630,7 +636,12 @@ export function PersonForm({
                   const isDup = duplicateKeys.has(a.key);
                   return (
                     <div key={a.key}>
-                      <div className="grid grid-cols-[1fr_1fr_118px_118px_auto] items-end gap-2.5">
+                      {/* Below sm the five tracks (2 × 118px + gaps + two icon
+                          buttons) no longer fit a phone, so the row restacks: one
+                          column, the two dates side by side, actions trailing. From
+                          sm: up `contents` dissolves the date wrapper and the
+                          original five-track grid is back unchanged. */}
+                      <div className="grid grid-cols-1 items-end gap-2.5 sm:grid-cols-[1fr_1fr_118px_118px_auto]">
                         <Field label="Amt">
                           <Combobox
                             aria-label="Amt"
@@ -655,25 +666,27 @@ export function PersonForm({
                             emptyText="Keine Gliederung gefunden."
                           />
                         </Field>
-                        <Field label="seit">
-                          <Input
-                            type="date"
-                            aria-label="Amt seit"
-                            value={a.startDate}
-                            onChange={(e) => updateAssignment(a.key, { startDate: e.target.value })}
-                          />
-                        </Field>
-                        {/* Short label so all four captions stay single-line and the
-                            controls line up; the panel hint explains what „bis“ does. */}
-                        <Field label="bis">
-                          <Input
-                            type="date"
-                            aria-label="Amt bis"
-                            value={a.endDate}
-                            onChange={(e) => updateAssignment(a.key, { endDate: e.target.value })}
-                          />
-                        </Field>
-                        <div className="flex items-center">
+                        <div className="grid grid-cols-2 items-end gap-2.5 sm:contents">
+                          <Field label="seit">
+                            <Input
+                              type="date"
+                              aria-label="Amt seit"
+                              value={a.startDate}
+                              onChange={(e) => updateAssignment(a.key, { startDate: e.target.value })}
+                            />
+                          </Field>
+                          {/* Short label so all four captions stay single-line and the
+                              controls line up; the panel hint explains what „bis“ does. */}
+                          <Field label="bis">
+                            <Input
+                              type="date"
+                              aria-label="Amt bis"
+                              value={a.endDate}
+                              onChange={(e) => updateAssignment(a.key, { endDate: e.target.value })}
+                            />
+                          </Field>
+                        </div>
+                        <div className="flex items-center justify-end sm:justify-start">
                           {a.id != null ? (
                             <Button
                               type="button"

@@ -192,7 +192,9 @@ export function GliederungenManager({
                       ) : null}
                       <span>{SECTION_LABELS[group.section] ?? group.section}</span>
                     </span>
-                    <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+                    {/* Always visible on touch (no :hover, and tapping a plain row
+                        focuses nothing) — hover-reveal only from sm: up. */}
+                    <span className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100 sm:group-focus-within/row:opacity-100">
                       <Button variant="ghost" size="icon-xs" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
                         <Pencil className="size-3.5" />
                       </Button>

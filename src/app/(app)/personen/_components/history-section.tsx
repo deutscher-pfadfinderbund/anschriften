@@ -66,7 +66,9 @@ export function HistorySection({
                   <span className="text-ink-faint"> · {h.groupName} · </span>
                   <span className="tabular-nums">{range(h)}</span>
                 </span>
-                <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/hist:opacity-100 group-focus-within/hist:opacity-100">
+                {/* Always visible on touch (no :hover, and tapping a plain row
+                    focuses nothing) — hover-reveal only from sm: up. */}
+                <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/hist:opacity-100 sm:group-focus-within/hist:opacity-100">
                   <Button
                     type="button"
                     variant="ghost"

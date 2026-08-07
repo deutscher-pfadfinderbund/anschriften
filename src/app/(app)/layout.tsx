@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Toaster } from "@/components/ui/sonner";
 import { auth } from "@/lib/auth";
 
+import { MobileNav } from "./_components/mobile-nav";
 import { Sidebar } from "./_components/sidebar";
 
 // Authoritative auth gate for the whole protected area. proxy.ts only does an
@@ -18,7 +19,10 @@ export default async function AppLayout({
   const userName = session.user.name?.trim() || session.user.email || "Angemeldet";
 
   return (
-    <div className="flex min-h-screen">
+    // Below `lg` the top bar stacks above the content; from `lg` up the rail
+    // sits beside it.
+    <div className="flex min-h-screen flex-col lg:flex-row">
+      <MobileNav userName={userName} />
       <Sidebar userName={userName} />
       <div className="flex min-w-0 flex-1 flex-col">{children}</div>
       <Toaster />

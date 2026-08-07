@@ -34,12 +34,36 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function NavItem({ entry, active }: { entry: NavEntry; active: boolean }) {
+/** Fir lozenge + app name. Shared by the sidebar header and the mobile top bar. */
+export function Wordmark({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center font-display font-semibold leading-tight text-ink",
+        className,
+      )}
+    >
+      <span className="mr-[7px] inline-block size-[9px] -translate-y-px rotate-45 bg-fir" />
+      Anschriftenverzeichnis
+    </div>
+  );
+}
+
+function NavItem({
+  entry,
+  active,
+  onNavigate,
+}: {
+  entry: NavEntry;
+  active: boolean;
+  onNavigate?: () => void;
+}) {
   const Icon = entry.icon;
   return (
     <Link
       href={entry.href}
       aria-current={active ? "page" : undefined}
+      onClick={onNavigate}
       className={cn(
         // pl-2 plus the 2px marker border keeps the label on the same x as px-2.5.
         "flex w-full items-center gap-2.5 rounded-md border-l-2 py-2 pr-2.5 pl-2 text-[13.5px] transition-colors",
@@ -56,32 +80,51 @@ function NavItem({ entry, active }: { entry: NavEntry; active: boolean }) {
   );
 }
 
-export function Sidebar({ userName }: { userName: string }) {
+/**
+ * Wordmark + navigation + user footer. Lives here exactly once and is rendered
+ * both by the desktop <aside> below and by the mobile drawer (mobile-nav.tsx),
+ * so both share the same entries and the same active-state language.
+ * `onNavigate` lets the drawer close itself when a link is tapped.
+ */
+export function SidebarContent({
+  userName,
+  onNavigate,
+}: {
+  userName: string;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
-    <aside className="sticky top-0 flex h-screen w-58 shrink-0 flex-col border-r border-line bg-surface-2">
+    <>
       <div className="border-b border-line px-5 pt-[22px] pb-[18px]">
         <div className="mb-1 text-[10.5px] uppercase tracking-[0.14em] text-ink-faint">
           Deutscher Pfadfinderbund
         </div>
-        <div className="flex items-center font-display text-[19px] font-semibold leading-tight text-ink">
-          <span className="mr-[7px] inline-block size-[9px] -translate-y-px rotate-45 bg-fir" />
-          Anschriftenverzeichnis
-        </div>
+        <Wordmark className="text-[19px]" />
       </div>
 
-      <nav className="flex flex-1 flex-col gap-0.5 px-2.5 py-3.5">
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 py-3.5">
         {MAIN_NAV.map((entry) => (
-          <NavItem key={entry.href} entry={entry} active={isActive(entry.href)} />
+          <NavItem
+            key={entry.href}
+            entry={entry}
+            active={isActive(entry.href)}
+            onNavigate={onNavigate}
+          />
         ))}
         <div className="px-2.5 pt-3.5 pb-1.5 text-[10.5px] uppercase tracking-[0.12em] text-ink-faint">
           Stammdaten
         </div>
         {MASTER_NAV.map((entry) => (
-          <NavItem key={entry.href} entry={entry} active={isActive(entry.href)} />
+          <NavItem
+            key={entry.href}
+            entry={entry}
+            active={isActive(entry.href)}
+            onNavigate={onNavigate}
+          />
         ))}
       </nav>
 
@@ -104,6 +147,15 @@ export function Sidebar({ userName }: { userName: string }) {
           </button>
         </form>
       </div>
+    </>
+  );
+}
+
+/** Desktop rail. Below `lg` the same content is reachable through the drawer. */
+export function Sidebar({ userName }: { userName: string }) {
+  return (
+    <aside className="sticky top-0 hidden h-screen w-58 shrink-0 flex-col border-r border-line bg-surface-2 lg:flex">
+      <SidebarContent userName={userName} />
     </aside>
   );
 }

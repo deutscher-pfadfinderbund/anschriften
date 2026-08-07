@@ -210,7 +210,9 @@ export function StammdatenManager({
                           ))}
                         </span>
                       ) : null}
-                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+                      {/* Always visible on touch (no :hover, and tapping a plain row
+                          focuses nothing) — hover-reveal only from sm: up. */}
+                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100 sm:group-focus-within/row:opacity-100">
                         <Button
                           variant="ghost"
                           size="icon-xs"
@@ -277,7 +279,9 @@ export function StammdatenManager({
                     <div className="flex max-w-3xl items-center gap-2.5 px-[18px] py-1.5 text-[13.5px]">
                       <MonoBadge>{r.sortOrder}</MonoBadge>
                       <span className="truncate text-ink">{r.name}</span>
-                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+                      {/* Always visible on touch (no :hover, and tapping a plain row
+                          focuses nothing) — hover-reveal only from sm: up. */}
+                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover/row:opacity-100 sm:group-focus-within/row:opacity-100">
                         <Button
                           variant="ghost"
                           size="icon-xs"

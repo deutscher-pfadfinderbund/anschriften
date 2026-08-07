@@ -736,12 +736,14 @@ export function VerteilerManager({
                             <span className="text-ink-faint">— ohne E-Mail</span>
                           )}
                         </div>
+                        {/* Always visible on touch (no :hover, and tapping a plain row
+                            focuses nothing) — hover-reveal only from sm: up. */}
                         {m.manual ? (
                           <Button
                             variant="ghost"
                             size="icon-sm"
                             aria-label={`${formatName(m)} entfernen`}
-                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100"
+                            className="shrink-0 text-ink-faint opacity-100 transition-opacity hover:text-crit sm:opacity-0 sm:group-hover/row:opacity-100 sm:group-focus-within/row:opacity-100 focus-visible:opacity-100"
                             disabled={isPending}
                             onClick={() => handleRemove(m.personId)}
                           >
