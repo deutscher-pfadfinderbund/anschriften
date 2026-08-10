@@ -32,6 +32,7 @@ import {
 import type { GroupRow } from "@/db/queries";
 import { SECTION_LABELS, SECTION_ORDER } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
+import { HOVER_REVEAL, cn } from "@/lib/utils";
 
 export type GroupUsage = Record<number, { assignments: number; children: number }>;
 
@@ -174,14 +175,18 @@ export function GliederungenManager({
               {ordered.map(({ group, depth }) => (
                 <li key={group.id} className="group/row hover:bg-sel">
                   {/* max-w keeps name and labels in one readable band instead of
-                      stretching them to opposite ends of a wide viewport. */}
+                      stretching them to opposite ends of a wide viewport. Below `sm`
+                      the row wraps and Art/Bereich move to a second line, so the
+                      Gliederungs-Name is readable in full instead of „Gau F…“. */}
                   <div
-                    className="flex max-w-3xl items-center gap-2 px-[18px] py-1.5 text-[13.5px]"
+                    className="flex max-w-3xl flex-wrap items-center gap-2 px-[18px] py-1.5 text-[13.5px] sm:flex-nowrap"
                     style={{ paddingLeft: `${18 + depth * 16}px` }}
                   >
                     <MonoBadge>{group.sortKey}</MonoBadge>
-                    <span className="truncate text-ink">{group.name}</span>
-                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-faint">
+                    {/* flex-1 below sm (fills the line and wraps the text),
+                        the original shrink-and-truncate from sm: up. */}
+                    <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{group.name}</span>
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-faint max-sm:order-last max-sm:w-full">
                       {group.kind ? (
                         <>
                           <span>{group.kind}</span>
@@ -192,7 +197,7 @@ export function GliederungenManager({
                       ) : null}
                       <span>{SECTION_LABELS[group.section] ?? group.section}</span>
                     </span>
-                    <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 group-focus-within/row:opacity-100">
+                    <span className={cn("flex shrink-0 items-center gap-0.5", HOVER_REVEAL)}>
                       <Button variant="ghost" size="icon-xs" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
                         <Pencil className="size-3.5" />
                       </Button>

@@ -66,7 +66,7 @@ import type {
 } from "@/db/queries";
 import { buildBcc, type BccSeparator } from "@/lib/export";
 import { formatDateTime, formatName } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { HOVER_REVEAL, TOUCH_HIT_Y, cn } from "@/lib/utils";
 
 type ListFormState = { id: number | null; name: string; description: string };
 
@@ -514,7 +514,9 @@ export function VerteilerManager({
                     </p>
                   ) : null}
 
-                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  {/* Extra bottom margin on touch so the toggles' stretched tap
+                      bands (below) stay clear of the Textarea. */}
+                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 pointer-coarse:mb-3">
                     <Label className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint">
                       <Mail className="size-3.5" />
                       BCC-Vorschau
@@ -526,6 +528,7 @@ export function VerteilerManager({
                         className={cn(
                           "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
                           "focus-visible:ring-2 focus-visible:ring-ring",
+                          TOUCH_HIT_Y,
                           // Same "active" language as the nav and the tabs:
                           // neutral surface, fir text — never a filled pill.
                           separator === "; "
@@ -541,6 +544,7 @@ export function VerteilerManager({
                         className={cn(
                           "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
                           "focus-visible:ring-2 focus-visible:ring-ring",
+                          TOUCH_HIT_Y,
                           separator === ", "
                             ? "bg-surface-2 font-medium text-fir"
                             : "text-ink-soft hover:text-ink",
@@ -741,7 +745,7 @@ export function VerteilerManager({
                             variant="ghost"
                             size="icon-sm"
                             aria-label={`${formatName(m)} entfernen`}
-                            className="shrink-0 text-ink-faint opacity-0 transition-opacity hover:text-crit group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100"
+                            className={cn("shrink-0 text-ink-faint hover:text-crit", HOVER_REVEAL)}
                             disabled={isPending}
                             onClick={() => handleRemove(m.personId)}
                           >
@@ -877,7 +881,9 @@ export function VerteilerManager({
               Anschriften suchen und auswählen. Bereits enthaltene Mitglieder werden ausgeblendet.
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-md border border-line">
+          {/* min-w-0: grid items default to min-width:auto, so without it this
+              box would again be sized by the member list's min-content. */}
+          <div className="min-w-0 rounded-md border border-line">
             <MultiSelectList
               options={addOptions}
               selected={addSelection}

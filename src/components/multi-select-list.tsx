@@ -54,8 +54,16 @@ export function MultiSelectList({
             data-checked={selected.has(o.value)}
             onSelect={() => onToggle(o.value)}
           >
-            <span className="text-ink">{o.label}</span>
-            {o.hint ? <span className="text-ink-faint">{o.hint}</span> : null}
+            {/* Name and hint share one shrinkable box. Without it the row's
+                min-content is "name + e-mail on one line" (~373px), which no
+                amount of dialog sizing can compress — the panel then overflowed
+                its own 358px box on a 390px phone. `min-w-0 flex-1` drops the
+                row's min-content to the checkmark, and below `sm` the hint moves
+                under the name instead of competing with it for the same line. */}
+            <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-2">
+              <span className="truncate text-ink">{o.label}</span>
+              {o.hint ? <span className="truncate text-ink-faint">{o.hint}</span> : null}
+            </span>
           </CommandItem>
         ))}
       </CommandList>
