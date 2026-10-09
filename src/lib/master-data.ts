@@ -3,7 +3,7 @@
 // actions stay authoritative: `orderNumber`/`nameField` in src/lib/action-helpers.ts and
 // the UNIQUE index on `name`.
 
-/** Largest Reihenfolge the server accepts (mirrors `orderNumber`). */
+/** Largest Reihenfolge: the one limit of the dialogs and of the server's `orderNumber`. */
 export const ORDER_MAX = 99_999;
 
 /** Message for a Reihenfolge that `parseOrder` rejects. */

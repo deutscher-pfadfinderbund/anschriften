@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import { ORDER_MAX } from "@/lib/master-data";
 
 // Shared helpers for the Server Actions in src/actions/*. Every action follows the same
 // shape, so the pieces live here instead of being copied per file:
@@ -65,16 +66,16 @@ export const nameField = z
 const WHOLE_NUMBER = "Bitte eine ganze Zahl eingeben.";
 
 /**
- * A non-negative whole number for the ordering fields (Rang, Sortierung,
- * Sortierschlüssel) with German messages, capped well inside Postgres' `integer` — an
- * out-of-range value would otherwise reach the database and crash the action.
+ * The Reihenfolge of a master-data row (Amt, Stand, Gliederung): a whole number from 0
+ * to ORDER_MAX with German messages. The cap sits well inside Postgres' `integer`, so an
+ * out-of-range value never reaches the database and crashes the action.
  */
 export function orderNumber(label: string) {
   return z
     .number({ error: WHOLE_NUMBER })
     .int(WHOLE_NUMBER)
     .min(0, `${label} darf nicht negativ sein.`)
-    .max(99_999, `${label} ist zu groß (höchstens 99999).`);
+    .max(ORDER_MAX, `${label} ist zu groß (höchstens ${ORDER_MAX}).`);
 }
 
 /**

@@ -14,7 +14,7 @@ import type { ListRef, OfficeRow, RankRow } from "@/db/queries";
 import { isDuplicateName, nextOrder, orderError, parseOrder } from "@/lib/master-data";
 import { RANK_UNRANKED } from "@/lib/rank";
 
-import { EntryDialog, EntryList, EntryRow, TextField, useEntryDialog } from "./_components/master-data-ui";
+import { EntryDialog, EntryList, EntryRow, TextField, useEntryDialog } from "../_components/master-data-ui";
 
 type Kind = "office" | "rank";
 

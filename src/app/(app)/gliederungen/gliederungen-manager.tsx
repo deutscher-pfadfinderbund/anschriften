@@ -4,13 +4,6 @@ import { useMemo } from "react";
 import { Building2, Plus } from "lucide-react";
 
 import { deleteGroup, saveGroup } from "@/actions/groups";
-import {
-  EntryDialog,
-  EntryList,
-  EntryRow,
-  TextField,
-  useEntryDialog,
-} from "@/app/(app)/stammdaten/_components/master-data-ui";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { EmptyState } from "@/components/empty-state";
 import { FormLabel } from "@/components/form-label";
@@ -21,6 +14,8 @@ import type { GroupRow } from "@/db/queries";
 import { descendantIds, orderGroups } from "@/lib/groups";
 import { isDuplicateName, nextOrder, orderError, parseOrder } from "@/lib/master-data";
 import { SECTIONS, SECTION_LABELS, type Section } from "@/lib/sections";
+
+import { EntryDialog, EntryList, EntryRow, TextField, useEntryDialog } from "../_components/master-data-ui";
 
 const PARENT_NONE = "none";
 

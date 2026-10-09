@@ -1,5 +1,5 @@
 /**
- * Small neutral box for numeric keys (Amts-Rang, Sortierung, Sortierschlüssel).
+ * Small neutral box for a master-data row's Reihenfolge (Ämter, Stände, Gliederungen).
  * Fixed width and tabular figures, so a column of them lines up.
  */
 export function NumberBadge({

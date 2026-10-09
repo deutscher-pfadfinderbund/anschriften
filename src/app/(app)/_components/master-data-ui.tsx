@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { ActionResult } from "@/lib/action-helpers";
+import { ORDER_MAX } from "@/lib/master-data";
 import { cn } from "@/lib/utils";
 
 /**
@@ -348,8 +349,8 @@ export function TextField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        // The server's limits: 200 characters for names and the Art, 5 digits (ORDER_MAX).
-        maxLength={numeric ? 5 : 200}
+        // The server's limits: 200 characters for names and the Art, ORDER_MAX's digits.
+        maxLength={numeric ? String(ORDER_MAX).length : 200}
         inputMode={numeric ? "numeric" : undefined}
         autoComplete="off"
         aria-invalid={error ? true : undefined}
