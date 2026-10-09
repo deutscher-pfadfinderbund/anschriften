@@ -7,7 +7,7 @@
  * and the alphabetical name register. `buildProfileData` is a pure function over plain data;
  * `buildData` is the thin async wrapper that loads the rows from Postgres.
  *
- * Fidelity notes vs. the legacy LaTeX/Java generator (see PR text):
+ * Fidelity notes vs. the legacy LaTeX/Java generator:
  *  - Register sort key is Fahrtenname else Vorname (as the confidential text and IndexWorker.java
  *    specify), umlauts folded ae/oe/ue.
  *  - Section order in `komplett` follows `sort_key`; the old template hard-coded Mädchenbund

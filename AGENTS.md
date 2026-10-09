@@ -25,7 +25,7 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 - Postgres 17 + Drizzle ORM. Schema: `src/db/schema.ts`, Migrationen eingecheckt in `drizzle/`
 - Tailwind 4 (Tokens via `@theme` in `globals.css`), shadcn/ui
 - PDF: Typst (Issue #5) — Fachlogik in TS (`src/pdf/build-data.ts`), Template dumm halten
-- Tests: vitest, nur für reine Logik (`src/lib`, `src/pdf/build-data.ts`, `scripts/import-parse.ts`). Keine Test-Pyramide
+- Tests: vitest, nur für reine Logik ohne React/DB (`src/lib`, die reinen Dateien neben Komponenten wie `directory-filter.ts`/`form-values.ts`, `src/pdf/build-data.ts`, `scripts/import-parse.ts`). Keine Test-Pyramide
 
 ## Architektur-Konventionen
 

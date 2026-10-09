@@ -2,7 +2,7 @@
 // configured; otherwise `isMailEnabled()` is false, the UI hides all mail actions
 // and the server action refuses. Provider-agnostic: a plain SMTP transport via
 // nodemailer, so switching provider (own server, SES, Postmark, Brevo, Mailjet …)
-// is a `.env` change with no code change. Plaintext only in v1 — no HTML, no
+// is a `.env` change with no code change. Plaintext only — no HTML, no
 // attachments (YAGNI; keeps the abuse surface small).
 import nodemailer from "nodemailer";
 
@@ -12,7 +12,7 @@ import { mailLog } from "@/db/schema";
 /**
  * True when the mail module is configured (SMTP host + From address present).
  * Read at call time — never captured at import — so restarting the server without
- * the SMTP vars really disables the module (see abnahme step 1).
+ * the SMTP vars really disables the module.
  */
 export function isMailEnabled(): boolean {
   return Boolean(process.env.SMTP_HOST?.trim() && process.env.MAIL_FROM?.trim());
