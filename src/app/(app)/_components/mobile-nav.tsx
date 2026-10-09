@@ -17,13 +17,14 @@ import { SidebarContent, Wordmark } from "./sidebar";
  * hamburger opens the same navigation as a left-anchored, full-height drawer —
  * built from the shared Dialog primitive with call-site class overrides rather
  * than a second primitive. Escape and a tap on the overlay close it; tapping a
- * nav link closes it too, so the target page is not left covered.
+ * nav link closes it too, so the target page is not left covered. Its height is
+ * --top-bar (globals.css), which toasts and sticky elements keep clear of.
  */
 export function MobileNav({ userName }: { userName: string }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface-2 pr-1.5 pl-4 lg:hidden">
+    <header className="sticky top-0 z-30 flex h-(--top-bar) shrink-0 items-center justify-between gap-3 border-b border-line bg-surface-2 pr-1.5 pl-4 lg:hidden">
       <Wordmark />
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>

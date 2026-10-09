@@ -38,10 +38,10 @@ function subscribeDesktop(onChange: () => void) {
 }
 
 /**
- * Header cells stick below the mobile top bar (h-14, below lg) or the viewport top.
+ * Header cells stick below the mobile top bar (--top-bar, 0 from lg up).
  * The bottom line is an inset shadow: a collapsed border would stay behind when stuck.
  */
-const STICKY_HEAD = "sticky top-14 z-10 bg-surface-2 shadow-[inset_0_-1px_0_var(--line-strong)] lg:top-0";
+const STICKY_HEAD = "sticky top-(--top-bar) z-10 bg-surface-2 shadow-[inset_0_-1px_0_var(--line-strong)]";
 
 /**
  * The focused control is about to unmount (a reset or clear button): move keyboard focus

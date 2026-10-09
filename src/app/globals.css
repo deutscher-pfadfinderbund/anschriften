@@ -114,6 +114,16 @@
   --border: var(--line);
   --ring: var(--fir);
   --radius: 0.5rem;
+
+  /* Height of the sticky mobile top bar (MobileNav), shown below lg only. Toasts and
+   * the directory's sticky table head keep clear of it. */
+  --top-bar: 3.5rem;
+}
+
+@media (width >= 64rem) {
+  :root {
+    --top-bar: 0px;
+  }
 }
 
 :root[data-theme="light"] {
@@ -246,6 +256,58 @@
   }
   input[type="search"]::-webkit-search-cancel-button:hover {
     background-color: var(--ink);
+  }
+}
+
+/*
+ * Toasts (sonner). Sonner injects its own unlayered stylesheet at runtime, after this
+ * file, and its buttons are a dark pill. These rules repeat its selector prefix plus
+ * the toaster's theme attribute, so they outrank it (its dark-theme rules included):
+ * the action button looks like our outline Button (size sm), the cancel button like a
+ * ghost one, and description and close button use the ink tokens in both themes.
+ */
+[data-sonner-toaster][data-sonner-theme] [data-sonner-toast][data-styled="true"] {
+  & [data-button] {
+    height: 1.75rem;
+    padding-inline: 0.625rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    font-size: var(--text-caption);
+    font-weight: 500;
+    transition: background-color 150ms, color 150ms;
+  }
+  & [data-button][data-action] {
+    border-color: var(--line-strong);
+    background: var(--surface);
+    color: var(--ink);
+  }
+  & [data-button][data-cancel] {
+    background: transparent;
+    color: var(--ink-soft);
+  }
+  & [data-button]:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  /* Sonner swaps the focus outline for a faint shadow; keep the app-wide indicator. */
+  & [data-button]:focus-visible,
+  & [data-close-button]:focus-visible {
+    box-shadow: none;
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  & [data-description] {
+    color: var(--ink-soft);
+  }
+  & [data-close-button] {
+    border-color: var(--line-strong);
+    background: var(--surface);
+    color: var(--ink-soft);
+  }
+  & [data-close-button]:hover {
+    border-color: var(--line-strong);
+    background: var(--hover);
+    color: var(--ink);
   }
 }
 
