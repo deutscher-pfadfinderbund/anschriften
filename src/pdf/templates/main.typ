@@ -8,6 +8,10 @@
 //
 // Compile (see src/pdf/compile.ts for the production call):
 //   typst compile --root <dir> --font-path src/pdf/fonts main.typ out.pdf
+//
+// Typst gotchas: page numbers come from `context` + `query(label)` (the old
+// `locate(loc => …)` API is gone), and `pagebreak()` is not allowed inside `columns(…)`,
+// so `render-section` breaks the page before it opens its two-column block.
 
 #let data = json("data.json")
 

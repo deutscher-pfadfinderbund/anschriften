@@ -6,9 +6,9 @@
  * from `PATH` (local: Homebrew; container: installed in the image) — never hard-coded. The
  * temp dir is always removed afterwards.
  *
- * Deployment note (M6): the template/assets/fonts under `src/pdf` must be present next to the
- * running server; they are resolved relative to `process.cwd()`, or from `PDF_ASSETS_DIR` when
- * that env var is set (the container points it at `/app/src/pdf`).
+ * Deployment note: the template/assets/fonts under `src/pdf` must be present next to the
+ * running server; they are resolved relative to `process.cwd()` (`/app` in the container,
+ * where the Dockerfile copies them).
  */
 import { execFile } from "node:child_process";
 import { promises as fs } from "node:fs";
@@ -19,7 +19,7 @@ import type { ProfileData } from "./build-data";
 
 const execFileAsync = promisify(execFile);
 
-const PDF_DIR = process.env.PDF_ASSETS_DIR ?? path.join(process.cwd(), "src", "pdf");
+const PDF_DIR = path.join(process.cwd(), "src", "pdf");
 const TEMPLATE = path.join(PDF_DIR, "templates", "main.typ");
 const ASSETS_DIR = path.join(PDF_DIR, "assets");
 const FONT_DIR = path.join(PDF_DIR, "fonts");
@@ -42,7 +42,7 @@ export async function compilePdf(data: ProfileData): Promise<Buffer> {
         "--font-path",
         FONT_DIR,
         // Render with the bundled fonts only, so a dev box with a fuller Fira Sans installed
-        // produces the same output as the container (issue #17, docs/typst-spike.md).
+        // produces the same output as the container (issue #17).
         "--ignore-system-fonts",
         "main.typ",
         "out.pdf",

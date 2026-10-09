@@ -1,7 +1,7 @@
 // Data model for the Bundesanschriftenverzeichnis (M2 / issue #2).
 // Conventions: integer identity PKs, snake_case columns, timestamptz for audit timestamps.
 // Normalised only where dropdowns, hierarchy or n:m relations require it; `persons` stays flat.
-// better-auth tables live in a separate schema file and are owned by another milestone.
+// better-auth tables live in src/db/auth-schema.ts.
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,

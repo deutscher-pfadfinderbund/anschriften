@@ -31,6 +31,11 @@ Postmark, Brevo …) ist nur eine `.env`-Änderung.
   (`MAIL_BCC_CHUNK_SIZE`, Default 50), `To:` = `MAIL_FROM`. Plaintext, keine
   Anhänge. Jede Sendung wird in `mail_log` protokolliert (Betreff, Datum,
   Empfängerzahl, Status) und im Verteiler unter „Zuletzt versendet" angezeigt.
+  Bricht ein Versand nach einigen Chunks ab, nennen Meldung und Log, wie viele
+  Empfänger die Mail schon erhalten haben — dann nicht noch einmal an alle senden.
+- **Verschlüsselung:** Mit `SMTP_USER` wird STARTTLS erzwungen (Zugangsdaten gehen
+  nie im Klartext raus); Relays ohne Anmeldung (Mailpit, interne Server) gehen auch
+  ohne TLS.
 - **Lokal testen (ohne echten Provider):** [Mailpit](https://mailpit.axllent.org/)
   aus `compose.dev.yml` starten und die Dev-Env auf den SMTP-Sink zeigen lassen:
 

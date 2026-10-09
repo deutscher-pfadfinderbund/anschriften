@@ -512,15 +512,8 @@ async function writeModel(model: Model, databaseUrl: string, overwriteAssignment
 }
 
 async function main() {
-  // Pick up DATABASE_URL from the local env files (tsx does not load them itself).
-  for (const envFile of [".env.local", ".env"]) {
-    try {
-      process.loadEnvFile(envFile);
-    } catch {
-      // file does not exist — fine
-    }
-  }
-
+  // DATABASE_URL comes from the environment; `bun scripts/import-mdb.ts` loads .env.local
+  // and .env from the working directory by itself.
   const args = process.argv.slice(2);
   const dryRun = args.includes("--dry-run");
   const overwriteAssignments = args.includes("--overwrite-assignments");
