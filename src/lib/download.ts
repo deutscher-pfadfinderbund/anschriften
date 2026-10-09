@@ -2,6 +2,7 @@
 // every download button: fetch + blob keeps the user on the page, lets a failure surface as a
 // toast instead of a bare error page, and — crucially — never saves an error or login page
 // under a .pdf/.csv name.
+import { useState } from "react";
 import { toast } from "sonner";
 
 /** The session cookie is gone or invalid: the route answered 401 (or something redirected). */
@@ -46,25 +47,36 @@ export async function downloadFile(url: string, fallbackName: string): Promise<v
   setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
+const DOWNLOADS = {
+  csv: { fallbackName: "anschriften.csv", failure: "CSV-Export fehlgeschlagen." },
+  pdf: { fallbackName: "anschriftenverzeichnis.pdf", failure: "PDF konnte nicht erzeugt werden." },
+} as const;
+
 /**
- * The toast for a failed `downloadFile`: an expired session gets its own message with a
- * "Neu anmelden" action (the generic "bitte versuche es noch einmal" would just fail again);
- * everything else shows `genericMessage`.
+ * A download button: `start(url)` saves the file and toasts the outcome; clicks while
+ * `pending` are ignored. An expired session gets its own toast with "Neu anmelden" (the
+ * generic "bitte versuche es noch einmal" would just fail again).
  */
-export function toastDownloadError(err: unknown, genericMessage: string): void {
-  if (err instanceof SessionExpiredError) {
-    toast.error("Deine Sitzung ist abgelaufen – bitte neu anmelden.", {
-      // Stays until acted on or closed, so keyboard users can reach the action.
-      duration: Infinity,
-      closeButton: true,
-      action: {
-        label: "Neu anmelden",
-        onClick: () => {
-          window.location.href = "/login";
-        },
-      },
-    });
-    return;
+export function useDownload(kind: keyof typeof DOWNLOADS) {
+  const [pending, setPending] = useState(false);
+  async function start(url: string) {
+    if (pending) return;
+    setPending(true);
+    try {
+      await downloadFile(url, DOWNLOADS[kind].fallbackName);
+      toast.success(`${kind.toUpperCase()} heruntergeladen.`);
+    } catch (err) {
+      if (err instanceof SessionExpiredError)
+        toast.error("Deine Sitzung ist abgelaufen – bitte neu anmelden.", {
+          // Stays until acted on or closed, so keyboard users can reach the action.
+          duration: Infinity,
+          closeButton: true,
+          action: { label: "Neu anmelden", onClick: () => window.location.assign("/login") },
+        });
+      else toast.error(`${DOWNLOADS[kind].failure} Bitte versuche es noch einmal.`);
+    } finally {
+      setPending(false);
+    }
   }
-  toast.error(genericMessage);
+  return { pending, start };
 }

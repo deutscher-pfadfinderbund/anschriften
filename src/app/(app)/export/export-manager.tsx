@@ -6,12 +6,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { LoaderCircle } from "lucide-react";
-import { toast } from "sonner";
 
 import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { downloadFile, toastDownloadError } from "@/lib/download";
+import { useDownload } from "@/lib/download";
 import { LINK } from "@/lib/utils";
 
 const PROFILES = [
@@ -51,23 +50,12 @@ export function ExportManager() {
     ranks: false,
     memorial: false,
   });
-  const [pending, setPending] = useState(false);
+  const pdf = useDownload("pdf");
 
-  // Fetch + blob so a Typst failure surfaces as a toast instead of navigating away to a
-  // bare error page, and so double-clicks can't start parallel runs.
-  async function downloadPdf() {
-    if (pending) return;
+  function downloadPdf() {
     const params = new URLSearchParams({ profile });
     for (const { id } of OPTIONS) if (options[id]) params.set(id, "1");
-    setPending(true);
-    try {
-      await downloadFile(`/api/export/pdf?${params}`, "anschriftenverzeichnis.pdf");
-      toast.success("PDF heruntergeladen.");
-    } catch (err) {
-      toastDownloadError(err, "PDF konnte nicht erzeugt werden. Bitte versuche es noch einmal.");
-    } finally {
-      setPending(false);
-    }
+    void pdf.start(`/api/export/pdf?${params}`);
   }
 
   return (
@@ -120,10 +108,10 @@ export function ExportManager() {
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {/* aria-disabled instead of disabled: a disabled button would drop keyboard focus
-            while the PDF is generated. downloadPdf ignores clicks while pending. */}
-        <Button onClick={downloadPdf} aria-disabled={pending} className="aria-disabled:opacity-60">
-          {pending ? <LoaderCircle aria-hidden className="animate-spin" /> : null}
-          {pending ? "PDF wird erzeugt …" : "PDF erzeugen"}
+            while the PDF is generated. pdf.start ignores clicks while pending. */}
+        <Button onClick={downloadPdf} aria-disabled={pdf.pending} className="aria-disabled:opacity-60">
+          {pdf.pending ? <LoaderCircle aria-hidden className="animate-spin" /> : null}
+          {pdf.pending ? "PDF wird erzeugt …" : "PDF erzeugen"}
         </Button>
         <span className="text-caption text-ink-faint">Die Erzeugung kann einige Sekunden dauern.</span>
       </div>

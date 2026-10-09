@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import type { PersonListRow } from "@/db/queries";
 import { callAction } from "@/lib/call-action";
-import { downloadFile, toastDownloadError } from "@/lib/download";
+import { useDownload } from "@/lib/download";
 import { personCount } from "@/lib/format";
 import { LINK, TOUCH_HIT, cn } from "@/lib/utils";
 
@@ -53,9 +53,10 @@ export function SelectionBar({
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
-  const [csvPending, setCsvPending] = useState(false);
+  const csv = useDownload("csv");
 
   const mail = mailSelection(selected);
+  const ids = selected.map((p) => p.id);
 
   async function copyEmails() {
     const note = skippedNote(mail.deceased, mail.bcc.skipped);
@@ -69,18 +70,6 @@ export function SelectionBar({
       toast.success(`${emailAddressCount(mail.bcc.count)} kopiert${note ? ` (${note}).` : "."}`);
     } catch {
       toast.error("Kopieren nicht möglich. Bitte versuche es noch einmal.");
-    }
-  }
-
-  async function downloadCsv() {
-    setCsvPending(true);
-    try {
-      await downloadFile(`/api/export/csv?ids=${selected.map((p) => p.id).join(",")}`, "anschriften.csv");
-      toast.success("CSV heruntergeladen.");
-    } catch (err) {
-      toastDownloadError(err, "CSV-Export fehlgeschlagen. Bitte versuche es noch einmal.");
-    } finally {
-      setCsvPending(false);
     }
   }
 
@@ -135,9 +124,14 @@ export function SelectionBar({
               Zu Verteiler hinzufügen …
             </Button>
           ) : null}
-          <Button size="sm" variant="outline" onClick={downloadCsv} disabled={csvPending}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => csv.start(`/api/export/csv?ids=${ids}`)}
+            disabled={csv.pending}
+          >
             <Download />
-            {csvPending ? "CSV wird erstellt …" : "CSV"}
+            {csv.pending ? "CSV wird erstellt …" : "CSV"}
           </Button>
         </div>
         <button
@@ -159,7 +153,7 @@ export function SelectionBar({
       <AddToListDialog
         open={addOpen}
         onOpenChange={setAddOpen}
-        personIds={selected.map((p) => p.id)}
+        personIds={ids}
         distributionLists={distributionLists}
       />
 

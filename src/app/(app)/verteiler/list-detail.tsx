@@ -20,7 +20,7 @@ import type {
   RankRow,
 } from "@/db/queries";
 import { callAction } from "@/lib/call-action";
-import { downloadFile, toastDownloadError } from "@/lib/download";
+import { useDownload } from "@/lib/download";
 import { buildBcc, isEmail, type BccSeparator } from "@/lib/export";
 import { formatDateTime, formatNameWithScout } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -56,7 +56,7 @@ export function ListDetail({
   const [addressesOpen, setAddressesOpen] = useState(false);
   const addressesRef = useRef<HTMLTextAreaElement>(null);
   const [composeOpen, setComposeOpen] = useState(false);
-  const [csvPending, setCsvPending] = useState(false);
+  const csv = useDownload("csv");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -83,18 +83,6 @@ export function ListDetail({
       setAddressesOpen(true);
       requestAnimationFrame(() => addressesRef.current?.focus());
       toast.error("Kopieren nicht möglich – die E-Mail-Adressen sind markiert, kopiere sie mit Strg+C.");
-    }
-  }
-
-  async function downloadCsv() {
-    setCsvPending(true);
-    try {
-      await downloadFile(`/api/export/csv?listId=${list.id}`, "anschriften.csv");
-      toast.success("CSV heruntergeladen.");
-    } catch (err) {
-      toastDownloadError(err, "CSV-Export fehlgeschlagen. Bitte versuche es noch einmal.");
-    } finally {
-      setCsvPending(false);
     }
   }
 
@@ -130,9 +118,13 @@ export function ListDetail({
               <Copy />
               E-Mail-Adressen kopieren
             </Button>
-            <Button variant="outline" onClick={downloadCsv} disabled={csvPending || members.length === 0}>
+            <Button
+              variant="outline"
+              onClick={() => csv.start(`/api/export/csv?listId=${list.id}`)}
+              disabled={csv.pending || members.length === 0}
+            >
               <Download />
-              {csvPending ? "Wird erstellt …" : "CSV herunterladen"}
+              {csv.pending ? "CSV wird erstellt …" : "CSV herunterladen"}
             </Button>
           </div>
           <div className="flex flex-wrap items-center gap-1">
