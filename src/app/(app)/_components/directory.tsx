@@ -2,13 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useDeferredValue, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import {
-  type ColumnDef,
-  type RowSelectionState,
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, SearchX, Users, X } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
@@ -18,16 +11,11 @@ import { TableHead } from "@/components/ui/table";
 import type { GroupRow, OfficeRow, PersonListRow } from "@/db/queries";
 import { cn } from "@/lib/utils";
 
-import { type SearchIndex, filterPersons, hasActiveFilters, searchIndex } from "./directory-filter";
+import { filterPersons, hasActiveFilters, searchIndex } from "./directory-filter";
 import { PersonCard, PersonTableRow } from "./directory-rows";
 import { SelectionBar } from "./directory-selection";
 import { DirectoryToolbar } from "./directory-toolbar";
 import { useDirectoryParams } from "./use-directory-params";
-
-type Indexed = PersonListRow & SearchIndex;
-
-// TanStack only sorts and tracks the selection; the rows render themselves.
-const COLUMNS: ColumnDef<Indexed>[] = [{ id: "name", accessorFn: (p) => p.sortKey, sortingFn: "basic" }];
 
 // Tailwind's `md`: the table from here up, the card list below.
 const DESKTOP = "(min-width: 48rem)";
@@ -98,46 +86,48 @@ export function Directory({
   const officeId = offices.some((o) => o.id === params.officeId) ? params.officeId : null;
   const listId = distributionLists.some((l) => l.id === params.listId) ? params.listId : null;
 
+  // `persons` arrive in directory order (listPersons sorts them with byDirectoryName);
+  // descending is the same list reversed. Filtering keeps the order.
   const indexed = useMemo(() => persons.map((p) => ({ ...p, ...searchIndex(p) })), [persons]);
+  const ordered = useMemo(() => (params.sortDesc ? [...indexed].reverse() : indexed), [indexed, params.sortDesc]);
   // The field updates on every keystroke; the list follows in a deferred render.
   const q = useDeferredValue(params.query);
-  const filtered = useMemo(
-    () => filterPersons(indexed, { q, groupId, officeId, listId }, groups),
-    [indexed, q, groupId, officeId, listId, groups],
+  const rows = useMemo(
+    () => filterPersons(ordered, { q, groupId, officeId, listId }, groups),
+    [ordered, q, groupId, officeId, listId, groups],
   );
   const filtering = hasActiveFilters({ q, groupId, officeId, listId });
   const selectFilters = groupId != null || officeId != null || listId != null;
 
-  // Keyed by person id; survives filter changes (the bar reports hidden ones).
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const sorting = useMemo(() => [{ id: "name", desc: params.sortDesc }], [params.sortDesc]);
-  const table = useReactTable({
-    data: filtered,
-    columns: COLUMNS,
-    state: { sorting, rowSelection },
-    getRowId: (p) => String(p.id),
-    onRowSelectionChange: setRowSelection,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
-  const rows = table.getRowModel().rows;
-  const shownSelected = rows.filter((row) => row.getIsSelected()).length;
-  const allShownChecked = shownSelected === 0 ? false : shownSelected === rows.length ? true : "indeterminate";
+  // Selected person ids; survives filter changes (the bar reports hidden ones).
+  const [selection, setSelection] = useState<ReadonlySet<number>>(() => new Set());
+  const shownSelected = rows.filter((p) => selection.has(p.id));
+  const allShownChecked =
+    shownSelected.length === 0 ? false : shownSelected.length === rows.length ? true : "indeterminate";
 
   // Stable callbacks keep the memoized rows from re-rendering.
   const setSelected = useCallback((id: number, selected: boolean) => {
-    setRowSelection((prev) => {
-      const next = { ...prev };
-      if (selected) next[id] = true;
-      else delete next[id];
+    setSelection((prev) => {
+      const next = new Set(prev);
+      if (selected) next.add(id);
+      else next.delete(id);
       return next;
     });
   }, []);
+  /** Select or clear every shown person; selected persons the filters hide stay as they are. */
+  const setAllShown = (selected: boolean) =>
+    setSelection((prev) => {
+      const next = new Set(prev);
+      for (const p of rows) {
+        if (selected) next.add(p.id);
+        else next.delete(p.id);
+      }
+      return next;
+    });
   const openPerson = useCallback((id: number) => router.push(`/personen/${id}`), [router]);
 
-  const selected = useMemo(() => persons.filter((p) => rowSelection[p.id]), [persons, rowSelection]);
-  const shownIds = useMemo(() => new Set(filtered.map((p) => p.id)), [filtered]);
-  const hiddenCount = selected.filter((p) => !shownIds.has(p.id)).length;
+  const selected = useMemo(() => persons.filter((p) => selection.has(p.id)), [persons, selection]);
+  const hiddenCount = selected.length - shownSelected.length;
 
   const searchRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLButtonElement>(null);
@@ -148,7 +138,7 @@ export function Directory({
   const clearSelection = () => {
     // With every selected person hidden there is no list (and no select-all) to return to.
     keepKeyboardFocus(selectAllRef.current ?? searchRef.current);
-    setRowSelection({});
+    setSelection(new Set());
   };
 
   // Render only the layout that is on screen; null (server, hydration) renders both
@@ -181,7 +171,7 @@ export function Directory({
           <div className={cn("flex items-center gap-3 sm:ml-auto", !filtering && "max-sm:-mt-2")}>
             {/* Always mounted, so screen readers announce the count as it changes. */}
             <p role="status" className="text-caption tabular-nums text-ink-soft">
-              {filtering ? `${filtered.length} von ${persons.length} angezeigt` : ""}
+              {filtering ? `${rows.length} von ${persons.length} angezeigt` : ""}
             </p>
             {/* With no results the empty state offers the same button, larger. */}
             {filtering && rows.length > 0 ? (
@@ -199,9 +189,7 @@ export function Directory({
           className="order-last"
           selected={selected}
           hiddenCount={hiddenCount}
-          onKeepVisible={() =>
-            setRowSelection(Object.fromEntries(selected.filter((p) => shownIds.has(p.id)).map((p) => [p.id, true])))
-          }
+          onKeepVisible={() => setSelection(new Set(shownSelected.map((p) => p.id)))}
           onClear={clearSelection}
           distributionLists={distributionLists}
           mailEnabled={mailEnabled}
@@ -258,7 +246,7 @@ export function Directory({
                         <SelectAllCheckbox
                           ref={selectAllRef}
                           checked={allShownChecked}
-                          onCheckedChange={table.toggleAllRowsSelected}
+                          onCheckedChange={setAllShown}
                           filtered={filtering}
                         />
                       </label>
@@ -287,11 +275,11 @@ export function Directory({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
+                  {rows.map((p) => (
                     <PersonTableRow
-                      key={row.id}
-                      person={row.original}
-                      selected={row.getIsSelected()}
+                      key={p.id}
+                      person={p}
+                      selected={selection.has(p.id)}
                       onSelectedChange={setSelected}
                       onOpen={openPerson}
                     />
@@ -307,19 +295,14 @@ export function Directory({
                     // would otherwise null it while this one stays.
                     ref={isDesktop === false ? selectAllRef : undefined}
                     checked={allShownChecked}
-                    onCheckedChange={table.toggleAllRowsSelected}
+                    onCheckedChange={setAllShown}
                     filtered={filtering}
                   />
                   <span className="eyebrow">{filtering ? "Alle angezeigten auswählen" : "Alle auswählen"}</span>
                 </label>
                 <ul>
-                  {rows.map((row) => (
-                    <PersonCard
-                      key={row.id}
-                      person={row.original}
-                      selected={row.getIsSelected()}
-                      onSelectedChange={setSelected}
-                    />
+                  {rows.map((p) => (
+                    <PersonCard key={p.id} person={p} selected={selection.has(p.id)} onSelectedChange={setSelected} />
                   ))}
                 </ul>
               </div>

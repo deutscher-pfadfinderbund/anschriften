@@ -35,7 +35,7 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 - Session in Server Actions: `const session = await getActionSession(); if (!session) return SESSION_EXPIRED;` (`src/lib/action-helpers.ts`). Nie werfen — ein Throw ersetzt die Seite durch die Fehlerseite und vernichtet Formulareingaben
 - Fachregeln an genau einer Stelle: „heute" = `todayIso()` aus `src/lib/format.ts` (Europe/Berlin, nie `toISOString()`); aktive Amtszeit = `end_date IS NULL` (Bis-Daten in der Zukunft werden abgelehnt); Bereiche = `SECTIONS` aus `src/lib/sections.ts`; E-Mail-Gültigkeit = `EMAIL_RE`/`collectEmails` aus `src/lib/export.ts`; Downloads = `downloadFile` aus `src/lib/download.ts`
 - DB-Zugriff: zentraler Client `src/db/index.ts`; niemals SQL-Strings in Komponenten. Zwei dokumentierte Ausnahmen greifen direkt auf `db` zu: `src/pdf/build-data.ts` (isolierte Full-Table-Reads fürs PDF) und `src/lib/mail.ts` (`mail_log`-Schreiben atomar zum SMTP-Versand)
-- Personentabelle: alle Datensätze serverseitig laden (~600), clientseitig filtern (TanStack Table). Keine Pagination
+- Personentabelle: alle Datensätze serverseitig laden (~600, schon in Verzeichnis-Reihenfolge `byDirectoryName`), clientseitig filtern, sortieren und auswählen mit schlichtem React-State (keine Tabellen-Bibliothek). Keine Pagination
 - `updated_by` = Name/E-Mail aus der Session bei jeder Mutation setzen
 
 ## Design (UI)

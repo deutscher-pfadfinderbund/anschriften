@@ -138,7 +138,10 @@ export type PersonListRow = {
   effectiveListIds: number[];
 };
 
-/** All persons with their active assignments and rank — one shot for the table. */
+/**
+ * All persons with their active assignments and rank — one shot for the table, in
+ * directory order (`byDirectoryName`, like the Verteiler members).
+ */
 export async function listPersons(): Promise<PersonListRow[]> {
   const [rows, { membership }] = await Promise.all([
     db.query.persons.findMany({
@@ -165,7 +168,7 @@ export async function listPersons(): Promise<PersonListRow[]> {
     }
   }
 
-  return rows.map((p) => ({
+  const list: PersonListRow[] = rows.map((p) => ({
     id: p.id,
     firstName: p.firstName,
     lastName: p.lastName,
@@ -187,6 +190,7 @@ export async function listPersons(): Promise<PersonListRow[]> {
     })),
     effectiveListIds: listIdsByPerson.get(p.id) ?? [],
   }));
+  return list.sort(byDirectoryName);
 }
 
 // --- person editor --------------------------------------------------------------------

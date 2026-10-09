@@ -2,7 +2,7 @@
 // unit-tested in directory-filter.test.ts.
 import type { PersonListRow } from "@/db/queries";
 import { buildBcc, type BccResult } from "@/lib/export";
-import { fold, formatName } from "@/lib/format";
+import { fold } from "@/lib/format";
 import { descendantIds } from "@/lib/groups";
 
 // --- URL state ------------------------------------------------------------------------
@@ -59,8 +59,6 @@ export type SearchIndex = {
   searchText: string;
   /** Every phone number reduced to its digits, space-separated. */
   searchDigits: string;
-  /** Sort key: "nachname, vorname" (folded, DIN 5007-2 like the PDF). */
-  sortKey: string;
 };
 
 const digitsOnly = (s: string) => s.replace(/\D/g, "");
@@ -82,7 +80,6 @@ export function searchIndex(p: PersonListRow): SearchIndex {
         .join(" "),
     ),
     searchDigits: p.phones.map((ph) => digitsOnly(ph.number)).join(" "),
-    sortKey: fold(formatName(p)),
   };
 }
 
