@@ -71,7 +71,8 @@ export function MembersPanel({
       m.via.length > 0
         ? `„${formatName(m)}“ ist nicht mehr von Hand eingetragen, bleibt aber über eine Regel enthalten.`
         : `„${formatName(m)}“ aus dem Verteiler entfernt.`,
-      { action: { label: "Rückgängig", onClick: () => void restoreMember(list.id, m) } },
+      // A little longer than the default, so there is time to reach „Rückgängig“.
+      { duration: 8000, action: { label: "Rückgängig", onClick: () => void restoreMember(list.id, m) } },
     );
     if (hadFocus) {
       const target = next ? document.getElementById(removeButtonId(next.personId)) : addButtonRef.current;
