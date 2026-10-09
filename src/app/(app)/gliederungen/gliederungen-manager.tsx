@@ -74,6 +74,18 @@ export function GliederungenManager({
     ];
   }, [groups, form.id]);
 
+  // A child always takes its parent's Bereich (saveGroup enforces it), so the select shows
+  // the parent's and is locked. A top-level group's Bereich carries its whole subtree along.
+  const parent = form.parentId != null ? groups.find((g) => g.id === form.parentId) : undefined;
+  const shownSection = parent?.section ?? form.section;
+  const hasChildren = form.id != null && groups.some((g) => g.parentId === form.id);
+  const sectionHint =
+    parent != null
+      ? "Wird von der übergeordneten Gliederung übernommen."
+      : hasChildren
+        ? "Gilt auch für alle Untergliederungen."
+        : null;
+
   function openCreate() {
     setForm(emptyForm());
     setFormOpen(true);
@@ -93,7 +105,7 @@ export function GliederungenManager({
   function submitForm() {
     const payload = {
       name: form.name,
-      section: form.section as Section,
+      section: shownSection as Section,
       kind: form.kind.trim() ? form.kind.trim() : null,
       sortKey: Number(form.sortKey) || 0,
       parentId: form.parentId,
@@ -207,8 +219,16 @@ export function GliederungenManager({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <FormLabel htmlFor="g-section">Bereich</FormLabel>
-                <Select value={form.section} onValueChange={(v) => setForm((f) => ({ ...f, section: v }))}>
-                  <SelectTrigger id="g-section" className="w-full">
+                <Select
+                  value={shownSection}
+                  onValueChange={(v) => setForm((f) => ({ ...f, section: v }))}
+                  disabled={parent != null}
+                >
+                  <SelectTrigger
+                    id="g-section"
+                    className="w-full"
+                    aria-describedby={sectionHint ? "g-section-hint" : undefined}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -219,6 +239,11 @@ export function GliederungenManager({
                     ))}
                   </SelectContent>
                 </Select>
+                {sectionHint ? (
+                  <p id="g-section-hint" className="mt-1 text-xs text-ink-faint">
+                    {sectionHint}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <FormLabel htmlFor="g-sort">Sortierschlüssel</FormLabel>
@@ -241,7 +266,14 @@ export function GliederungenManager({
               <Combobox
                 options={parentOptions}
                 value={form.parentId != null ? String(form.parentId) : PARENT_NONE}
-                onChange={(v) => setForm((f) => ({ ...f, parentId: v === PARENT_NONE ? null : Number(v) }))}
+                onChange={(v) =>
+                  setForm((f) => {
+                    const parentId = v === PARENT_NONE ? null : Number(v);
+                    // Keep the inherited Bereich when the parent is cleared again.
+                    const inherited = groups.find((g) => g.id === parentId)?.section;
+                    return { ...f, parentId, section: inherited ?? f.section };
+                  })
+                }
                 placeholder="— keine (oberste Ebene) —"
                 searchPlaceholder="Gliederung suchen …"
                 aria-label="Übergeordnete Gliederung"
