@@ -22,12 +22,11 @@ export function fold(s: string): string {
     .trim();
 }
 
-/** "Nachname, Vorname" with sensible fallbacks to the scout name. */
-export function formatName(p: {
-  firstName?: string | null;
-  lastName?: string | null;
-  scoutName?: string | null;
-}): string {
+/** The name fields of a person, as every name helper here (and the sort order) reads them. */
+export type PersonName = { firstName?: string | null; lastName?: string | null; scoutName?: string | null };
+
+/** "Nachname, Vorname" — the list form; falls back to either part alone, then the Fahrtenname. */
+export function formatName(p: PersonName): string {
   const last = p.lastName?.trim() ?? "";
   const first = p.firstName?.trim() ?? "";
   if (last && first) return `${last}, ${first}`;
@@ -36,42 +35,23 @@ export function formatName(p: {
   return p.scoutName?.trim() || "—";
 }
 
-/**
- * The Fahrtenname as an addition to a real name: returned only when there is a Vor- or
- * Nachname next to it (a person known only by the scout name already shows it as the
- * name itself, see `formatName`). Null otherwise.
- */
-export function scoutAddition(p: {
-  firstName?: string | null;
-  lastName?: string | null;
-  scoutName?: string | null;
-}): string | null {
+/** The Fahrtenname when it adds to a Vor- or Nachname; null when absent or already the name itself. */
+export function scoutAddition(p: PersonName): string | null {
   const scout = p.scoutName?.trim();
   if (!scout) return null;
   return p.lastName?.trim() || p.firstName?.trim() ? scout : null;
 }
 
-/**
- * "Vorname Nachname" — the form for running text („Amtszeit von Hannes Hoffmann beenden“),
- * where the list form "Nachname, Vorname" reads oddly. Falls back to the Fahrtenname.
- */
-export function formatFullName(p: {
-  firstName?: string | null;
-  lastName?: string | null;
-  scoutName?: string | null;
-}): string {
-  const name = [p.firstName?.trim(), p.lastName?.trim()].filter(Boolean).join(" ");
-  return name || p.scoutName?.trim() || "—";
-}
-
-/** "Nachname, Vorname „Fahrtenname“" — the plain-text form for headings, options and lists. */
-export function formatNameWithScout(p: {
-  firstName?: string | null;
-  lastName?: string | null;
-  scoutName?: string | null;
-}): string {
+/** "Nachname, Vorname „Fahrtenname“" — the list form as plain text (headings, options, labels). */
+export function formatNameWithScout(p: PersonName): string {
   const scout = scoutAddition(p);
   return scout ? `${formatName(p)} „${scout}“` : formatName(p);
+}
+
+/** "Vorname Nachname" — for running text („Amtszeit von Hannes Hoffmann beenden“); else the Fahrtenname. */
+export function formatFullName(p: PersonName): string {
+  const name = [p.firstName?.trim(), p.lastName?.trim()].filter(Boolean).join(" ");
+  return name || p.scoutName?.trim() || "—";
 }
 
 /** German date for display: "24.06.2019". Input is an ISO date string or null. */

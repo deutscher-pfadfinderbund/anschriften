@@ -1,8 +1,6 @@
-import { fold } from "@/lib/format";
+import { fold, type PersonName } from "@/lib/format";
 
-type Named = { firstName: string | null; lastName: string | null; scoutName: string | null };
-
-const compareFolded = (a: string | null, b: string | null) =>
+const compareFolded = (a?: string | null, b?: string | null) =>
   fold(a ?? "").localeCompare(fold(b ?? ""), "de");
 
 /**
@@ -10,7 +8,7 @@ const compareFolded = (a: string | null, b: string | null) =>
  * name, then scout name. Each field is folded (DIN 5007-2) and compared on its own, so
  * "Schmidt" sorts before "Schmidt-Meyer" whatever the first names are.
  */
-export function byDirectoryName(a: Named, b: Named): number {
+export function byDirectoryName(a: PersonName, b: PersonName): number {
   return (
     compareFolded(a.lastName || a.scoutName, b.lastName || b.scoutName) ||
     compareFolded(a.firstName, b.firstName) ||
