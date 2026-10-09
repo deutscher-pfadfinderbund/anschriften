@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
@@ -17,10 +17,10 @@ import { actorName } from "@/lib/auth-helpers";
 import { todayIso } from "@/lib/format";
 import { resolveTenureEnd } from "@/lib/person-schema";
 
-// Office-history mutations (issue #22). Active tenures are owned by `savePerson`
-// (delete + recreate from the form); these actions manage the *history* — ending a
-// current office and creating/editing/removing past ones — as immediate, standalone
-// writes so a normal person save never touches historical rows.
+// Office-history mutations (issue #22). Active tenures — including ending one ("Beenden"
+// in the editor) — are owned by `savePerson` (buffered in the form, written on Speichern).
+// These actions only manage rows that are ALREADY history: creating, editing and removing
+// past tenures as immediate, standalone writes, so a normal person save never touches them.
 
 const dateField = z
   .string()
@@ -31,54 +31,6 @@ const dateField = z
 /** Bump the owning person's audit fields so the change is attributed and lists refresh. */
 async function touchPerson(personId: number, by: string): Promise<void> {
   await db.update(persons).set({ updatedBy: by, updatedAt: new Date() }).where(eq(persons.id, personId));
-}
-
-// --- end an active tenure ("Amt beenden…") --------------------------------------
-
-const endSchema = z.object({
-  assignmentId: z.number().int().positive(),
-  // Either a concrete Bis-Datum or "Ende unbekannt" (endUnknown ⇒ end_date = today).
-  endDate: dateField,
-  endUnknown: z.boolean().default(false),
-});
-
-/**
- * End a currently active tenure by setting its `end_date`; the row becomes history
- * and stops counting towards the table, PDF, distribution rules and mail recipients.
- * With `endUnknown` the end is recorded as unknown (end_date = today upper bound).
- * (savePerson accepts the same ending on a form row, so the editor can buffer it until
- * Speichern instead — once it does, this immediate variant can go.)
- */
-export async function endAssignment(raw: z.infer<typeof endSchema>): Promise<ActionResult> {
-  const session = await getActionSession();
-  if (!session) return SESSION_EXPIRED;
-  const parsed = endSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  const { assignmentId, endDate, endUnknown } = parsed.data;
-
-  const [row] = await db
-    .select({ personId: assignments.personId, startDate: assignments.startDate, endDate: assignments.endDate })
-    .from(assignments)
-    .where(eq(assignments.id, assignmentId))
-    .limit(1);
-  if (!row) return { ok: false, message: "Zuordnung nicht gefunden." };
-  if (row.endDate != null) return { ok: false, message: "Dieses Amt ist bereits beendet." };
-
-  const resolved = resolveTenureEnd({ startDate: row.startDate, endDate, endUnknown, today: todayIso() });
-  if (!resolved.ok) return { ok: false, message: resolved.message };
-
-  // Guard the update against a concurrent savePerson (delete+recreate of active
-  // rows): if the row vanished in between, report it instead of silently ending nothing.
-  const updated = await db
-    .update(assignments)
-    .set({ endDate: resolved.endDate, endUnknown: resolved.endUnknown, updatedAt: new Date() })
-    .where(and(eq(assignments.id, assignmentId), isNull(assignments.endDate)))
-    .returning({ id: assignments.id });
-  if (updated.length === 0)
-    return { ok: false, message: "Dieses Amt wurde inzwischen geändert. Bitte lade die Seite neu." };
-  await touchPerson(row.personId, actorName(session));
-  revalidateApp();
-  return { ok: true };
 }
 
 // --- create a past tenure ("Frühere Ämter" → hinzufügen) ------------------------

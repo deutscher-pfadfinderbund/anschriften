@@ -336,7 +336,7 @@ describe("personInputSchema: assignment rows", () => {
   it("rejects an Amt without a Gliederung instead of dropping it silently", () => {
     const r = parsePersonInput(base({ assignments: [row({ groupId: null, officeId: 7 })] }));
     expect(r.ok ? null : r.errors).toEqual({
-      "assignments.0.groupId": "Bitte zu jedem Amt eine Gliederung wählen.",
+      "assignments.0.groupId": "Bitte eine Gliederung wählen.",
     });
   });
 

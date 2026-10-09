@@ -204,7 +204,7 @@ export const personInputSchema = z
         ctx.addIssue({
           code: "custom",
           path: ["assignments", i, "groupId"],
-          message: "Bitte zu jedem Amt eine Gliederung wählen.",
+          message: "Bitte eine Gliederung wählen.",
         });
         return;
       }

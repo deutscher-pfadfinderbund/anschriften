@@ -33,7 +33,7 @@ export async function generateMetadata({
   const { id } = await params;
   const personId = parseId(id);
   const person = personId != null ? await loadPerson(personId) : null;
-  return { title: person ? formatName(person) : "Anschrift bearbeiten" };
+  return { title: person ? formatName(person) : "Person bearbeiten" };
 }
 
 export default async function EditPersonPage({
@@ -59,7 +59,6 @@ export default async function EditPersonPage({
 
   return (
     <PersonForm
-      mode="edit"
       person={person}
       groups={groups}
       offices={offices}
