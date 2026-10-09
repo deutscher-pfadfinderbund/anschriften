@@ -240,7 +240,7 @@ export function TextField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        // Mirrors the server's 200-character limit on names and the Art.
+        // The server's limits: 200 characters for names and the Art, 5 digits (ORDER_MAX).
         maxLength={numeric ? 5 : 200}
         inputMode={numeric ? "numeric" : undefined}
         autoComplete="off"
