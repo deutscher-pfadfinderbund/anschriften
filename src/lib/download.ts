@@ -56,12 +56,15 @@ export async function downloadFile(url: string, fallbackName: string): Promise<v
 
 /**
  * The toast for a failed `downloadFile`: an expired session gets its own message with a
- * "Neu anmelden" action (the generic "bitte erneut versuchen" would just fail again);
+ * "Neu anmelden" action (the generic "bitte versuche es noch einmal" would just fail again);
  * everything else shows `genericMessage`.
  */
 export function toastDownloadError(err: unknown, genericMessage: string): void {
   if (err instanceof SessionExpiredError) {
     toast.error("Deine Sitzung ist abgelaufen – bitte neu anmelden.", {
+      // Stays until acted on or closed, so keyboard users can reach the action.
+      duration: Infinity,
+      closeButton: true,
       action: {
         label: "Neu anmelden",
         onClick: () => {

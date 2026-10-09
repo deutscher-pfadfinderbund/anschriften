@@ -1,13 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { Command as CommandPrimitive } from "cmdk"
+import { Command as CommandPrimitive, useCommandState } from "cmdk"
 import { SearchIcon, CheckIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
 function Command({
   className,
+  children,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive>) {
   return (
@@ -18,7 +19,22 @@ function Command({
         className
       )}
       {...props}
-    />
+    >
+      {children}
+      <MatchCount />
+    </CommandPrimitive>
+  )
+}
+
+/** Tells screen readers how many options match while a search is typed. */
+function MatchCount() {
+  const text = useCommandState((s) =>
+    s.search ? (s.filtered.count === 0 ? "Keine Treffer" : `${s.filtered.count} Treffer`) : ""
+  )
+  return (
+    <p role="status" className="sr-only">
+      {text}
+    </p>
   )
 }
 
@@ -73,12 +89,15 @@ function CommandEmpty({
   )
 }
 
-/** A row; pass `data-checked` to show the trailing checkmark (chosen value). */
+/**
+ * A row; pass `data-checked` for the chosen value: a trailing checkmark, and the state
+ * spelled out for screen readers (cmdk's aria-selected follows the keyboard cursor).
+ */
 function CommandItem({
   className,
   children,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Item>) {
+}: React.ComponentProps<typeof CommandPrimitive.Item> & { "data-checked"?: boolean }) {
   return (
     <CommandPrimitive.Item
       data-slot="command-item"
@@ -89,6 +108,7 @@ function CommandItem({
       {...props}
     >
       {children}
+      {props["data-checked"] ? <span className="sr-only">, ausgewählt</span> : null}
       <CheckIcon
         aria-hidden
         className="ml-auto text-fir opacity-0 group-data-[checked=true]/command-item:opacity-100"

@@ -82,6 +82,8 @@ export function Combobox({
       >
         <Command
           label={spoken(searchPlaceholder)}
+          // The keyboard cursor starts on the chosen option.
+          defaultValue={selected?.label}
           filter={(itemValue, search) => (matchesQuery(itemValue, search) ? 1 : 0)}
         >
           <CommandInput placeholder={searchPlaceholder} />

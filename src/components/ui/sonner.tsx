@@ -18,6 +18,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       offset={{ top: "calc(var(--top-bar) + 16px)" }}
       mobileOffset={{ top: "calc(var(--top-bar) + 8px)" }}
       containerAriaLabel="Benachrichtigungen"
+      toastOptions={{ closeButtonAriaLabel: "Schließen" }}
       icons={{
         success: <CircleCheckIcon className="size-4 text-fir" />,
         info: <InfoIcon className="size-4" />,

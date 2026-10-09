@@ -7,17 +7,12 @@ import { cn } from "@/lib/utils"
 
 function Tabs({
   className,
-  orientation = "horizontal",
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.Root>) {
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
-      data-orientation={orientation}
-      className={cn(
-        "group/tabs flex gap-2 data-horizontal:flex-col",
-        className
-      )}
+      className={cn("flex flex-col gap-2", className)}
       {...props}
     />
   )
@@ -38,7 +33,7 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        "group/tabs-list inline-flex w-fit items-center justify-center gap-1 bg-transparent text-ink-soft group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col group-data-vertical/tabs:items-stretch",
+        "inline-flex h-8 w-fit items-center justify-center gap-1 bg-transparent text-ink-soft",
         className
       )}
       {...props}
@@ -55,14 +50,11 @@ function TabsTrigger({
       data-slot="tabs-trigger"
       className={cn(
         "relative inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-ui font-medium whitespace-nowrap text-ink-soft transition-colors",
-        "group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start",
         "hover:text-ink",
         "disabled:pointer-events-none disabled:opacity-50",
         "data-[state=active]:text-fir",
-        // Fir marker: underline when horizontal, left bar when vertical.
-        "after:absolute after:bg-fir after:opacity-0 after:transition-opacity",
-        "group-data-horizontal/tabs:after:inset-x-1 group-data-horizontal/tabs:after:-bottom-px group-data-horizontal/tabs:after:h-0.5 group-data-horizontal/tabs:after:rounded-full",
-        "group-data-vertical/tabs:after:inset-y-0.5 group-data-vertical/tabs:after:-left-1 group-data-vertical/tabs:after:w-0.5 group-data-vertical/tabs:after:rounded-full",
+        // Fir marker: an underline on the active tab.
+        "after:absolute after:inset-x-1 after:-bottom-px after:h-0.5 after:rounded-full after:bg-fir after:opacity-0 after:transition-opacity",
         "data-[state=active]:after:opacity-100",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
@@ -72,6 +64,10 @@ function TabsTrigger({
   )
 }
 
+/**
+ * Not a Tab stop of its own (Radix makes it one): every panel here holds focusable
+ * rows, and an outline-less stop would read as lost focus.
+ */
 function TabsContent({
   className,
   ...props
@@ -79,6 +75,7 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
+      tabIndex={-1}
       className={cn("flex-1 text-body outline-none", className)}
       {...props}
     />

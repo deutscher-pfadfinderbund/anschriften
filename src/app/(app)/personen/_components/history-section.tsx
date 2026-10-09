@@ -28,7 +28,7 @@ import { formatDate, todayIso } from "@/lib/format";
 import { TOUCH_HIT, cn } from "@/lib/utils";
 
 import { EndDateChoice } from "./end-date";
-import { ComboField, TextField } from "./field";
+import { ComboField, TextField, focusSoon } from "./field";
 import { GROUP_PICKER, NONE, OFFICE_PICKER, isEndChoiceReady, type EndChoice } from "./form-values";
 
 // "Frühere Ämter": ended tenures. Unlike the rows above they are written immediately —
@@ -134,7 +134,7 @@ export function HistorySection({
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="Früheres Amt bearbeiten"
+                      aria-label={`Bearbeiten: ${h.officeName ?? "Ohne Amt"} · ${h.groupName}`}
                       title="Bearbeiten"
                       className="text-ink-faint"
                       onClick={() =>
@@ -155,7 +155,7 @@ export function HistorySection({
                       type="button"
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="Früheres Amt löschen"
+                      aria-label={`Löschen: ${h.officeName ?? "Ohne Amt"} · ${h.groupName}`}
                       title="Löschen"
                       className="text-ink-faint hover:text-crit"
                       onClick={() => setRemoving(h)}
@@ -236,7 +236,9 @@ function HistoryForm({
 
   function submit() {
     setTried(true);
-    if (draft.groupId == null || !isEndChoiceReady(draft.end, draft.startDate)) return;
+    // A refused submit moves focus to the first marked field, so its error is read out.
+    if (draft.groupId == null) return focusSoon("hist-group");
+    if (!isEndChoiceReady(draft.end, draft.startDate)) return focusSoon("hist-end");
     const values = {
       updatedAt: version,
       groupId: draft.groupId,

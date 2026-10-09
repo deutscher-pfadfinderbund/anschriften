@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
 
@@ -181,27 +181,26 @@ export function ComposeMailDialog({
           </p>
         </div>
         {confirming ? (
-          <p
-            role="status"
-            className="rounded-md border border-line-strong bg-surface-2 px-3 py-2 text-ui text-ink"
-          >
+          <p role="alert" className="rounded-md border border-line-strong bg-surface-2 px-3 py-2 text-ui text-ink">
             Wirklich an <span className="font-medium">{emailAddressCount(recipientCount)}</span> senden? Der
             Versand lässt sich nicht rückgängig machen.
           </p>
         ) : null}
         <DialogFooter>
+          {/* Keyed, so the buttons are new elements: focus lands on Zurück instead of staying
+              on the spot where Senden was, and a second Enter cannot send. */}
           {confirming ? (
-            <>
-              <Button variant="outline" onClick={() => setConfirming(false)} disabled={isPending}>
+            <Fragment key="confirm">
+              <Button variant="outline" autoFocus onClick={() => setConfirming(false)} disabled={isPending}>
                 Zurück
               </Button>
               <Button onClick={submit} disabled={!canSend}>
                 <Send />
                 {isPending ? "Wird gesendet …" : `Jetzt an ${emailAddressCount(recipientCount)} senden`}
               </Button>
-            </>
+            </Fragment>
           ) : (
-            <>
+            <Fragment key="compose">
               <Button variant="outline" onClick={close}>
                 Abbrechen
               </Button>
@@ -209,7 +208,7 @@ export function ComposeMailDialog({
                 <Send />
                 Senden …
               </Button>
-            </>
+            </Fragment>
           )}
         </DialogFooter>
       </DialogContent>

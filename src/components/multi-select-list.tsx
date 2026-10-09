@@ -63,9 +63,6 @@ export function MultiSelectList({
               <span className="truncate text-ink">{o.label}</span>
               {o.hint ? <span className="truncate text-ink-faint">{o.hint}</span> : null}
             </span>
-            {/* cmdk's aria-selected follows the keyboard cursor, not the
-                choice, so the chosen state is spelled out for screen readers. */}
-            {selected.has(o.value) ? <span className="sr-only">, ausgewählt</span> : null}
           </CommandItem>
         ))}
       </CommandList>

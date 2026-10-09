@@ -42,16 +42,6 @@
     @slot;
   }
 }
-@custom-variant data-horizontal {
-  &:where([data-orientation="horizontal"]) {
-    @slot;
-  }
-}
-@custom-variant data-vertical {
-  &:where([data-orientation="vertical"]) {
-    @slot;
-  }
-}
 
 /*
  * Design tokens. Every token is written once as light-dark(LIGHT, DARK).
@@ -69,10 +59,11 @@
   --field: light-dark(#ffffff, #191c1a);
 
   /* Ink. ink-faint still carries real content (labels, sublines,
-   * placeholders), so it stays ≥ 4.5:1 on surface, field and --hover. */
+   * placeholders), so it stays ≥ 4.5:1 on every surface, --hover and --active
+   * (a selected row). */
   --ink: light-dark(#232724, #e5e8e4);
   --ink-soft: light-dark(#5b625d, #a8afa9);
-  --ink-faint: light-dark(#676d68, #8f968f);
+  --ink-faint: light-dark(#626863, #979e97);
 
   /* Lines: --line/--line-strong separate regions; --control is the boundary
    * of form controls (≥ 3:1 against surface, paper and field, WCAG 1.4.11). */
