@@ -13,15 +13,7 @@ import {
   type ActionResult,
 } from "@/lib/action-helpers";
 import { actorName, requireSession } from "@/lib/auth-helpers";
-
-const SECTIONS = [
-  "bund",
-  "jungenbund",
-  "maedchenbund",
-  "orden_st_georg",
-  "orden_st_christophorus",
-  "bundesgilde",
-] as const;
+import { SECTIONS } from "@/lib/sections";
 
 const groupSchema = z.object({
   name: z.string().trim().min(1, "Name ist erforderlich."),

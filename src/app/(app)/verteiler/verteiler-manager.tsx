@@ -65,21 +65,10 @@ import type {
   RankRow,
 } from "@/db/queries";
 import { buildBcc, type BccSeparator } from "@/lib/export";
-import { formatDateTime, formatName } from "@/lib/format";
+import { formatDateTime, formatName, formatNameWithScout, scoutAddition } from "@/lib/format";
 import { HOVER_REVEAL, TOUCH_HIT_Y, cn } from "@/lib/utils";
 
 type ListFormState = { id: number | null; name: string; description: string };
-
-/** "Nachname, Vorname" plus the scout name when both are present. */
-function memberLabel(m: {
-  firstName: string | null;
-  lastName: string | null;
-  scoutName: string | null;
-}): string {
-  const base = formatName(m);
-  const showScout = !!m.scoutName && !!(m.lastName || m.firstName);
-  return showScout ? `${base} „${m.scoutName}“` : base;
-}
 
 function hasEmail(m: ListMemberRow): boolean {
   return !!m.email && m.email.trim().length > 0;
@@ -237,7 +226,7 @@ export function VerteilerManager({
       .filter((p) => !memberIds.has(p.id))
       .map((p) => ({
         value: p.id,
-        label: memberLabel(p),
+        label: formatNameWithScout(p),
         hint: p.email && p.email.trim() ? p.email : "ohne E-Mail",
       }));
   }, [activeList, personOptions]);
@@ -510,7 +499,7 @@ export function VerteilerManager({
                         {withoutEmail.length}{" "}
                         {withoutEmail.length === 1 ? "Mitglied" : "Mitglieder"} ohne E-Mail-Adresse:
                       </span>{" "}
-                      {withoutEmail.map(memberLabel).join(", ")} — nur postalisch erreichbar.
+                      {withoutEmail.map(formatNameWithScout).join(", ")} — nur postalisch erreichbar.
                     </p>
                   ) : null}
 
@@ -686,7 +675,7 @@ export function VerteilerManager({
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-ink">
                             {formatName(m)}
-                            {m.scoutName && (m.lastName || m.firstName) ? (
+                            {scoutAddition(m) ? (
                               <span className="ml-1.5 font-normal text-ink-soft">„{m.scoutName}“</span>
                             ) : null}
                           </div>

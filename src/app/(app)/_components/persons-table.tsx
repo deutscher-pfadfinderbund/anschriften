@@ -53,7 +53,8 @@ import {
 } from "@/components/ui/table";
 import type { DistributionListSummary, GroupRow, OfficeRow, PersonListRow } from "@/db/queries";
 import { buildBcc } from "@/lib/export";
-import { SECTION_LABELS, birthYear, fold, formatName } from "@/lib/format";
+import { birthYear, fold, formatName, scoutAddition } from "@/lib/format";
+import { SECTION_LABELS, type Section } from "@/lib/sections";
 import { orderGroups } from "@/lib/groups";
 
 const ALL = "__all__";
@@ -82,11 +83,6 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 }
 
 type Indexed = PersonListRow & { _search: string };
-
-/** The Fahrtenname is an addition to a real name, never the label on its own. */
-function showScout(p: PersonListRow): boolean {
-  return !!p.scoutName && !!(p.lastName || p.firstName);
-}
 
 /** Second line under the name: „Stand · *Geburtsjahr“, whichever is present. */
 function nameSubline(p: PersonListRow): string {
@@ -227,7 +223,7 @@ export function PersonsTable({
                 className="rounded-sm font-medium whitespace-nowrap text-ink outline-none transition-colors hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {formatName(p)}
-                {showScout(p) ? (
+                {scoutAddition(p) ? (
                   <span className="ml-1.5 font-normal text-ink-soft">„{p.scoutName}“</span>
                 ) : null}
               </Link>
@@ -744,7 +740,7 @@ function PersonCard({ row }: { row: Row<Indexed> }) {
             className="rounded-sm font-medium text-ink outline-none transition-colors before:absolute before:inset-0 hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
           >
             {formatName(p)}
-            {showScout(p) ? (
+            {scoutAddition(p) ? (
               <span className="ml-1.5 font-normal text-ink-soft">„{p.scoutName}“</span>
             ) : null}
           </Link>
@@ -799,7 +795,7 @@ function GroupOptions({
 }: {
   ordered: { group: GroupRow; depth: number }[];
 }) {
-  const bySection = new Map<string, { group: GroupRow; depth: number }[]>();
+  const bySection = new Map<Section, { group: GroupRow; depth: number }[]>();
   for (const item of ordered) {
     if (!bySection.has(item.group.section)) bySection.set(item.group.section, []);
     bySection.get(item.group.section)!.push(item);
@@ -808,7 +804,7 @@ function GroupOptions({
     <>
       {[...bySection.entries()].map(([section, items]) => (
         <SelectGroup key={section}>
-          <SelectLabel>{SECTION_LABELS[section] ?? section}</SelectLabel>
+          <SelectLabel>{SECTION_LABELS[section]}</SelectLabel>
           {items.map(({ group, depth }) => (
             <SelectItem key={group.id} value={String(group.id)}>
               {" ".repeat(depth * 2)}

@@ -19,6 +19,7 @@ import {
   type MemberOrigin,
 } from "@/lib/effective-members";
 import type { CsvPerson } from "@/lib/export";
+import type { Section } from "@/lib/sections";
 
 export type PhoneEntry = { label: string; number: string };
 
@@ -55,7 +56,7 @@ export type GroupRow = {
   id: number;
   name: string;
   parentId: number | null;
-  section: string;
+  section: Section;
   kind: string | null;
   sortKey: number;
 };

@@ -21,16 +21,10 @@ import {
 // Relative import (not the `@/` alias): drizzle-kit bundles this schema file directly
 // and does not resolve tsconfig path aliases.
 import { RANK_UNRANKED } from "../lib/rank";
+import { SECTIONS } from "../lib/sections";
 
 /** Top-level organisational branch. Drives PDF ordering and grouping. */
-export const sectionEnum = pgEnum("section", [
-  "bund",
-  "jungenbund",
-  "maedchenbund",
-  "orden_st_georg",
-  "orden_st_christophorus",
-  "bundesgilde",
-]);
+export const sectionEnum = pgEnum("section", SECTIONS);
 
 /** Outcome of a mail send (optional mail module, issue #19). */
 export const mailStatusEnum = pgEnum("mail_status", ["sent", "failed"]);

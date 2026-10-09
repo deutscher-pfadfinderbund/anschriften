@@ -36,7 +36,9 @@ import {
   formatDate,
   formatDateTime,
   formatName,
+  formatNameWithScout,
   phoneLabelOptions,
+  todayIso,
 } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 import type { FieldErrors, PersonInput } from "@/lib/person-schema";
@@ -48,7 +50,6 @@ import {
   NONE,
   OFFICE_NONE,
   Panel,
-  todayIso,
   type AssignmentRow,
   type PhoneRow,
 } from "./form-primitives";
@@ -262,7 +263,7 @@ export function PersonForm({
 
   const heading =
     mode === "edit" && person
-      ? formatName(person) + (person.scoutName && (person.lastName || person.firstName) ? ` „${person.scoutName}“` : "")
+      ? formatNameWithScout(person)
       : "Neue Person";
   const subtitle =
     mode === "edit"
@@ -525,8 +526,7 @@ export function PersonForm({
                           rel="noopener"
                           className="text-fir underline-offset-2 hover:underline"
                         >
-                          {formatName(p)}
-                          {p.scoutName && (p.lastName || p.firstName) ? ` „${p.scoutName}“` : ""}
+                          {formatNameWithScout(p)}
                         </Link>
                       </li>
                     ))}

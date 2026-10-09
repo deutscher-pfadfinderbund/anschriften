@@ -3,8 +3,8 @@
 /**
  * Canonical German collation fold (DIN 5007-2, phone-book): compose first, then map
  * ä→ae, ö→oe, ü→ue, ß→ss, strip any remaining accents (café → cafe) and lower-case.
- * Shared rule with the PDF register (`normalizeSortKey` in build-data.ts) so the on-screen
- * persons table and the printed book sort identically.
+ * The one collation rule for the app: the persons table and the printed PDF register
+ * (src/pdf/build-data.ts) both sort with it, so they cannot drift apart.
  */
 export function fold(s: string): string {
   return s
@@ -36,6 +36,31 @@ export function formatName(p: {
   return p.scoutName?.trim() || "—";
 }
 
+/**
+ * The Fahrtenname as an addition to a real name: returned only when there is a Vor- or
+ * Nachname next to it (a person known only by the scout name already shows it as the
+ * name itself, see `formatName`). Null otherwise.
+ */
+export function scoutAddition(p: {
+  firstName?: string | null;
+  lastName?: string | null;
+  scoutName?: string | null;
+}): string | null {
+  const scout = p.scoutName?.trim();
+  if (!scout) return null;
+  return p.lastName?.trim() || p.firstName?.trim() ? scout : null;
+}
+
+/** "Nachname, Vorname „Fahrtenname“" — the plain-text form for headings, options and lists. */
+export function formatNameWithScout(p: {
+  firstName?: string | null;
+  lastName?: string | null;
+  scoutName?: string | null;
+}): string {
+  const scout = scoutAddition(p);
+  return scout ? `${formatName(p)} „${scout}“` : formatName(p);
+}
+
 /** German date for display: "24.06.2019". Input is an ISO date string or null. */
 export function formatDate(iso?: string | null): string {
   if (!iso) return "";
@@ -51,12 +76,32 @@ export function birthYear(iso?: string | null): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/** German date + time for the "zuletzt geändert" meta line. */
+// The Bund works in German time. Both helpers below pin Europe/Berlin explicitly: the
+// server (container) runs in UTC, the browser in the user's zone, and an unpinned
+// "today"/time would differ between them (wrong dates after midnight, hydration errors).
+const BERLIN = "Europe/Berlin";
+
+const berlinDate = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BERLIN,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** Today's calendar date in Europe/Berlin as ISO `YYYY-MM-DD`. Same result on server and client. */
+export function todayIso(now: Date = new Date()): string {
+  const parts = berlinDate.formatToParts(now);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/** German date + time in Europe/Berlin, e.g. "09.10.2026, 18:49" (the "zuletzt geändert" line). */
 export function formatDateTime(value?: string | Date | null): string {
   if (!value) return "";
   const d = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleString("de-DE", {
+    timeZone: BERLIN,
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -98,22 +143,3 @@ export function phoneLabelOptions(current?: string | null): string[] {
   if (!label || curated.includes(label)) return curated;
   return [...curated, label];
 }
-
-/** Human-readable label for a group section (for tree headers / hints). */
-export const SECTION_LABELS: Record<string, string> = {
-  bund: "Bund",
-  jungenbund: "Jungenbund",
-  maedchenbund: "Mädchenbund",
-  orden_st_georg: "Orden St. Georg",
-  orden_st_christophorus: "Orden St. Christophorus",
-  bundesgilde: "Bundesgilde",
-};
-
-export const SECTION_ORDER = [
-  "bund",
-  "jungenbund",
-  "maedchenbund",
-  "orden_st_georg",
-  "orden_st_christophorus",
-  "bundesgilde",
-] as const;

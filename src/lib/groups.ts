@@ -1,4 +1,4 @@
-import { SECTION_ORDER } from "@/lib/format";
+import { SECTIONS } from "@/lib/sections";
 
 export type GroupNode = {
   id: number;
@@ -33,8 +33,8 @@ export function orderGroups<T extends GroupNode>(groups: T[]): OrderedGroup<T>[]
   for (const list of byParent.values()) list.sort(cmp);
 
   const rootCmp = (a: T, b: T) => {
-    const sa = SECTION_ORDER.indexOf(a.section as (typeof SECTION_ORDER)[number]);
-    const sb = SECTION_ORDER.indexOf(b.section as (typeof SECTION_ORDER)[number]);
+    const sa = (SECTIONS as readonly string[]).indexOf(a.section);
+    const sb = (SECTIONS as readonly string[]).indexOf(b.section);
     return (sa < 0 ? 99 : sa) - (sb < 0 ? 99 : sb) || cmp(a, b);
   };
   const roots = (byParent.get(-1) ?? []).slice().sort(rootCmp);

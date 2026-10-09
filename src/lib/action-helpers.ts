@@ -8,8 +8,8 @@ import type { z } from "zod";
 /** Outcome of a mutation: success, or failure with a user-facing German message. */
 export type ActionResult = { ok: true } | { ok: false; message: string };
 
-/** Server-side "today" as an ISO date (YYYY-MM-DD) — the documented upper bound for "Ende unbekannt". */
-export const todayIso = (): string => new Date().toISOString().slice(0, 10);
+/** "Today" in Europe/Berlin as ISO date — the documented upper bound for "Ende unbekannt". */
+export { todayIso } from "@/lib/format";
 
 /**
  * Revalidate every page whose data reflects a person + assignment change: the directory

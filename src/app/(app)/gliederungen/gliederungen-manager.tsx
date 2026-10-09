@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { GroupRow } from "@/db/queries";
-import { SECTION_LABELS, SECTION_ORDER } from "@/lib/format";
+import { SECTIONS, SECTION_LABELS, type Section } from "@/lib/sections";
 import { orderGroups } from "@/lib/groups";
 import { HOVER_REVEAL, cn } from "@/lib/utils";
 
@@ -114,7 +114,7 @@ export function GliederungenManager({
   function submitForm() {
     const payload = {
       name: form.name,
-      section: form.section as (typeof SECTION_ORDER)[number],
+      section: form.section as Section,
       kind: form.kind.trim() ? form.kind.trim() : null,
       sortKey: Number(form.sortKey) || 0,
       parentId: form.parentId,
@@ -195,7 +195,7 @@ export function GliederungenManager({
                           </span>
                         </>
                       ) : null}
-                      <span>{SECTION_LABELS[group.section] ?? group.section}</span>
+                      <span>{SECTION_LABELS[group.section]}</span>
                     </span>
                     <span className={cn("flex shrink-0 items-center gap-0.5", HOVER_REVEAL)}>
                       <Button variant="ghost" size="icon-xs" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
@@ -239,7 +239,7 @@ export function GliederungenManager({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SECTION_ORDER.map((s) => (
+                    {SECTIONS.map((s) => (
                       <SelectItem key={s} value={s}>
                         {SECTION_LABELS[s]}
                       </SelectItem>
