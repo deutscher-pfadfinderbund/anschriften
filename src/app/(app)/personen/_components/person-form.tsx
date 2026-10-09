@@ -26,6 +26,9 @@ import { useUnsavedGuard } from "./use-unsaved-guard";
 
 const noSubscribe = () => () => {};
 
+/** One conflict toast at a time; it belongs to this form and goes when the form does. */
+const CONFLICT_TOAST = "person-conflict";
+
 /** The person editor: create (no `person`) or edit. Everything is buffered until Speichern. */
 export function PersonForm({
   person,
@@ -81,6 +84,8 @@ export function PersonForm({
 
   const otherHolders = useActiveHolders(activeHolders, person?.id);
 
+  useEffect(() => () => void toast.dismiss(CONFLICT_TOAST), []);
+
   function save() {
     if (isSaving) return;
     // Only orders whose warning is still shown: one for a row the user changed or removed
@@ -102,6 +107,7 @@ export function PersonForm({
         }
         if (res.reload)
           toast.error(res.message, {
+            id: CONFLICT_TOAST,
             description: "Deine Änderungen hier gehen dabei verloren.",
             duration: Infinity,
             closeButton: true,
@@ -155,9 +161,13 @@ export function PersonForm({
         backLabel="Zurück zum Verzeichnis"
       />
       <PageBody className="pb-0">
+        {/* While the form is on the page, the page's scroll padding keeps a field that gets
+            keyboard focus clear of the sticky save bar (two rows on a phone) and, below lg,
+            of the sticky top bar. */}
         <form
           ref={formRef}
           noValidate
+          className="[html:has(&)]:scroll-pb-24 max-lg:[html:has(&)]:scroll-pt-16"
           aria-label={person ? "Person bearbeiten" : "Neue Person"}
           onSubmit={(e) => {
             e.preventDefault();
