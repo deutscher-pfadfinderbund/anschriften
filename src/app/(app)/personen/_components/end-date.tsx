@@ -13,7 +13,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  useLastShown,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatDate, todayIso } from "@/lib/format";
@@ -82,7 +81,6 @@ export type EndRequest = {
  */
 export function EndDateDialog({ request, onClose }: { request: EndRequest | null; onClose: () => void }) {
   const focusAfter = useRef<string | null>(null);
-  const shown = useLastShown(request);
   return (
     <Dialog open={request != null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
@@ -95,12 +93,12 @@ export function EndDateDialog({ request, onClose }: { request: EndRequest | null
           }
         }}
       >
-        {shown ? (
+        {request ? (
           <EndDateForm
-            request={shown}
+            request={request}
             onClose={onClose}
             onConfirmed={() => {
-              focusAfter.current = shown.focusAfter;
+              focusAfter.current = request.focusAfter;
             }}
           />
         ) : null}

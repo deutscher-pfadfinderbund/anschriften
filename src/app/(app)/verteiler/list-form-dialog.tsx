@@ -21,26 +21,21 @@ import { callAction } from "@/lib/call-action";
 /** What the dialog edits: a new list (`id` null) or an existing one. */
 export type ListDraft = { id: number | null; name: string; description: string };
 
-/**
- * "Neuer Verteiler" / "Verteiler bearbeiten". `draft` stays set while the dialog closes,
- * so the closing animation keeps its content; `open` drives visibility.
- */
+/** "Neuer Verteiler" / "Verteiler bearbeiten", open while there is a `draft`. */
 export function ListFormDialog({
-  open,
   draft,
-  onOpenChange,
+  onClose,
   onSaved,
 }: {
-  open: boolean;
-  draft: ListDraft;
-  onOpenChange: (open: boolean) => void;
+  draft: ListDraft | null;
+  onClose: () => void;
   /** Called with the saved list's id (to select a newly created list). */
   onSaved: (id: number) => void;
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={draft != null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
-        <ListForm draft={draft} onCancel={() => onOpenChange(false)} onSaved={onSaved} />
+        {draft ? <ListForm draft={draft} onCancel={onClose} onSaved={onSaved} /> : null}
       </DialogContent>
     </Dialog>
   );

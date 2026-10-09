@@ -21,7 +21,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  useLastShown,
 } from "@/components/ui/dialog";
 import type { HistoricalAssignment } from "@/db/queries";
 import { callAction } from "@/lib/call-action";
@@ -79,7 +78,6 @@ export function HistorySection({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const shownDraft = useLastShown(draft);
   const [removing, setRemoving] = useState<HistoricalAssignment | null>(null);
   const [isRemoving, startRemove] = useTransition();
 
@@ -173,12 +171,12 @@ export function HistorySection({
 
       <Dialog open={draft != null} onOpenChange={(o) => !o && setDraft(null)}>
         <DialogContent>
-          {shownDraft ? (
+          {draft ? (
             <HistoryForm
               personId={personId}
               version={version}
               onVersion={onVersion}
-              initial={shownDraft}
+              initial={draft}
               groupOptions={groupOptions}
               officeOptions={officeOptions}
               onDone={() => setDraft(null)}

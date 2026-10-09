@@ -121,7 +121,6 @@ export function EntryRow({
  */
 export function useEntryDialog<D extends object>(initial: D) {
   const [pending, startTransition] = useTransition();
-  // `open` is kept apart from the draft so the dialog keeps its content while it fades out.
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(initial);
   const [confirming, setConfirmingState] = useState(false);

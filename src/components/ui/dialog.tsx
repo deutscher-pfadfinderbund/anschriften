@@ -7,10 +7,15 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-function Dialog({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+/** `open` of a controlled <Dialog>, for its panel; undefined when uncontrolled. */
+const DialogOpenContext = React.createContext<boolean | undefined>(undefined)
+
+function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  return (
+    <DialogOpenContext value={props.open}>
+      <DialogPrimitive.Root data-slot="dialog" {...props} />
+    </DialogOpenContext>
+  )
 }
 
 function DialogTrigger({
@@ -75,6 +80,11 @@ function DialogPanel({
   const [opener] = React.useState(() =>
     typeof document === "undefined" ? null : document.activeElement
   )
+  // While it fades out, the panel shows what it showed while open: callers may derive
+  // `open` and the content from one state, which empties the moment closing starts.
+  const open = React.useContext(DialogOpenContext)
+  const [shown, setShown] = React.useState(children)
+  if (open && shown !== children) setShown(children)
 
   return (
     <DialogPrimitive.Content
@@ -105,7 +115,7 @@ function DialogPanel({
       )}
       {...props}
     >
-      {children}
+      {open === false ? shown : children}
       <DialogPrimitive.Close data-slot="dialog-close" asChild>
         {/* The icon sizes grow to a 44px tap target on touch devices; pulling
             the anchor into the corner keeps the glyph optically where it sits
@@ -191,19 +201,7 @@ function DialogDescription({
   )
 }
 
-/**
- * `value` while it is set, else the last value it had. For a dialog whose `open` and
- * content come from one state (`open={draft != null}`): the content stays while it fades
- * out instead of collapsing the moment closing starts.
- */
-function useLastShown<T>(value: T | null): T | null {
-  const [last, setLast] = React.useState(value)
-  if (value != null && value !== last) setLast(value)
-  return value ?? last
-}
-
 export {
-  useLastShown,
   Dialog,
   DialogClose,
   DialogContent,

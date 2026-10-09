@@ -51,17 +51,11 @@ export function VerteilerManager({
   // A stale or unknown id (e.g. the list was just deleted) falls back to the first list.
   const activeList = lists.find((l) => l.id === selectedId) ?? lists[0] ?? null;
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [draft, setDraft] = useState<ListDraft>(NEW_LIST);
+  const [draft, setDraft] = useState<ListDraft | null>(null);
 
   function select(id: number | null) {
     // Next.js syncs history.replaceState into useSearchParams; no server round trip.
     window.history.replaceState(null, "", id == null ? "/verteiler" : `/verteiler?list=${id}`);
-  }
-
-  function openForm(next: ListDraft) {
-    setDraft(next);
-    setFormOpen(true);
   }
 
   return (
@@ -70,7 +64,7 @@ export function VerteilerManager({
         title="Verteiler"
         subtitle="Gremien-Verteiler pflegen und als BCC-Liste oder CSV exportieren"
         actions={
-          <Button onClick={() => openForm(NEW_LIST)}>
+          <Button onClick={() => setDraft(NEW_LIST)}>
             <Plus />
             Neuer Verteiler
           </Button>
@@ -89,7 +83,7 @@ export function VerteilerManager({
               mailEnabled={mailEnabled}
               mailLog={mailLog}
               onEdit={() =>
-                openForm({
+                setDraft({
                   id: activeList.id,
                   name: activeList.name,
                   description: activeList.description ?? "",
@@ -111,11 +105,10 @@ export function VerteilerManager({
       </PageBody>
 
       <ListFormDialog
-        open={formOpen}
         draft={draft}
-        onOpenChange={setFormOpen}
+        onClose={() => setDraft(null)}
         onSaved={(id) => {
-          setFormOpen(false);
+          setDraft(null);
           select(id);
         }}
       />
