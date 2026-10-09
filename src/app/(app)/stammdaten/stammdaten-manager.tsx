@@ -77,7 +77,10 @@ export function StammdatenManager({
 
   const copy = COPY[draft.kind];
   const entries = draft.kind === "office" ? offices.map(officeEntry) : ranks.map(rankEntry);
-  const nameTaken = isDuplicateName(draft.name, entries, draft.entry?.id ?? null);
+  // Only while editing: once a create succeeds, the refreshed list holds the new entry
+  // itself, which must not flash "gibt es schon" while the dialog fades out.
+  const nameTaken =
+    dialog.open && !dialog.pending && isDuplicateName(draft.name, entries, draft.entry?.id ?? null);
   // An Amt may stay without Reihenfolge (the RANK_UNRANKED sentinel, shown as empty).
   const orderErr = orderError(draft.order, draft.kind === "office");
   const blockers = draft.kind === "office" ? officeBlockers : rankBlockers;
@@ -219,7 +222,7 @@ export function StammdatenManager({
           draft.entry
             ? {
                 title: copy.deleteTitle,
-                description: `„${draft.entry.name}“ wird gelöscht. Das kann nicht rückgängig gemacht werden.`,
+                description: `„${draft.entry.name}“ wird gelöscht. Das lässt sich nicht rückgängig machen.`,
                 blockedReason: blockers[draft.entry.id],
                 onConfirm: confirmDelete,
               }

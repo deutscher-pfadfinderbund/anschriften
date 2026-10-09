@@ -63,7 +63,8 @@ export function GliederungenManager({
 
   const parent = draft.parentId != null ? groups.find((g) => g.id === draft.parentId) : undefined;
   const hasChildren = editId != null && groups.some((g) => g.parentId === editId);
-  const nameTaken = isDuplicateName(draft.name, groups, editId);
+  // Only while editing (see stammdaten-manager): a new Gliederung must not match itself.
+  const nameTaken = dialog.open && !dialog.pending && isDuplicateName(draft.name, groups, editId);
   const orderErr = orderError(draft.order);
 
   function openDialog(group: GroupRow | null) {
@@ -164,7 +165,7 @@ export function GliederungenManager({
           draft.group
             ? {
                 title: "Gliederung löschen?",
-                description: `„${draft.group.name}“ wird gelöscht. Das kann nicht rückgängig gemacht werden.`,
+                description: `„${draft.group.name}“ wird gelöscht. Das lässt sich nicht rückgängig machen.`,
                 blockedReason: blockers[draft.group.id],
                 onConfirm: confirmDelete,
               }

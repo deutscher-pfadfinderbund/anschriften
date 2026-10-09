@@ -212,7 +212,19 @@ function DialogDescription({
   )
 }
 
+/**
+ * `value` while it is set, else the last value it had. For a dialog whose `open` and
+ * content come from one state (`open={draft != null}`): the content stays while it fades
+ * out instead of collapsing the moment closing starts.
+ */
+function useLastShown<T>(value: T | null): T | null {
+  const [last, setLast] = React.useState(value)
+  if (value != null && value !== last) setLast(value)
+  return value ?? last
+}
+
 export {
+  useLastShown,
   Dialog,
   DialogClose,
   DialogContent,
