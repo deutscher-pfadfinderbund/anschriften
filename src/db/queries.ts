@@ -126,6 +126,8 @@ export type PersonListRow = {
   rankName: string | null;
   birthDate: string | null;
   deathDate: string | null;
+  /** Searched, not shown. */
+  street: string | null;
   city: string | null;
   email: string | null;
   phones: PhoneEntry[];
@@ -170,6 +172,7 @@ export async function listPersons(): Promise<PersonListRow[]> {
     rankName: p.rank?.name ?? null,
     birthDate: p.birthDate,
     deathDate: p.deathDate,
+    street: p.street,
     city: p.city,
     email: p.email,
     phones: p.phones,
