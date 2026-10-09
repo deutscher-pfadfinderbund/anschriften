@@ -38,6 +38,20 @@ docker compose pull && docker compose up -d
 Migrationen werden beim App-Start automatisch angewendet (per Advisory-Lock
 serialisiert, damit parallele Starts nicht kollidieren).
 
+**Einmalig beim Update auf die Version mit „aktiv = ohne Ende-Datum":** Ein Amt mit
+Ende-Datum gilt jetzt überall als beendet, auch im PDF; ein Ende in der Zukunft lässt
+sich nicht mehr speichern. Vor dem Update prüfen, ob es solche Einträge gibt:
+
+```bash
+docker compose exec -T db psql -U anschriften -d anschriften \
+  -c "select id, person_id, end_date from assignments where end_date > current_date;"
+```
+
+Jede Zeile wäre nach dem Update aus dem PDF verschwunden. Sollen diese Ämter weiter
+aktiv sein, das Ende entfernen
+(`update assignments set end_date = null, end_unknown = false where end_date > current_date;`)
+und das Amt zum tatsächlichen Ende in der App beenden.
+
 ## 2. Rollback
 
 Die CI taggt jedes Release als Versions-Image (`v1.2.3` → Tags `1.2.3` und `1.2`,
