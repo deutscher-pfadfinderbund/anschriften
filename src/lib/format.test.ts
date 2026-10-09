@@ -7,6 +7,7 @@ import {
   fold,
   formatDate,
   formatDateTime,
+  formatFullName,
   formatName,
   formatNameWithScout,
   phoneLabelOptions,
@@ -75,6 +76,19 @@ describe("formatName", () => {
     expect(formatName({})).toBe("—");
     expect(formatName({ lastName: null, firstName: null, scoutName: null })).toBe("—");
     expect(formatName({ lastName: "", firstName: "", scoutName: "  " })).toBe("—");
+  });
+});
+
+describe("formatFullName", () => {
+  it("reads „Vorname Nachname“ for running text", () => {
+    expect(formatFullName({ firstName: " Hannes ", lastName: "Hoffmann", scoutName: "Falke" })).toBe("Hannes Hoffmann");
+    expect(formatFullName({ lastName: "Hoffmann" })).toBe("Hoffmann");
+    expect(formatFullName({ firstName: "Hannes", lastName: " " })).toBe("Hannes");
+  });
+
+  it("falls back to the scout name, then a dash", () => {
+    expect(formatFullName({ lastName: null, scoutName: "Falke" })).toBe("Falke");
+    expect(formatFullName({})).toBe("—");
   });
 });
 
