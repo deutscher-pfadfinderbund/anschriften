@@ -98,7 +98,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
             onChange("");
           }
         }}
-        placeholder="Name, Ort, E-Mail, Telefon …"
+        placeholder="Name, Amt, Ort, E-Mail, Telefon …"
         aria-label="Personen durchsuchen"
         // The native cancel glyph is replaced by the button below (Firefox has none).
         className="pr-8 pl-8 [&::-webkit-search-cancel-button]:hidden"

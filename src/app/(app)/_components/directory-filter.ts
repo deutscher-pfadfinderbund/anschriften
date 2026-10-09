@@ -48,14 +48,14 @@ export function parseDirectoryParams(params: { get(name: string): string | null 
 }
 
 export function hasActiveFilters(f: DirectoryFilters): boolean {
-  return f.q.trim() !== "" || f.groupId != null || f.officeId != null || f.listId != null;
+  return searchWords(f.q).length > 0 || f.groupId != null || f.officeId != null || f.listId != null;
 }
 
 // --- search ----------------------------------------------------------------------------
 
 /** Precomputed per person once, so a keystroke only runs `includes` checks. */
 export type SearchIndex = {
-  /** Folded names, street, city and e-mail. */
+  /** Folded text of everything the list shows (and the street): who types what they see finds it. */
   searchText: string;
   /** Every phone number reduced to its digits, space-separated. */
   searchDigits: string;
@@ -67,7 +67,20 @@ const digitsOnly = (s: string) => s.replace(/\D/g, "");
 
 export function searchIndex(p: PersonListRow): SearchIndex {
   return {
-    searchText: fold([p.lastName, p.firstName, p.scoutName, p.street, p.city, p.email].filter(Boolean).join(" ")),
+    searchText: fold(
+      [
+        p.lastName,
+        p.firstName,
+        p.scoutName,
+        p.rankName,
+        p.street,
+        p.city,
+        p.email,
+        ...p.assignments.flatMap((a) => [a.officeName, a.groupName]),
+      ]
+        .filter(Boolean)
+        .join(" "),
+    ),
     searchDigits: p.phones.map((ph) => digitsOnly(ph.number)).join(" "),
     sortKey: fold(formatName(p)),
   };
@@ -76,9 +89,12 @@ export function searchIndex(p: PersonListRow): SearchIndex {
 /** A query word made of digits and phone punctuation ("0251/40003", "+49", "(0170)"). */
 const PHONE_WORD = /^[\d+()/.-]+$/;
 
-/** The folded words of a search query (empty for a blank query). */
+/**
+ * The folded words of a search query (empty for a blank query). Commas and semicolons
+ * separate words too, so the name as the list prints it ("Müller, Anna") finds the person.
+ */
 export function searchWords(query: string): string[] {
-  return fold(query).split(/\s+/).filter(Boolean);
+  return fold(query).split(/[\s,;]+/).filter(Boolean);
 }
 
 /**

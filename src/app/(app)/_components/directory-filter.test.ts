@@ -58,13 +58,14 @@ const anna = person({
   city: "Münster",
   email: "anna@example.org",
   phones: [{ label: "Mobil", number: "0170 1000003" }],
-  assignments: [assignment(1, 3, 9)],
+  assignments: [{ ...assignment(1, 3, 9), groupName: "Horte Greif", officeName: "Gauvogt" }],
   effectiveListIds: [7],
 });
 const ben = person({
   id: 2,
   firstName: "Ben",
   lastName: "Becker",
+  rankName: "Pfadfinder",
   city: "Köln",
   phones: [{ label: "Privat", number: "0221/40003" }],
   assignments: [assignment(2, 2), assignment(3, 4, 9)],
@@ -79,6 +80,18 @@ describe("search", () => {
     expect(ids({ q: "anna müller" })).toEqual([1]);
     expect(ids({ q: "Mueller Anna" })).toEqual([1]);
     expect(ids({ q: "anna schmidt" })).toEqual([]);
+  });
+
+  it("finds the name as the list prints it, with a comma", () => {
+    expect(ids({ q: "Müller, Anna" })).toEqual([1]);
+    expect(ids({ q: "Müller," })).toEqual([1]);
+    expect(ids({ q: "becker;ben" })).toEqual([2]);
+  });
+
+  it("searches Amt, Gliederung and Stand as shown in the list", () => {
+    expect(ids({ q: "gauvogt" })).toEqual([1]);
+    expect(ids({ q: "horte greif" })).toEqual([1]);
+    expect(ids({ q: "pfadfinder" })).toEqual([2]);
   });
 
   it("searches Fahrtenname, street, city and e-mail", () => {
@@ -98,6 +111,10 @@ describe("search", () => {
 
   it("does not let a lone separator match everyone", () => {
     expect(ids({ q: "-" })).toEqual([]);
+  });
+
+  it("treats separators alone as no search", () => {
+    expect(hasActiveFilters({ ...none, q: " , ; " })).toBe(false);
   });
 
   it("keeps everyone for a blank query", () => {
