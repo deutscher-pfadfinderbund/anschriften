@@ -153,6 +153,33 @@ describe("sendListMail partial failure (chunked BCC)", () => {
     expect(logged.error).toMatch(/^Abgebrochen nach 4 von 5 Empfängern: /);
   });
 
+  it("counts addresses the server refused in an accepted chunk as refused, not delivered", async () => {
+    // nodemailer resolves when only some RCPTs fail and lists them in `rejected`.
+    sendMailMock
+      .mockResolvedValueOnce({ accepted: ["kanzlei@example.org", "a@example.org"], rejected: ["B@example.org"] })
+      .mockResolvedValueOnce({ accepted: ["kanzlei@example.org", "c@example.org", "d@example.org"], rejected: [] })
+      .mockRejectedValueOnce(new Error("421 too many messages"));
+
+    const result = await sendListMail({ subject: "S", body: "B", recipients, sentBy: "K" });
+
+    expect(result).toMatchObject({ ok: false, sent: 3, recipientCount: 5 });
+    const logged = insertValuesMock.mock.calls[0][0] as { error: string };
+    expect(logged.error).toMatch(/^Abgebrochen nach 3 von 5 Empfängern: /);
+  });
+
+  it("reports refusals of a completed mailing in the result and the log, without addresses", async () => {
+    sendMailMock
+      .mockResolvedValueOnce({ rejected: [{ name: "", address: "a@example.org" }] })
+      .mockResolvedValue({ rejected: [] });
+
+    const result = await sendListMail({ subject: "S", body: "B", recipients, sentBy: "K" });
+
+    expect(result).toEqual({ ok: true, chunks: 3, recipientCount: 5, refused: 1 });
+    const logged = insertValuesMock.mock.calls[0][0] as { status: string; error: string };
+    expect(logged.status).toBe("sent");
+    expect(logged.error).toBe("1 von 5 Empfängern vom Mailserver abgelehnt");
+  });
+
   it("reports sent = 0 when the very first chunk fails", async () => {
     sendMailMock.mockRejectedValue(new Error("ECONNREFUSED"));
     const result = await sendListMail({ subject: "S", body: "B", recipients, sentBy: "K" });
@@ -166,7 +193,7 @@ describe("sendListMail partial failure (chunked BCC)", () => {
     insertValuesMock.mockRejectedValue(new Error("db down"));
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const result = await sendListMail({ subject: "S", body: "B", recipients, sentBy: "K" });
-    expect(result).toEqual({ ok: true, chunks: 3, recipientCount: 5 });
+    expect(result).toEqual({ ok: true, chunks: 3, recipientCount: 5, refused: 0 });
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
   });

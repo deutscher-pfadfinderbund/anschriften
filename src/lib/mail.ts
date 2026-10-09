@@ -64,12 +64,18 @@ export type SendListMailInput = {
 };
 
 export type SendListMailResult =
-  | { ok: true; chunks: number; recipientCount: number }
+  | {
+      ok: true;
+      chunks: number;
+      recipientCount: number;
+      /** Addresses the mail server refused at RCPT time while accepting the rest (no retry). */
+      refused: number;
+    }
   | {
       ok: false;
       /** Sanitized error (no recipient addresses) — safe for the log and the toast. */
       error: string;
-      /** Recipients whose BCC chunk was accepted before the failure (0 = nothing went out). */
+      /** Recipients the server accepted before the failure (0 = nothing went out). */
       sent: number;
       recipientCount: number;
     };
@@ -93,7 +99,9 @@ export function mailFailureMessage(result: { error: string; sent: number; recipi
  * Send one plaintext mailing to `recipients` via SMTP, split into BCC chunks of
  * `MAIL_BCC_CHUNK_SIZE`. `To:` is `MAIL_FROM` so recipients never see each other.
  * Counts delivered recipients chunk by chunk, so a failure midway reports how many
- * already got the mail. Writes exactly one `mail_log` row per mailing (not per chunk)
+ * already got the mail. A chunk can also go out while the server refuses single
+ * addresses (nodemailer then resolves and lists them in `rejected`); those are counted
+ * as refused, not delivered. Writes exactly one `mail_log` row per mailing (not per chunk)
  * for both outcomes; a failing log write is only logged to the console and never turns
  * a delivered mailing into a reported failure.
  */
@@ -131,17 +139,20 @@ export async function sendListMail(input: SendListMailInput): Promise<SendListMa
 
   const chunks = chunk(input.recipients, bccChunkSize());
   let sent = 0;
+  let refused = 0;
   let failure: string | null = null;
   try {
     for (const bcc of chunks) {
-      await transport.sendMail({
+      const info = await transport.sendMail({
         from,
         to: from,
         bcc,
         subject: input.subject,
         text: input.body,
       });
-      sent += bcc.length;
+      const refusedHere = countRefused(bcc, info?.rejected);
+      sent += bcc.length - refusedHere;
+      refused += refusedHere;
     }
   } catch (err) {
     // SMTP rejections often echo recipient addresses (PII). Sanitize once and use the same
@@ -151,6 +162,8 @@ export async function sendListMail(input: SendListMailInput): Promise<SendListMa
     transport.close();
   }
 
+  // Counts only, never the refused addresses themselves (PII).
+  const refusedNote = refused > 0 ? `${refused} von ${recipientCount} Empfängern vom Mailserver abgelehnt` : null;
   await writeMailLog({
     sentBy: input.sentBy,
     listId: input.listId ?? null,
@@ -159,14 +172,23 @@ export async function sendListMail(input: SendListMailInput): Promise<SendListMa
     status: failure == null ? "sent" : "failed",
     error:
       failure == null
-        ? null
+        ? refusedNote
         : sent > 0
           ? `Abgebrochen nach ${sent} von ${recipientCount} Empfängern: ${failure}`
           : failure,
   });
 
   if (failure != null) return { ok: false, error: failure, sent, recipientCount };
-  return { ok: true, chunks: chunks.length, recipientCount };
+  return { ok: true, chunks: chunks.length, recipientCount, refused };
+}
+
+/** How many of a chunk's BCC addresses the server refused (nodemailer's `info.rejected`). */
+function countRefused(bcc: string[], rejected: unknown): number {
+  if (!Array.isArray(rejected) || rejected.length === 0) return 0;
+  const refusedSet = new Set(
+    rejected.map((r) => (typeof r === "string" ? r : String((r as { address?: unknown })?.address ?? "")).toLowerCase()),
+  );
+  return bcc.filter((a) => refusedSet.has(a.toLowerCase())).length;
 }
 
 /** Insert the `mail_log` row; a DB error here is logged, never thrown (the mail is already out). */

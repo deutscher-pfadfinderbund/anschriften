@@ -593,7 +593,11 @@ export function VerteilerManager({
                           </div>
                         </div>
                         {e.status === "sent" ? (
-                          <span className="shrink-0 rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft">
+                          <span
+                            className="shrink-0 rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
+                            // A sent mailing can still note addresses the mail server refused.
+                            title={e.error ?? undefined}
+                          >
                             versendet
                           </span>
                         ) : (

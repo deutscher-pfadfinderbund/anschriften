@@ -9,8 +9,23 @@ import { collectEmails } from "@/lib/export";
 import { isMailEnabled, mailFailureMessage, sendListMail } from "@/lib/mail";
 
 export type SendMailResult =
-  | { ok: true; recipientCount: number; chunks: number }
-  | { ok: false; message: string };
+  | {
+      ok: true;
+      /** Recipients the mail server accepted (refused addresses are not included). */
+      recipientCount: number;
+      chunks: number;
+      /** Addresses the mail server refused while accepting the rest. */
+      refused: number;
+    }
+  | {
+      ok: false;
+      message: string;
+      /**
+       * Recipients who already got the mail before the failure. When > 0 the client must
+       * not offer the same send again, or those recipients get it twice.
+       */
+      sent?: number;
+    };
 
 const composeSchema = z.object({
   subject: z
@@ -77,6 +92,11 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
   // Refresh the "Zuletzt versendet" card regardless of outcome (failures are logged too).
   revalidateApp();
 
-  if (!result.ok) return { ok: false, message: mailFailureMessage(result) };
-  return { ok: true, recipientCount: result.recipientCount, chunks: result.chunks };
+  if (!result.ok) return { ok: false, message: mailFailureMessage(result), sent: result.sent };
+  return {
+    ok: true,
+    recipientCount: result.recipientCount - result.refused,
+    chunks: result.chunks,
+    refused: result.refused,
+  };
 }
