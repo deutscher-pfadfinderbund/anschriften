@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import type { HistoricalAssignment } from "@/db/queries";
 import { formatDate, todayIso } from "@/lib/format";
-import { HOVER_REVEAL, TOUCH_HIT, cn } from "@/lib/utils";
+import { TOUCH_HIT, cn } from "@/lib/utils";
 
 import { EndDateChoice } from "./end-date";
 import { ComboField, TextField } from "./field";
@@ -117,7 +117,9 @@ export function HistorySection({
                       {historyRange(h)}
                     </span>
                   </span>
-                  <span className={cn("flex shrink-0 items-center gap-0.5", HOVER_REVEAL)}>
+                  {/* A mouse sees the actions on hover or focus within the row; touch screens
+                      have no hover, so there they stay visible. */}
+                  <span className="flex shrink-0 items-center gap-0.5 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100">
                     <Button
                       type="button"
                       variant="ghost"

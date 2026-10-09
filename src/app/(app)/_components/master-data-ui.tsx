@@ -172,7 +172,7 @@ export function useEntryDialog<D extends object>(initial: D) {
 type EntryDialogState = ReturnType<typeof useEntryDialog<object>>;
 
 /** Löschen in an edit dialog. */
-export type Deletion = {
+type Deletion = {
   /** e.g. „Amt löschen?“ */
   title: string;
   description: string;

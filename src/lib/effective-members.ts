@@ -30,7 +30,7 @@ export type MembershipAssignment = {
 };
 
 /** Every person: the Stand drives rank rules, the death date excludes them entirely. */
-export type MembershipPerson = { id: number; rankId: number | null; deathDate: string | null };
+type MembershipPerson = { id: number; rankId: number | null; deathDate: string | null };
 
 /**
  * All inputs are required on purpose: a forgotten field would silently change who gets

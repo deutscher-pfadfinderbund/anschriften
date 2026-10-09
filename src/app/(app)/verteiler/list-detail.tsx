@@ -22,7 +22,7 @@ import type {
 import { downloadFile, toastDownloadError } from "@/lib/download";
 import { buildBcc, isEmail, type BccSeparator } from "@/lib/export";
 import { formatDateTime, formatNameWithScout } from "@/lib/format";
-import { TOUCH_HIT_Y, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 import { MembersPanel } from "./members-panel";
 import { RulesPanel } from "./rules-panel";
@@ -188,7 +188,9 @@ export function ListDetail({
                     onClick={() => setSeparator(value)}
                     className={cn(
                       "rounded-[5px] px-2 py-0.5 text-caption transition-colors",
-                      TOUCH_HIT_Y,
+                      // Taller tap band on touch; vertical only, so the two toggles' bands
+                      // do not overlap.
+                      "pointer-coarse:relative pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2",
                       separator === value
                         ? "bg-active font-medium text-fir"
                         : "text-ink-soft hover:bg-hover hover:text-ink",

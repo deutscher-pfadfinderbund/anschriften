@@ -29,7 +29,7 @@ export type DirectoryFilters = {
   listId: number | null;
 };
 
-export type DirectoryParams = DirectoryFilters & { sortDesc: boolean };
+type DirectoryParams = DirectoryFilters & { sortDesc: boolean };
 
 function parseId(value: string | null): number | null {
   const n = Number(value);
@@ -54,7 +54,7 @@ export function hasActiveFilters(f: DirectoryFilters): boolean {
 // --- search ----------------------------------------------------------------------------
 
 /** Precomputed per person once, so a keystroke only runs `includes` checks. */
-export type SearchIndex = {
+type SearchIndex = {
   /** Folded text of everything the list shows (and the street): who types what they see finds it. */
   searchText: string;
   /** Every phone number reduced to its digits, space-separated. */
@@ -90,7 +90,7 @@ const PHONE_WORD = /^[\d+()/.-]+$/;
  * The folded words of a search query (empty for a blank query). Commas and semicolons
  * separate words too, so the name as the list prints it ("Müller, Anna") finds the person.
  */
-export function searchWords(query: string): string[] {
+function searchWords(query: string): string[] {
   return fold(query).split(/[\s,;]+/).filter(Boolean);
 }
 
@@ -99,7 +99,7 @@ export function searchWords(query: string): string[] {
  * `matchesQuery`). A word that looks like a phone number is also compared digit by
  * digit, so "0170-1000003" finds "0170 1000003".
  */
-export function matchesSearch(index: SearchIndex, words: readonly string[]): boolean {
+function matchesSearch(index: SearchIndex, words: readonly string[]): boolean {
   return words.every((word) => {
     if (index.searchText.includes(word)) return true;
     const digits = PHONE_WORD.test(word) ? digitsOnly(word) : "";
@@ -135,7 +135,7 @@ export function filterPersons<T extends PersonListRow & SearchIndex>(
 
 // --- selection ---------------------------------------------------------------------------
 
-export type MailSelection = {
+type MailSelection = {
   /** Living selected persons: the only ones a mailing or the BCC copy goes to. */
   personIds: number[];
   /** Selected persons left out because they are deceased. */

@@ -86,7 +86,7 @@ export function isEmail(value: string | null | undefined): boolean {
   return EMAIL_RE.test((value ?? "").trim());
 }
 
-export type CollectedEmails = {
+type CollectedEmails = {
   /** Trimmed, valid addresses, deduplicated case-insensitively, in first-seen order. */
   recipients: string[];
   /** How many inputs were dropped because they were blank or not a valid address. */

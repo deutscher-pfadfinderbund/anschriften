@@ -23,7 +23,7 @@ const longText = optText(2000);
 const rowId = z.number().int().positive();
 
 /** One phone row as the form sends it; blank numbers are dropped by the person schema. */
-export const phoneInputSchema = z.object({ label: shortText, number: shortText });
+const phoneInputSchema = z.object({ label: shortText, number: shortText });
 
 /**
  * One "Ämter & Gliederung" row as the form sends it. `groupId` may be null only for a row
@@ -32,7 +32,7 @@ export const phoneInputSchema = z.object({ label: shortText, number: shortText }
  * A row with `endDate` or `endUnknown` is stored as a finished tenure (history), so past
  * offices can be captured directly and "Amt beenden" can be buffered until Speichern.
  */
-export const assignmentInputSchema = z.object({
+const assignmentInputSchema = z.object({
   groupId: rowId.nullable(),
   officeId: rowId.nullable().default(null),
   // Amtszeit "seit" (issue #22). NULL = unknown.
@@ -49,7 +49,7 @@ export const assignmentInputSchema = z.object({
  * same transaction and validates ownership/liveness there. `endUnknown = false` means
  * the `endDate` is mandatory and validated (against the target's start) server-side.
  */
-export const endPreviousInputSchema = z.object({
+const endPreviousInputSchema = z.object({
   assignmentId: rowId,
   endDate: shortText,
   endUnknown: z.boolean().default(false),

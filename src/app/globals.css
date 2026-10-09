@@ -146,8 +146,6 @@
   --color-control: var(--control);
   --color-hover: var(--hover);
   --color-active: var(--active);
-  /* Legacy name for --hover, still used by page files (hover:bg-sel). */
-  --color-sel: var(--hover);
   --color-scrim: var(--scrim);
   --color-fir: var(--fir);
   --color-fir-fill: var(--fir-fill);
