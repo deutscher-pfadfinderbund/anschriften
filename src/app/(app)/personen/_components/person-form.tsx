@@ -62,7 +62,13 @@ export function PersonForm({
   const [values, setValues] = useState<FormValues>(baseline);
   // Concurrency token (see toPayload): replaced only by what a history action returns.
   const [version, setVersion] = useState(person?.updatedAt ?? "");
-  const dirty = useMemo(() => snapshot(values) !== snapshot(baseline), [values, baseline]);
+  const otherHolders = useActiveHolders(activeHolders, person?.id);
+  // Only holder-warning orders whose warning is still shown: one for a row the user
+  // changed or removed afterwards is stale, must not fire silently and is no edit.
+  const orders = values.endPrevious.filter((o) =>
+    values.assignments.some((a) => otherHolders(a).some((h) => h.assignmentId === o.assignmentId)),
+  );
+  const dirty = snapshot({ ...values, endPrevious: orders }) !== snapshot(baseline);
   const { confirmLeave, release } = useUnsavedGuard(dirty);
 
   // The last filtered directory (sessionStorage) — "/" on the server and during hydration.
@@ -85,17 +91,10 @@ export function PersonForm({
       setErrors((e) => Object.fromEntries(Object.entries(e).filter(([k]) => !clear.includes(k))));
   };
 
-  const otherHolders = useActiveHolders(activeHolders, person?.id);
-
   useEffect(() => () => void toast.dismiss(CONFLICT_TOAST), []);
 
   function save() {
     if (isSaving) return;
-    // Only orders whose warning is still shown: one for a row the user changed or removed
-    // afterwards is stale and must not fire silently.
-    const orders = values.endPrevious.filter((o) =>
-      values.assignments.some((a) => otherHolders(a).some((h) => h.assignmentId === o.assignmentId)),
-    );
     const rows = values.assignments;
     startSave(async () => {
       const payload = toPayload(values, person && { id: person.id, updatedAt: version }, orders);
