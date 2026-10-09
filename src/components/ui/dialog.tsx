@@ -66,12 +66,9 @@ function focusOpener(opener: Element | null): boolean {
 function DialogPanel({
   className,
   children,
-  showCloseButton,
   onCloseAutoFocus,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  showCloseButton: boolean
-}) {
+}: React.ComponentProps<typeof DialogPrimitive.Content>) {
   // Mounted fresh on every open (the portal's Presence unmounts it when
   // closed), and captured during render — before an `autoFocus` field inside
   // the dialog has moved focus away from the opener.
@@ -109,36 +106,30 @@ function DialogPanel({
       {...props}
     >
       {children}
-      {showCloseButton && (
-        <DialogPrimitive.Close data-slot="dialog-close" asChild>
-          {/* The icon sizes grow to a 44px tap target on touch devices; pulling
-              the anchor into the corner keeps the glyph optically where it sits
-              with a mouse (8px + half of 28px === 0px + half of 44px). Same
-              `pointer-coarse` key as TOUCH_TARGET in button.tsx. */}
-          <Button
-            variant="ghost"
-            className="absolute top-2 right-2 text-ink-faint pointer-coarse:top-0 pointer-coarse:right-0"
-            size="icon-sm"
-          >
-            <XIcon />
-            <span className="sr-only">Schließen</span>
-          </Button>
-        </DialogPrimitive.Close>
-      )}
+      <DialogPrimitive.Close data-slot="dialog-close" asChild>
+        {/* The icon sizes grow to a 44px tap target on touch devices; pulling
+            the anchor into the corner keeps the glyph optically where it sits
+            with a mouse (8px + half of 28px === 0px + half of 44px). Same
+            `pointer-coarse` key as TOUCH_TARGET in button.tsx. */}
+        <Button
+          variant="ghost"
+          className="absolute top-2 right-2 text-ink-faint pointer-coarse:top-0 pointer-coarse:right-0"
+          size="icon-sm"
+        >
+          <XIcon />
+          <span className="sr-only">Schließen</span>
+        </Button>
+      </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   )
 }
 
-function DialogContent({
-  showCloseButton = true,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  showCloseButton?: boolean
-}) {
+/** Overlay plus panel. DialogPanel is its own component so it mounts fresh per opening. */
+function DialogContent(props: React.ComponentProps<typeof DialogPrimitive.Content>) {
   return (
     <DialogPortal>
       <DialogOverlay />
-      <DialogPanel showCloseButton={showCloseButton} {...props} />
+      <DialogPanel {...props} />
     </DialogPortal>
   )
 }
@@ -153,14 +144,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function DialogFooter({
-  className,
-  showCloseButton = false,
-  children,
-  ...props
-}: React.ComponentProps<"div"> & {
-  showCloseButton?: boolean
-}) {
+function DialogFooter({ className, children, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-footer"
@@ -171,11 +155,6 @@ function DialogFooter({
       {...props}
     >
       {children}
-      {showCloseButton && (
-        <DialogPrimitive.Close asChild>
-          <Button variant="outline">Schließen</Button>
-        </DialogPrimitive.Close>
-      )}
     </div>
   )
 }
@@ -231,8 +210,6 @@ export {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogOverlay,
-  DialogPortal,
   DialogTitle,
   DialogTrigger,
 }

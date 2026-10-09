@@ -63,8 +63,8 @@ export async function GET(request: Request): Promise<Response> {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      // filename is already ASCII (slugged); filename* is added for RFC 5987 completeness.
-      "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      // ASCII only (the list name is slugged), so the plain form is enough.
+      "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control": "no-store",
     },
   });

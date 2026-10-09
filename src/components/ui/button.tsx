@@ -23,8 +23,6 @@ const buttonVariants = cva(
         default: "bg-primary text-primary-foreground hover:bg-fir-deep",
         outline:
           "border-line-strong bg-surface text-ink hover:bg-hover aria-expanded:bg-active",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-hover aria-expanded:bg-active",
         ghost: "hover:bg-hover hover:text-ink aria-expanded:bg-active aria-expanded:text-ink",
         destructive: "bg-destructive/10 text-destructive hover:bg-destructive/15",
       },
@@ -72,4 +70,4 @@ function Button({
   )
 }
 
-export { Button, buttonVariants }
+export { Button }

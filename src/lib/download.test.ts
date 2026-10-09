@@ -5,21 +5,9 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 import { downloadFile, filenameFromDisposition, SessionExpiredError } from "./download";
 
 describe("filenameFromDisposition", () => {
-  it("prefers the RFC 5987 filename* (percent-encoded UTF-8)", () => {
-    expect(
-      filenameFromDisposition(
-        `attachment; filename="anschriften-x.csv"; filename*=UTF-8''anschriften-m%C3%A4dchenbund.csv`,
-      ),
-    ).toBe("anschriften-mädchenbund.csv");
-  });
-
-  it("falls back to the quoted or bare filename", () => {
+  it("reads the quoted or bare filename", () => {
     expect(filenameFromDisposition(`attachment; filename="verzeichnis.pdf"`)).toBe("verzeichnis.pdf");
     expect(filenameFromDisposition(`attachment; filename=verzeichnis.pdf`)).toBe("verzeichnis.pdf");
-  });
-
-  it("survives malformed percent-encoding by using the plain name", () => {
-    expect(filenameFromDisposition(`attachment; filename="a.csv"; filename*=UTF-8''%E0%A4%A.csv`)).toBe("a.csv");
   });
 
   it("returns null without a usable header", () => {

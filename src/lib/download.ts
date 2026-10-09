@@ -13,19 +13,11 @@ export class SessionExpiredError extends Error {
 }
 
 /**
- * Filename from a Content-Disposition header. Prefers the RFC 5987 `filename*=UTF-8''…` form
- * (percent-encoded, may carry umlauts) over the plain `filename="…"`. Null when absent.
+ * Filename from a Content-Disposition header (`filename="…"` or bare), null when absent.
+ * Our export routes only send ASCII names, so the RFC 5987 `filename*` form is not needed.
  */
 export function filenameFromDisposition(header: string | null): string | null {
   if (!header) return null;
-  const extended = /filename\*\s*=\s*([^']*)'[^']*'([^;]+)/i.exec(header);
-  if (extended) {
-    try {
-      return decodeURIComponent(extended[2].trim().replace(/^"|"$/g, ""));
-    } catch {
-      // Malformed percent-encoding: fall through to the plain filename.
-    }
-  }
   const plain = /filename\s*=\s*(?:"([^"]*)"|([^;]+))/i.exec(header);
   const name = (plain?.[1] ?? plain?.[2] ?? "").trim();
   return name || null;
