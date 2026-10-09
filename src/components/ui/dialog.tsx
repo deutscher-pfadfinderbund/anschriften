@@ -50,15 +50,17 @@ function DialogOverlay({
 /**
  * Radix only returns focus to a <DialogTrigger>, but almost every dialog here is
  * opened from state. So the panel remembers what had focus when it opened and
- * goes back there on close; if that element is gone (e.g. the deleted row) or
- * cannot take focus, it falls back to the page's main landmark (#inhalt).
+ * goes back there on close. If that element is gone (e.g. the deleted row) or
+ * never had focus (Safari does not focus a clicked button), Radix's own handler
+ * gets its turn and focuses the <DialogTrigger>, if there is one; failing both,
+ * focus lands on the page's main landmark (#inhalt).
  */
-function restoreFocus(opener: Element | null) {
-  if (opener instanceof HTMLElement && opener !== document.body && opener.isConnected) {
-    opener.focus()
-    if (document.activeElement === opener) return
+function focusOpener(opener: Element | null): boolean {
+  if (!(opener instanceof HTMLElement) || opener === document.body || !opener.isConnected) {
+    return false
   }
-  document.getElementById("inhalt")?.focus()
+  opener.focus()
+  return document.activeElement === opener
 }
 
 function DialogPanel({
@@ -83,8 +85,17 @@ function DialogPanel({
       onCloseAutoFocus={(event) => {
         onCloseAutoFocus?.(event)
         if (event.defaultPrevented) return
-        event.preventDefault()
-        restoreFocus(opener)
+        if (focusOpener(opener)) {
+          event.preventDefault() // skip Radix's trigger focus
+          return
+        }
+        // Not prevented, so Radix's handler runs next and focuses the trigger,
+        // if any. The microtask runs after it: only if nothing took focus.
+        queueMicrotask(() => {
+          if (document.activeElement === document.body) {
+            document.getElementById("inhalt")?.focus()
+          }
+        })
       }}
       className={cn(
         // Sized against the viewport (dvw/dvh), not `100%`: a fixed element's
