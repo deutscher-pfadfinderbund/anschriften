@@ -22,8 +22,8 @@ import { actorName } from "@/lib/auth-helpers";
 
 const officeSchema = z.object({
   name: nameField,
-  // RANK_UNRANKED (999) is the "ohne Rang" sentinel and passes like any other value.
-  rank: orderNumber("Der Rang"),
+  // RANK_UNRANKED (999) is the "ohne Reihenfolge" sentinel and passes like any other value.
+  rank: orderNumber("Die Reihenfolge"),
 });
 
 export type OfficeInput = z.input<typeof officeSchema>;
@@ -42,7 +42,7 @@ export async function saveOffice(id: number | null, raw: OfficeInput): Promise<A
         : await db.update(offices).set(values).where(eq(offices.id, id)).returning({ id: offices.id });
     if (saved.length === 0) return { ok: false, message: deletedMeanwhile("Dieses Amt") };
   } catch (err) {
-    if (isUniqueViolation(err)) return { ok: false, message: "Ein Amt mit diesem Namen existiert bereits." };
+    if (isUniqueViolation(err)) return { ok: false, message: "Ein Amt mit diesem Namen gibt es schon." };
     throw err;
   }
   revalidateApp();
