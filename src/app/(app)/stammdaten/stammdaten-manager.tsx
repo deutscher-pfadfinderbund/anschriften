@@ -162,7 +162,7 @@ export function StammdatenManager({
                   <EmptyState
                     icon={Briefcase}
                     title="Noch keine Ämter angelegt."
-                    description="Lege über „Neues Amt“ oben rechts das erste Amt an. Es steht danach bei Personen und als Verteiler-Regel zur Auswahl."
+                    description="Lege mit „Neues Amt“ das erste Amt an. Es steht danach bei Personen und als Verteiler-Regel zur Auswahl."
                   />
                 ) : null
               }
@@ -199,7 +199,7 @@ export function StammdatenManager({
                   <EmptyState
                     icon={Award}
                     title="Noch keine Stände angelegt."
-                    description="Lege über „Neuer Stand“ oben rechts den ersten Stand an. Er steht danach bei Personen und als Verteiler-Regel zur Auswahl."
+                    description="Lege mit „Neuer Stand“ den ersten Stand an. Er steht danach bei Personen und als Verteiler-Regel zur Auswahl."
                   />
                 ) : null
               }

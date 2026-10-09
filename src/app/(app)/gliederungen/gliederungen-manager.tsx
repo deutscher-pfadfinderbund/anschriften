@@ -150,7 +150,7 @@ export function GliederungenManager({
               <EmptyState
                 icon={Building2}
                 title="Noch keine Gliederungen angelegt."
-                description="Lege über „Neue Gliederung“ oben rechts die erste Gliederung an. Sie steht danach bei Personen, Verteilern und im PDF zur Verfügung."
+                description="Lege mit „Neue Gliederung“ die erste Gliederung an. Sie steht danach bei Personen, Verteilern und im PDF zur Verfügung."
               />
             ) : null
           }

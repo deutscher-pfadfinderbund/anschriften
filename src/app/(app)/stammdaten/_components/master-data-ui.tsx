@@ -21,7 +21,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-/** List card that hugs its content: an ordered list of entries, or the empty state. */
+/**
+ * List card that hugs its content: an ordered list of entries, or the empty state (then
+ * without the description, which explains the rows).
+ */
 export function EntryList({
   title,
   description,
@@ -35,7 +38,12 @@ export function EntryList({
   children: React.ReactNode;
 }) {
   return (
-    <Panel title={title} description={description} flush className="max-w-2xl overflow-hidden">
+    <Panel
+      title={title}
+      description={emptyState ? undefined : description}
+      flush
+      className="max-w-2xl overflow-hidden"
+    >
       {emptyState ?? <ul className="divide-y divide-line">{children}</ul>}
     </Panel>
   );
