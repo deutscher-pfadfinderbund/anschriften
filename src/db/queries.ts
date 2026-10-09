@@ -14,7 +14,7 @@ import {
 } from "@/db/schema";
 import { computeEffectiveMembership, type MemberOrigin } from "@/lib/effective-members";
 import type { CsvPerson } from "@/lib/export";
-import { formatFullName, formatName } from "@/lib/format";
+import { formatFullName } from "@/lib/format";
 import { byDirectoryName } from "@/lib/name-order";
 import { RULE_KINDS, type RuleKind, type RuleRef } from "@/lib/rule-kinds";
 import type { Section } from "@/lib/sections";
