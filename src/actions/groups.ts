@@ -19,19 +19,16 @@ import {
   type ActionResult,
 } from "@/lib/action-helpers";
 import { descendantIds } from "@/lib/groups";
+import { TEXT_MAX } from "@/lib/limits";
+import { optText, rowId } from "@/lib/person-schema";
 import { SECTIONS } from "@/lib/sections";
 
 const groupSchema = z.object({
   name: nameField,
-  parentId: z.number().int().positive().nullable(),
+  parentId: rowId.nullable(),
   // Only decisive for a top-level group: a child always takes its parent's Bereich.
   section: z.enum(SECTIONS, { error: "Bitte einen Bereich wählen." }),
-  kind: z
-    .string()
-    .trim()
-    .max(200, "Eingabe ist zu lang (max. 200 Zeichen).")
-    .nullish()
-    .transform((v) => v || null),
+  kind: optText(TEXT_MAX),
   sortKey: orderNumber("Die Reihenfolge"),
 });
 

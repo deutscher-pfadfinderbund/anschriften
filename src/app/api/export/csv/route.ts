@@ -6,6 +6,7 @@ import { getListName, personsForCsvByIds, personsForCsvByList } from "@/db/queri
 import { getSession } from "@/lib/auth-helpers";
 import { asciiSlug, buildCsv, CSV_BOM, type CsvPerson } from "@/lib/export";
 import { todayIso } from "@/lib/format";
+import { parseId } from "@/lib/ids";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,22 +24,15 @@ export async function GET(request: Request): Promise<Response> {
   let baseName: string;
 
   if (listIdRaw != null) {
-    const listId = Number(listIdRaw);
-    if (!Number.isInteger(listId) || listId <= 0) {
+    const listId = parseId(listIdRaw);
+    if (listId == null) {
       return new Response("Ungültige Verteiler-ID.", { status: 400 });
     }
     const [name, data] = await Promise.all([getListName(listId), personsForCsvByList(listId)]);
     rows = data;
     baseName = name ? asciiSlug(name) : `verteiler-${listId}`;
   } else if (idsRaw != null) {
-    const ids = [
-      ...new Set(
-        idsRaw
-          .split(",")
-          .map((s) => Number(s.trim()))
-          .filter((n) => Number.isInteger(n) && n > 0),
-      ),
-    ];
+    const ids = [...new Set(idsRaw.split(",").map(parseId).filter((id) => id != null))];
     if (ids.length === 0) {
       return new Response("Keine gültigen IDs übergeben.", { status: 400 });
     }

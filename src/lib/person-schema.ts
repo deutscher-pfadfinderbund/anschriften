@@ -2,15 +2,13 @@ import { z } from "zod";
 
 import { EMAIL_RE } from "@/lib/export";
 import { todayIso } from "@/lib/format";
+import { DESCRIPTION_MAX, TEXT_MAX } from "@/lib/limits";
 
 // Shared input contract for the person editor (client) and the save action (server).
 // German, field-keyed messages so the editor can show them inline.
 
-// Generous upper bounds — real values are far shorter; this only blocks
-// accidental or hostile megabyte-sized payloads.
-
 /** Optional free text: trimmed and bounded; blank (or missing) becomes null. */
-function optText(max: number) {
+export function optText(max: number) {
   return z
     .string()
     .trim()
@@ -18,9 +16,11 @@ function optText(max: number) {
     .nullish()
     .transform((v) => v || null);
 }
-const shortText = optText(200);
-const longText = optText(2000);
-const rowId = z.number().int().positive();
+const shortText = optText(TEXT_MAX);
+const longText = optText(DESCRIPTION_MAX);
+
+/** A row id (any table's serial primary key). */
+export const rowId = z.number().int().positive();
 
 /** One phone row as the form sends it; blank numbers are dropped by the person schema. */
 const phoneInputSchema = z.object({ label: shortText, number: shortText });

@@ -15,7 +15,7 @@ import {
   UserFacingError,
 } from "@/lib/action-helpers";
 import { todayIso } from "@/lib/format";
-import { isValidDate, resolveTenureEnd } from "@/lib/person-schema";
+import { isValidDate, resolveTenureEnd, rowId } from "@/lib/person-schema";
 
 // Office-history mutations. Active tenures — including ending one ("Beenden" in the
 // editor) — are owned by `savePerson` (buffered in the form, written on Speichern).
@@ -83,7 +83,7 @@ const tenureFields = {
   /** The person's `updatedAt` as the editor holds it (concurrency token). */
   updatedAt: z.string().max(40),
   groupId: z.number().int().positive("Bitte eine Gliederung wählen."),
-  officeId: z.number().int().positive().nullish(),
+  officeId: rowId.nullish(),
   startDate: dateField,
   endDate: dateField,
   endUnknown: z.boolean().default(false),
@@ -91,7 +91,7 @@ const tenureFields = {
 
 // --- create a past tenure ("Frühere Ämter" → hinzufügen) ------------------------
 
-const addHistoricalSchema = z.object({ personId: z.number().int().positive(), ...tenureFields });
+const addHistoricalSchema = z.object({ personId: rowId, ...tenureFields });
 
 /** Create an ended tenure for retroactive capture (e.g. an office held before the app existed). */
 export async function addHistoricalAssignment(raw: z.input<typeof addHistoricalSchema>): Promise<HistoryResult> {
@@ -120,7 +120,7 @@ export async function addHistoricalAssignment(raw: z.input<typeof addHistoricalS
 
 // --- edit a past tenure ---------------------------------------------------------
 
-const updateHistoricalSchema = z.object({ assignmentId: z.number().int().positive(), ...tenureFields });
+const updateHistoricalSchema = z.object({ assignmentId: rowId, ...tenureFields });
 
 /** Edit an ended tenure. Refuses to touch an active row (that belongs to the person form). */
 export async function updateHistoricalAssignment(
@@ -160,7 +160,7 @@ export async function updateHistoricalAssignment(
 
 // --- delete a tenure ("Eintrag löschen") ----------------------------------------
 
-const deleteSchema = z.object({ assignmentId: z.number().int().positive(), updatedAt: tenureFields.updatedAt });
+const deleteSchema = z.object({ assignmentId: rowId, updatedAt: tenureFields.updatedAt });
 
 /**
  * Hard-delete a HISTORY row ("Eintrag löschen" in Frühere Ämter). Active rows are

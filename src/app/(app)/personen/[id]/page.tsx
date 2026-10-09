@@ -12,17 +12,12 @@ import {
 } from "@/db/queries";
 import { requirePageSession } from "@/lib/auth-helpers";
 import { formatName } from "@/lib/format";
+import { parseId } from "@/lib/ids";
 
 import { PersonForm } from "../_components/person-form";
 
 // Memoized per request so generateMetadata and the page share one round-trip.
 const loadPerson = cache(getPersonForEdit);
-
-/** A person id from the URL, or null; anything beyond Postgres' `integer` cannot exist. */
-function parseId(raw: string): number | null {
-  const id = Number(raw);
-  return Number.isInteger(id) && id > 0 && id <= 2_147_483_647 ? id : null;
-}
 
 export async function generateMetadata({
   params,

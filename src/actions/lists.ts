@@ -15,6 +15,9 @@ import {
   stamp,
   type ActionResult,
 } from "@/lib/action-helpers";
+import { parseId } from "@/lib/ids";
+import { DESCRIPTION_MAX } from "@/lib/limits";
+import { optText } from "@/lib/person-schema";
 import { RULE_KIND_LABELS, RULE_KINDS, type RuleKind } from "@/lib/rule-kinds";
 
 export type SaveListResult = { ok: true; id: number } | { ok: false; message: string };
@@ -51,12 +54,7 @@ async function touchPersons(ids: number[], by: string): Promise<void> {
 
 const listSchema = z.object({
   name: nameField,
-  description: z
-    .string()
-    .trim()
-    .max(2000, "Eingabe ist zu lang (max. 2000 Zeichen).")
-    .nullish()
-    .transform((v) => v || null),
+  description: optText(DESCRIPTION_MAX),
 });
 
 export type ListInput = z.input<typeof listSchema>;
@@ -98,7 +96,7 @@ export async function deleteList(id: number): Promise<ActionResult> {
  */
 export async function addMembers(listId: number, personIds: number[]): Promise<AddMembersResult> {
   return mutation(async (by) => {
-    const requested = [...new Set(personIds.filter((n) => Number.isInteger(n) && n > 0))];
+    const requested = [...new Set(personIds.map(parseId).filter((id) => id != null))];
     if (requested.length === 0) return { ok: true, added: 0, skippedDeceased: 0 };
     const deceased = new Set(
       (

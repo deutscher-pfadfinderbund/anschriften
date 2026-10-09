@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { Tx } from "@/db";
 import { persons } from "@/db/schema";
 import { actorName, getSession } from "@/lib/auth-helpers";
+import { NAME_MAX } from "@/lib/limits";
 import { ORDER_MAX } from "@/lib/master-data";
 
 // Shared helpers for the Server Actions in src/actions/*. Every action follows the same
@@ -87,7 +88,7 @@ export const nameField = z
   .string()
   .trim()
   .min(1, "Name ist erforderlich.")
-  .max(200, "Eingabe ist zu lang (max. 200 Zeichen).");
+  .max(NAME_MAX, `Eingabe ist zu lang (max. ${NAME_MAX} Zeichen).`);
 
 const WHOLE_NUMBER = "Bitte eine ganze Zahl eingeben.";
 

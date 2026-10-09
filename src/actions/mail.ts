@@ -6,7 +6,9 @@ import { effectiveMemberIds, personEmailsByIds } from "@/db/queries";
 import { SESSION_EXPIRED, firstError, getActionSession, revalidateApp } from "@/lib/action-helpers";
 import { actorName } from "@/lib/auth-helpers";
 import { collectEmails } from "@/lib/export";
+import { BODY_MAX, SUBJECT_MAX } from "@/lib/limits";
 import { isMailEnabled, mailFailureMessage, sendListMail } from "@/lib/mail";
+import { rowId } from "@/lib/person-schema";
 
 export type SendMailResult =
   | {
@@ -32,7 +34,7 @@ const composeSchema = z.object({
     .string()
     .trim()
     .min(1, "Betreff ist erforderlich.")
-    .max(200, "Betreff ist zu lang (max. 200 Zeichen).")
+    .max(SUBJECT_MAX, `Betreff ist zu lang (max. ${SUBJECT_MAX} Zeichen).`)
     // A newline in the subject would end the SMTP header and let the rest of the
     // value inject arbitrary headers (Bcc:, …) — classic header injection.
     .refine((s) => !/[\r\n]/.test(s), "Der Betreff darf keine Zeilenumbrüche enthalten."),
@@ -40,10 +42,10 @@ const composeSchema = z.object({
     .string()
     .trim()
     .min(1, "Nachricht ist erforderlich.")
-    .max(50000, "Nachricht ist zu lang (max. 50.000 Zeichen)."),
+    .max(BODY_MAX, `Nachricht ist zu lang (max. ${BODY_MAX.toLocaleString("de-DE")} Zeichen).`),
   // A send targets either a whole list (effective set) or an explicit selection.
-  listId: z.number().int().positive().nullish(),
-  personIds: z.array(z.number().int().positive()).nullish(),
+  listId: rowId.nullish(),
+  personIds: z.array(rowId).nullish(),
 });
 
 export type SendMailInput = z.infer<typeof composeSchema>;
