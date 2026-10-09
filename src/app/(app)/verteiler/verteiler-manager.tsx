@@ -1,389 +1,67 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import {
-  Award,
-  Briefcase,
-  Clock,
-  Copy,
-  Download,
-  Layers,
-  Lock,
-  Mail,
-  Pencil,
-  Plus,
-  Send,
-  Trash2,
-  UserPlus,
-  Users,
-  X,
-  type LucideIcon,
-} from "lucide-react";
-import { toast } from "sonner";
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Mail, Plus } from "lucide-react";
 
-import {
-  addListRule,
-  addMembers,
-  deleteList,
-  removeListRule,
-  removeMember,
-  saveList,
-} from "@/actions/lists";
-import { Combobox } from "@/components/combobox";
-import { ComposeMailDialog } from "@/components/compose-mail-dialog";
-import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { EmptyState } from "@/components/empty-state";
-import { FormLabel } from "@/components/form-label";
-import { MultiSelectList } from "@/components/multi-select-list";
-import { PageHeader } from "@/components/page-header";
+import { PageBody, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import type {
   DistributionListWithMembers,
   GroupRow,
-  ListMemberRow,
   MailLogEntry,
   OfficeRow,
   PersonOption,
   RankRow,
 } from "@/db/queries";
-import { downloadFile, toastDownloadError } from "@/lib/download";
-import { buildBcc, isEmail, type BccSeparator } from "@/lib/export";
-import { formatDateTime, formatName, formatNameWithScout, scoutAddition } from "@/lib/format";
-import { RULE_KIND_LABELS, RULE_KINDS, type RuleKind } from "@/lib/rule-kinds";
-import { HOVER_REVEAL, TOUCH_HIT_Y, cn } from "@/lib/utils";
 
-type ListFormState = { id: number | null; name: string; description: string };
+import { ListDetail } from "./list-detail";
+import { ListFormDialog, type ListDraft } from "./list-form-dialog";
+import { ListNav } from "./list-nav";
 
-/** Same rule as the BCC copy and the mail send (collectEmails), so the lists agree. */
-function hasEmail(m: ListMemberRow): boolean {
-  return isEmail(m.email);
-}
-
-type RuleRow = { id: number; name: string };
-
-/** Texts per rule kind for the "Automatisch enthalten (nach …)" cards. */
-const RULE_UI: Record<
-  RuleKind,
-  {
-    icon: LucideIcon;
-    title: string;
-    description: string;
-    emptyRules: string;
-    addPlaceholder: string;
-    searchPlaceholder: string;
-    comboEmptyText: string;
-  }
-> = {
-  office: {
-    icon: Briefcase,
-    title: "Automatisch enthalten (nach Amt)",
-    description:
-      "Wer eines dieser Ämter innehat, ist automatisch Mitglied — bei einem Amtswechsel wandert die Mitgliedschaft mit.",
-    emptyRules: "Noch keine Amts-Regel.",
-    addPlaceholder: "+ Amt hinzufügen",
-    searchPlaceholder: "Amt suchen …",
-    comboEmptyText: "Kein Amt gefunden.",
-  },
-  rank: {
-    icon: Award,
-    title: "Automatisch enthalten (nach Stand)",
-    description:
-      "Wer einen dieser Stände trägt, ist automatisch Mitglied — z. B. alle Ordensritter und St.-Georgs-Ritter.",
-    emptyRules: "Noch keine Stand-Regel.",
-    addPlaceholder: "+ Stand hinzufügen",
-    searchPlaceholder: "Stand suchen …",
-    comboEmptyText: "Kein Stand gefunden.",
-  },
-  group: {
-    icon: Layers,
-    title: "Automatisch enthalten (nach Gliederung)",
-    description:
-      "Wer aktiv einer dieser Gliederungen zugeordnet ist, ist automatisch Mitglied — z. B. die ganze Bundesführung.",
-    emptyRules: "Noch keine Gliederungs-Regel.",
-    addPlaceholder: "+ Gliederung hinzufügen",
-    searchPlaceholder: "Gliederung suchen …",
-    comboEmptyText: "Keine Gliederung gefunden.",
-  },
-};
+const NEW_LIST: ListDraft = { id: null, name: "", description: "" };
 
 /**
- * One "Automatisch enthalten (nach …)" card. Identical chrome for Amt, Stand and
- * Gliederung — only the icon, texts and the id/name rows differ.
+ * The /verteiler screen: list navigation on the left (a select on phones), the chosen
+ * list on the right. The selection lives in the URL (`?list=<id>`), so a reload or a
+ * shared link opens the same list.
  */
-function RuleSection({
-  icon: Icon,
-  title,
-  description,
-  rows,
-  options,
-  onAdd,
-  onRemove,
-  emptyRules,
-  addAriaLabel,
-  addPlaceholder,
-  searchPlaceholder,
-  comboEmptyText,
-  disabled,
-}: {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-  rows: RuleRow[];
-  options: { value: string; label: string }[];
-  onAdd: (id: number) => void;
-  onRemove: (row: RuleRow) => void;
-  emptyRules: string;
-  addAriaLabel: string;
-  addPlaceholder: string;
-  searchPlaceholder: string;
-  comboEmptyText: string;
-  disabled: boolean;
-}) {
-  return (
-    <section className="rounded-lg border border-line bg-surface shadow-sm">
-      <div className="border-b border-line px-[18px] py-3">
-        <span className="font-display text-[15.5px] font-semibold text-ink">{title}</span>
-        <p className="mt-0.5 text-[12.5px] text-ink-faint">{description}</p>
-      </div>
-      <div className="p-[18px]">
-        {rows.length === 0 ? (
-          <p className="mb-3 text-[13px] text-ink-soft">{emptyRules}</p>
-        ) : (
-          /* Chips sized to their content: a rule is one short word, so full-width
-             rows would stack up as mostly empty bars. */
-          <ul className="mb-3 flex flex-wrap gap-1.5">
-            {rows.map((r) => (
-              <li
-                key={r.id}
-                className="flex max-w-full items-center gap-1.5 rounded-md border border-line bg-surface-2 py-1 pr-1 pl-2.5 text-[13.5px]"
-              >
-                <Icon className="size-3.5 shrink-0 text-ink-faint" />
-                <span className="min-w-0 truncate text-ink">{r.name}</span>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={`Regel „${r.name}“ entfernen`}
-                  className="shrink-0 text-ink-faint hover:text-crit"
-                  disabled={disabled}
-                  onClick={() => onRemove(r)}
-                >
-                  <X className="size-3.5" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="max-w-sm">
-          <Combobox
-            aria-label={addAriaLabel}
-            options={options}
-            value={null}
-            onChange={(v) => onAdd(Number(v))}
-            placeholder={addPlaceholder}
-            searchPlaceholder={searchPlaceholder}
-            emptyText={comboEmptyText}
-          />
-        </div>
-      </div>
-    </section>
-  );
-}
-
 export function VerteilerManager({
   lists,
   personOptions,
   offices,
   ranks,
   groups,
-  initialListId,
-  mailEnabled = false,
-  mailLog = [],
+  mailEnabled,
+  mailLog,
 }: {
   lists: DistributionListWithMembers[];
   personOptions: PersonOption[];
   offices: OfficeRow[];
   ranks: RankRow[];
   groups: GroupRow[];
-  initialListId?: number | null;
   /** True when the optional mail module is configured (see isMailEnabled). */
-  mailEnabled?: boolean;
+  mailEnabled: boolean;
   /** List-scoped send history, newest first (empty when the module is off). */
-  mailLog?: MailLogEntry[];
+  mailLog: MailLogEntry[];
 }) {
-  const [isPending, startTransition] = useTransition();
+  const searchParams = useSearchParams();
+  const selectedId = Number(searchParams.get("list")) || null;
+  // A stale or unknown id (e.g. the list was just deleted) falls back to the first list.
+  const activeList = lists.find((l) => l.id === selectedId) ?? lists[0] ?? null;
 
-  const [selectedListId, setSelectedListId] = useState<number | null>(
-    initialListId ?? lists[0]?.id ?? null,
-  );
-  const [separator, setSeparator] = useState<BccSeparator>("; ");
+  const [formOpen, setFormOpen] = useState(false);
+  const [draft, setDraft] = useState<ListDraft>(NEW_LIST);
 
-  const [listForm, setListForm] = useState<ListFormState | null>(null);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
-  const [addSelection, setAddSelection] = useState<Set<number>>(new Set());
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [csvPending, setCsvPending] = useState(false);
-  // Removing a rule can change many people's membership at once → confirm first.
-  const [ruleRemoval, setRuleRemoval] = useState<{ kind: RuleKind; id: number; name: string } | null>(
-    null,
-  );
-
-  // Reconcile the selection with the (possibly refreshed) server data: keep the
-  // chosen list if it still exists, otherwise fall back to the first one.
-  const activeList = useMemo(
-    () => lists.find((l) => l.id === selectedListId) ?? lists[0] ?? null,
-    [lists, selectedListId],
-  );
-
-  const members = useMemo(() => activeList?.members ?? [], [activeList]);
-  const withEmail = members.filter(hasEmail);
-  const withoutEmail = members.filter((m) => !hasEmail(m));
-  const bcc = useMemo(
-    () => buildBcc(members.map((m) => m.email), separator),
-    [members, separator],
-  );
-
-  // Send history for the active list (newest first, capped for the card).
-  const recentMail = useMemo(
-    () => (activeList ? mailLog.filter((e) => e.listId === activeList.id).slice(0, 5) : []),
-    [mailLog, activeList],
-  );
-
-  const addOptions = useMemo(() => {
-    if (!activeList) return [];
-    const memberIds = new Set(activeList.members.map((m) => m.personId));
-    // Deceased persons never count as members, so they are not offered.
-    return personOptions
-      .filter((p) => !memberIds.has(p.id) && p.deathDate == null)
-      .map((p) => ({
-        value: p.id,
-        label: formatNameWithScout(p),
-        hint: p.email && p.email.trim() ? p.email : "ohne E-Mail",
-      }));
-  }, [activeList, personOptions]);
-
-  async function downloadListCsv(listId: number) {
-    if (csvPending) return;
-    setCsvPending(true);
-    try {
-      await downloadFile(`/api/export/csv?listId=${listId}`, "anschriften.csv");
-    } catch (err) {
-      toastDownloadError(err, "CSV-Export fehlgeschlagen. Bitte erneut versuchen.");
-    } finally {
-      setCsvPending(false);
-    }
+  function select(id: number | null) {
+    // Next.js syncs history.replaceState into useSearchParams; no server round trip.
+    window.history.replaceState(null, "", id == null ? "/verteiler" : `/verteiler?list=${id}`);
   }
 
-  function copyBcc() {
-    if (bcc.text.length === 0) {
-      toast.error("Keine E-Mail-Adressen zum Kopieren.");
-      return;
-    }
-    navigator.clipboard.writeText(bcc.text).then(
-      () =>
-        toast.success(
-          `${bcc.count} Adressen kopiert${
-            bcc.skipped > 0 ? ` (${bcc.skipped} ohne gültige E-Mail übersprungen)` : ""
-          }.`,
-        ),
-      () => toast.error("Kopieren nicht möglich."),
-    );
-  }
-
-  function submitListForm() {
-    if (!listForm) return;
-    const { id } = listForm;
-    const payload = { name: listForm.name, description: listForm.description || null };
-    startTransition(async () => {
-      const res = await saveList(id, payload);
-      if (!res.ok) return void toast.error(res.message);
-      setSelectedListId(res.id);
-      toast.success(id != null ? "Verteiler gespeichert." : "Verteiler angelegt.");
-      setListForm(null);
-    });
-  }
-
-  function confirmDelete() {
-    if (!activeList) return;
-    startTransition(async () => {
-      const res = await deleteList(activeList.id);
-      if (!res.ok) return void toast.error(res.message);
-      toast.success("Verteiler gelöscht.");
-      setDeleteOpen(false);
-      setSelectedListId(null);
-    });
-  }
-
-  function submitAddMembers() {
-    if (!activeList || addSelection.size === 0) return;
-    const ids = [...addSelection];
-    startTransition(async () => {
-      const res = await addMembers(activeList.id, ids);
-      if (!res.ok) return void toast.error(res.message);
-      toast.success(`${res.added} ${res.added === 1 ? "Mitglied" : "Mitglieder"} hinzugefügt.`);
-      setAddOpen(false);
-      setAddSelection(new Set());
-    });
-  }
-
-  function handleRemove(personId: number) {
-    if (!activeList) return;
-    startTransition(async () => {
-      const res = await removeMember(activeList.id, personId);
-      if (!res.ok) return void toast.error(res.message);
-      toast.success("Mitglied aus dem Verteiler entfernt.");
-    });
-  }
-
-  /** Run the confirmed rule removal and toast the result. */
-  function confirmRuleRemoval() {
-    if (!activeList || !ruleRemoval) return;
-    const { kind, id, name } = ruleRemoval;
-    startTransition(async () => {
-      const res = await removeListRule(activeList.id, kind, id);
-      if (!res.ok) return void toast.error(res.message);
-      toast.success(`Regel „${name}“ entfernt.`);
-      setRuleRemoval(null);
-    });
-  }
-
-  // Per kind: the targets not yet a rule on the active list — the "+ … hinzufügen" comboboxes.
-  const ruleOptions = useMemo(() => {
-    const targets: Record<RuleKind, { id: number; name: string }[]> = {
-      office: offices,
-      rank: ranks,
-      group: groups,
-    };
-    const options = {} as Record<RuleKind, { value: string; label: string }[]>;
-    for (const kind of RULE_KINDS) {
-      const existing = new Set((activeList?.rules[kind] ?? []).map((r) => r.id));
-      options[kind] = targets[kind]
-        .filter((t) => !existing.has(t.id))
-        .map((t) => ({ value: String(t.id), label: t.name }));
-    }
-    return options;
-  }, [activeList, offices, ranks, groups]);
-
-  function handleAddRule(kind: RuleKind, targetId: number) {
-    if (!activeList || !Number.isInteger(targetId)) return;
-    const name = ruleOptions[kind].find((o) => o.value === String(targetId))?.label ?? RULE_KIND_LABELS[kind];
-    startTransition(async () => {
-      const res = await addListRule(activeList.id, kind, targetId);
-      if (!res.ok) return void toast.error(res.message);
-      toast.success(`Regel „${name}“ hinzugefügt.`);
-    });
+  function openForm(next: ListDraft) {
+    setDraft(next);
+    setFormOpen(true);
   }
 
   return (
@@ -391,494 +69,56 @@ export function VerteilerManager({
       <PageHeader
         title="Verteiler"
         subtitle="Gremien-Verteiler pflegen und als BCC-Liste oder CSV exportieren"
-      />
-      <div className="px-4 pt-gutter pb-10 sm:px-6">
-        <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[260px_1fr]">
-          {/* Left: list of distribution lists */}
-          <section className="rounded-lg border border-line bg-surface shadow-sm">
-            <div className="border-b border-line px-[18px] py-3 font-display text-[15.5px] font-semibold text-ink">
-              Verteiler
-            </div>
-            {lists.length === 0 ? (
-              <p className="px-[18px] py-4 text-[13px] text-ink-faint">Noch keine Verteiler.</p>
-            ) : (
-              <ul className="py-1.5">
-                {lists.map((l) => {
-                  const active = activeList?.id === l.id;
-                  return (
-                    <li key={l.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedListId(l.id)}
-                        aria-current={active ? "true" : undefined}
-                        className={cn(
-                          // pl-4 plus the 2px marker border adds up to the app-wide 18px gutter.
-                          "flex w-full items-center gap-2 border-l-2 py-2 pr-[18px] pl-4 text-left text-[13.5px] transition-colors",
-                          "outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          active
-                            ? "border-fir bg-surface-2 font-medium text-ink"
-                            : "border-transparent text-ink-soft hover:bg-sel hover:text-ink",
-                        )}
-                      >
-                        <span className="min-w-0 flex-1 truncate">{l.name}</span>
-                        <span className="tabular-nums text-xs text-ink-faint">
-                          {l.members.length}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            <div className="border-t border-line px-[18px] py-2.5">
-              <button
-                type="button"
-                onClick={() => setListForm({ id: null, name: "", description: "" })}
-                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-line-strong py-2 text-[13px] text-ink-soft transition-colors hover:border-fir hover:text-fir"
-              >
-                <Plus className="size-3.5" />
-                Neuer Verteiler
-              </button>
-            </div>
-          </section>
-
-          {/* Right: detail. min-w-0 so a long, unbreakable e-mail address cannot
-              widen the 1fr column past the viewport (grid items default to
-              min-width:auto, which made the whole page scroll sideways). */}
-          {activeList ? (
-            <div className="flex min-w-0 flex-col gap-[18px]">
-              <section className="rounded-lg border border-line bg-surface shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line px-[18px] py-3.5">
-                  <div className="min-w-0">
-                    <h2 className="font-display text-lg font-semibold text-ink">
-                      {activeList.name}
-                    </h2>
-                    <p className="mt-0.5 text-[13px] text-ink-soft">
-                      {members.length} {members.length === 1 ? "Mitglied" : "Mitglieder"} ·{" "}
-                      {withEmail.length} mit E-Mail
-                    </p>
-                    {activeList.description ? (
-                      <p className="mt-1 text-[13px] text-ink-faint">{activeList.description}</p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {mailEnabled ? (
-                      <Button onClick={() => setComposeOpen(true)}>
-                        <Send className="size-4" />
-                        E-Mail schreiben …
-                      </Button>
-                    ) : null}
-                    <Button variant={mailEnabled ? "outline" : "default"} onClick={copyBcc}>
-                      <Copy className="size-4" />
-                      Alle E-Mails kopieren
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => downloadListCsv(activeList.id)}
-                      disabled={csvPending}
-                    >
-                      <Download className="size-4" />
-                      CSV herunterladen
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        setListForm({
-                          id: activeList.id,
-                          name: activeList.name,
-                          description: activeList.description ?? "",
-                        })
-                      }
-                    >
-                      <Pencil className="size-4" />
-                      Umbenennen
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="text-ink-faint hover:text-crit"
-                      onClick={() => setDeleteOpen(true)}
-                    >
-                      <Trash2 className="size-4" />
-                      Löschen
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="p-[18px]">
-                  {withoutEmail.length > 0 ? (
-                    <p className="mb-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-[12.5px] text-ink-soft">
-                      <span className="font-medium text-ink">
-                        {withoutEmail.length}{" "}
-                        {withoutEmail.length === 1 ? "Mitglied" : "Mitglieder"} ohne gültige E-Mail-Adresse:
-                      </span>{" "}
-                      {withoutEmail.map(formatNameWithScout).join(", ")} — nur postalisch erreichbar.
-                    </p>
-                  ) : null}
-
-                  {/* Extra bottom margin on touch so the toggles' stretched tap
-                      bands (below) stay clear of the Textarea. */}
-                  <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 pointer-coarse:mb-3">
-                    <Label className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint">
-                      <Mail className="size-3.5" />
-                      BCC-Vorschau
-                    </Label>
-                    <div className="inline-flex rounded-md border border-line p-0.5 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setSeparator("; ")}
-                        className={cn(
-                          "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
-                          "focus-visible:ring-2 focus-visible:ring-ring",
-                          TOUCH_HIT_Y,
-                          // Same "active" language as the nav and the tabs:
-                          // neutral surface, fir text — never a filled pill.
-                          separator === "; "
-                            ? "bg-surface-2 font-medium text-fir"
-                            : "text-ink-soft hover:text-ink",
-                        )}
-                      >
-                        Semikolon (Outlook)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSeparator(", ")}
-                        className={cn(
-                          "rounded-[5px] px-2 py-0.5 outline-none transition-colors",
-                          "focus-visible:ring-2 focus-visible:ring-ring",
-                          TOUCH_HIT_Y,
-                          separator === ", "
-                            ? "bg-surface-2 font-medium text-fir"
-                            : "text-ink-soft hover:text-ink",
-                        )}
-                      >
-                        Komma (Gmail)
-                      </button>
-                    </div>
-                  </div>
-                  <Textarea
-                    readOnly
-                    value={bcc.text}
-                    aria-label="BCC-Vorschau"
-                    placeholder="Keine E-Mail-Adressen in diesem Verteiler."
-                    className="h-24 resize-y font-mono text-[12.5px]"
-                    onFocus={(e) => e.currentTarget.select()}
-                  />
-                  <div className="mt-2">
-                    <Button variant="outline" size="sm" onClick={copyBcc}>
-                      <Copy className="size-3.5" />
-                      Kopieren
-                    </Button>
-                  </div>
-                </div>
-              </section>
-
-              {/* Send history (optional mail module) */}
-              {mailEnabled && recentMail.length > 0 ? (
-                <section className="rounded-lg border border-line bg-surface shadow-sm">
-                  <div className="flex items-center gap-2 border-b border-line px-[18px] py-3">
-                    <Clock className="size-3.5 text-ink-faint" />
-                    <span className="font-display text-[15.5px] font-semibold text-ink">
-                      Zuletzt versendet
-                    </span>
-                  </div>
-                  <ul>
-                    {recentMail.map((e) => (
-                      <li
-                        key={e.id}
-                        className="flex items-start justify-between gap-3 border-b border-line px-[18px] py-2.5 text-[13.5px] last:border-b-0"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-ink">{e.subject}</div>
-                          <div className="mt-0.5 text-[12px] text-ink-faint">
-                            {formatDateTime(e.sentAt)} · {e.sentBy} · {e.recipientCount} Empfänger
-                          </div>
-                        </div>
-                        {e.status === "sent" ? (
-                          <span
-                            className="shrink-0 rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
-                            // A sent mailing can still note addresses the mail server refused.
-                            title={e.error ?? undefined}
-                          >
-                            versendet
-                          </span>
-                        ) : (
-                          <span
-                            className="shrink-0 rounded-[4px] bg-crit-tint px-1.5 py-px text-[10.5px] font-semibold text-crit"
-                            title={e.error ?? undefined}
-                          >
-                            fehlgeschlagen
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-
-              {/* Automatic membership rules — same shape for Amt, Stand and Gliederung. */}
-              {RULE_KINDS.map((kind) => (
-                <RuleSection
-                  key={kind}
-                  {...RULE_UI[kind]}
-                  rows={activeList.rules[kind]}
-                  options={ruleOptions[kind]}
-                  onAdd={(id) => handleAddRule(kind, id)}
-                  onRemove={(row) => setRuleRemoval({ kind, ...row })}
-                  addAriaLabel={`${RULE_KIND_LABELS[kind]} als Regel hinzufügen`}
-                  disabled={isPending}
-                />
-              ))}
-
-              {/* Members */}
-              <section className="rounded-lg border border-line bg-surface shadow-sm">
-                <div className="flex items-center justify-between border-b border-line px-[18px] py-3">
-                  <span className="font-display text-[15.5px] font-semibold text-ink">
-                    Mitglieder
-                  </span>
-                  <Button size="sm" onClick={() => setAddOpen(true)}>
-                    <UserPlus className="size-4" />
-                    Mitglieder hinzufügen
-                  </Button>
-                </div>
-                {members.length === 0 ? (
-                  <EmptyState
-                    icon={Users}
-                    title="Noch keine Mitglieder in diesem Verteiler."
-                    description="Anschriften einzeln hinzufügen oder oben eine automatische Regel nach Amt, Stand oder Gliederung anlegen."
-                  />
-                ) : (
-                  <ul>
-                    {members.map((m) => (
-                      <li
-                        key={m.personId}
-                        className="group/row flex items-center gap-3 border-b border-line px-[18px] py-2 text-[13.5px] last:border-b-0 hover:bg-sel"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-ink">
-                            {formatName(m)}
-                            {scoutAddition(m) ? (
-                              <span className="ml-1.5 font-normal text-ink-soft">„{m.scoutName}“</span>
-                            ) : null}
-                          </div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                            {m.manual ? (
-                              <span className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-faint">
-                                manuell
-                              </span>
-                            ) : null}
-                            {m.via.map((v) => (
-                              <span
-                                key={`${v.kind}${v.id}`}
-                                className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
-                              >
-                                über {RULE_KIND_LABELS[v.kind]}: {v.name}
-                              </span>
-                            ))}
-                            {m.mainOffice && m.via.length === 0 ? (
-                              <span className="text-xs text-ink-faint">{m.mainOffice}</span>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="hidden min-w-0 flex-1 sm:block">
-                          {m.email?.trim() ? (
-                            <a
-                              href={`mailto:${m.email}`}
-                              className="truncate text-fir hover:underline"
-                            >
-                              {m.email}
-                            </a>
-                          ) : (
-                            <span className="text-ink-faint">— ohne E-Mail</span>
-                          )}
-                        </div>
-                        {m.manual ? (
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`${formatName(m)} entfernen`}
-                            className={cn("shrink-0 text-ink-faint hover:text-crit", HOVER_REVEAL)}
-                            disabled={isPending}
-                            onClick={() => handleRemove(m.personId)}
-                          >
-                            <X className="size-4" />
-                          </Button>
-                        ) : (
-                          <span
-                            className="shrink-0 text-ink-faint"
-                            title="Automatisch über eine Regel enthalten — die Regel oben entfernen oder Amt, Stand bzw. Gliederung der Person ändern."
-                          >
-                            <Lock className="size-3.5 opacity-50" />
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </div>
-          ) : (
-            <section className="rounded-lg border border-dashed border-line-strong bg-surface">
-              <EmptyState
-                className="py-16"
-                icon={Mail}
-                title="Noch kein Verteiler angelegt."
-                description="Lege einen neuen Verteiler an, um E-Mail-Listen und CSV-Exporte zu erzeugen."
-                action={
-                  <Button onClick={() => setListForm({ id: null, name: "", description: "" })}>
-                    <Plus className="size-4" />
-                    Neuer Verteiler
-                  </Button>
-                }
-              />
-            </section>
-          )}
-        </div>
-      </div>
-
-      {/* Create / rename dialog */}
-      <Dialog open={listForm != null} onOpenChange={(o) => !o && setListForm(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {listForm?.id != null ? "Verteiler umbenennen" : "Neuer Verteiler"}
-            </DialogTitle>
-            <DialogDescription>
-              Verteiler bündeln Anschriften für E-Mail-Listen und Serienbriefe.
-            </DialogDescription>
-          </DialogHeader>
-          {listForm ? (
-            <div className="flex flex-col gap-3">
-              <div>
-                <FormLabel htmlFor="list-name">Name</FormLabel>
-                <Input
-                  id="list-name"
-                  autoFocus
-                  value={listForm.name}
-                  onChange={(e) => setListForm({ ...listForm, name: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") submitListForm();
-                  }}
-                  placeholder="z. B. Bundesthing"
-                />
-              </div>
-              <div>
-                <FormLabel htmlFor="list-desc">Beschreibung (optional)</FormLabel>
-                <Textarea
-                  id="list-desc"
-                  value={listForm.description}
-                  onChange={(e) => setListForm({ ...listForm, description: e.target.value })}
-                  placeholder="Wofür wird dieser Verteiler verwendet?"
-                />
-              </div>
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setListForm(null)} disabled={isPending}>
-              Abbrechen
-            </Button>
-            <Button onClick={submitListForm} disabled={isPending || !listForm?.name.trim()}>
-              {isPending ? "Speichern …" : "Speichern"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete dialog */}
-      <ConfirmDeleteDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title="Verteiler löschen?"
-        description={
-          <>
-            „{activeList?.name}“ wird mit allen {activeList?.members.length ?? 0} Mitgliedschaften
-            gelöscht. Die Anschriften selbst bleiben erhalten. Diese Aktion kann nicht rückgängig
-            gemacht werden.
-          </>
+        actions={
+          <Button onClick={() => openForm(NEW_LIST)}>
+            <Plus />
+            Neuer Verteiler
+          </Button>
         }
-        confirmLabel="Endgültig löschen"
-        pending={isPending}
-        onConfirm={confirmDelete}
       />
-
-      {/* Rule removal confirmation — can change many memberships at once */}
-      <ConfirmDeleteDialog
-        open={ruleRemoval != null}
-        onOpenChange={(o) => !o && setRuleRemoval(null)}
-        title="Regel entfernen?"
-        description={
-          <>
-            Die automatische Regel „{ruleRemoval?.name}“ wird aus diesem Verteiler entfernt.
-            Dadurch kann sich die Mitgliedschaft mehrerer Personen ändern. Manuell hinzugefügte
-            Mitglieder bleiben erhalten.
-          </>
-        }
-        confirmLabel="Regel entfernen"
-        pending={isPending}
-        onConfirm={confirmRuleRemoval}
-      />
-
-      {/* Add members dialog */}
-      <Dialog
-        open={addOpen}
-        onOpenChange={(o) => {
-          setAddOpen(o);
-          if (!o) setAddSelection(new Set());
-        }}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Mitglieder hinzufügen</DialogTitle>
-            <DialogDescription>
-              Anschriften suchen und auswählen. Bereits enthaltene Mitglieder werden ausgeblendet.
-            </DialogDescription>
-          </DialogHeader>
-          {/* min-w-0: grid items default to min-width:auto, so without it this
-              box would again be sized by the member list's min-content. */}
-          <div className="min-w-0 rounded-md border border-line">
-            <MultiSelectList
-              options={addOptions}
-              selected={addSelection}
-              onToggle={(value) =>
-                setAddSelection((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(value)) next.delete(value);
-                  else next.add(value);
-                  return next;
+      <PageBody>
+        {activeList ? (
+          <div className="grid grid-cols-1 items-start gap-gutter lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-x-8">
+            <ListNav lists={lists} activeId={activeList.id} onSelect={select} />
+            <ListDetail
+              list={activeList}
+              personOptions={personOptions}
+              offices={offices}
+              ranks={ranks}
+              groups={groups}
+              mailEnabled={mailEnabled}
+              mailLog={mailLog}
+              onRename={() =>
+                openForm({
+                  id: activeList.id,
+                  name: activeList.name,
+                  description: activeList.description ?? "",
                 })
               }
-              searchPlaceholder="Name, Fahrtenname oder E-Mail suchen …"
-              emptyText="Keine passende Anschrift gefunden."
+              onDeleted={() => select(null)}
             />
           </div>
-          <DialogFooter className="sm:justify-between">
-            <span className="text-[13px] text-ink-faint">
-              {addSelection.size} ausgewählt
-            </span>
-            <div className="flex gap-2">
-              <DialogClose asChild>
-                <Button variant="outline" disabled={isPending}>
-                  Abbrechen
-                </Button>
-              </DialogClose>
-              <Button onClick={submitAddMembers} disabled={isPending || addSelection.size === 0}>
-                {isPending ? "Hinzufügen …" : `Hinzufügen (${addSelection.size})`}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        ) : (
+          <div className="rounded-lg border border-dashed border-line-strong bg-surface">
+            <EmptyState
+              className="py-16"
+              icon={Mail}
+              title="Noch kein Verteiler angelegt."
+              description="Lege oben rechts über „Neuer Verteiler“ den ersten an – zum Beispiel für das Bundesthing."
+            />
+          </div>
+        )}
+      </PageBody>
 
-      {/* Compose mail (optional mail module) */}
-      {mailEnabled && activeList ? (
-        <ComposeMailDialog
-          open={composeOpen}
-          onOpenChange={setComposeOpen}
-          target={{ kind: "list", listId: activeList.id }}
-          contextName={`den Verteiler „${activeList.name}“`}
-          recipientCount={bcc.count}
-          skippedCount={bcc.skipped}
-        />
-      ) : null}
+      <ListFormDialog
+        open={formOpen}
+        draft={draft}
+        onOpenChange={setFormOpen}
+        onSaved={(id) => {
+          setFormOpen(false);
+          select(id);
+        }}
+      />
     </>
   );
 }
