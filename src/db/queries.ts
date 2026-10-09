@@ -14,7 +14,8 @@ import {
 } from "@/db/schema";
 import { computeEffectiveMembership, type MemberOrigin } from "@/lib/effective-members";
 import type { CsvPerson } from "@/lib/export";
-import { formatFullName } from "@/lib/format";
+import { formatFullName, formatName } from "@/lib/format";
+import { byDirectoryName } from "@/lib/name-order";
 import { RULE_KINDS, type RuleKind, type RuleRef } from "@/lib/rule-kinds";
 import type { Section } from "@/lib/sections";
 
@@ -495,11 +496,6 @@ export type DistributionListWithMembers = {
   members: ListMemberRow[];
 };
 
-/** Sort members like the directory: by last name, else scout name. */
-function memberSortKey(m: ListMemberRow): string {
-  return (m.lastName || m.scoutName || "").toLowerCase();
-}
-
 /** Every distribution list with its rules and effective members — one shot for /verteiler. */
 export async function listDistributionLists(): Promise<DistributionListWithMembers[]> {
   const [lists, { membership, rules }, people, activeOffices] = await Promise.all([
@@ -553,7 +549,7 @@ export async function listDistributionLists(): Promise<DistributionListWithMembe
         via: viaRefs(origin.via),
       };
     });
-    members.sort((a, b) => memberSortKey(a).localeCompare(memberSortKey(b), "de"));
+    members.sort(byDirectoryName);
     return {
       ...dl,
       rules: rulesByList.get(dl.id) ?? { office: [], rank: [], group: [] },

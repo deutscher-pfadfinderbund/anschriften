@@ -79,7 +79,7 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
   // Same rule as the compose preview and the clipboard copy (collectEmails), so the
   // count the user confirmed is the count that goes out.
   const { recipients } = collectEmails(emails);
-  if (recipients.length === 0) return { ok: false, message: "Keine Empfänger mit E-Mail-Adresse." };
+  if (recipients.length === 0) return { ok: false, message: "Keine Empfänger mit gültiger E-Mail-Adresse." };
 
   const result = await sendListMail({
     subject,
