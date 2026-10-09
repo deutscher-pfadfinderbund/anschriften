@@ -103,7 +103,9 @@ export function MembersPanel({
           description="Füge Personen über „Mitglieder hinzufügen“ hinzu oder lege unten eine Regel an."
         />
       ) : (
-        <ul>
+        // A container: the rows put name and e-mail side by side only when the panel
+        // itself is wide enough (at 1024 px the list rail leaves it narrow).
+        <ul className="@container">
           {members.map((m, index) => (
             <MemberRow
               key={m.personId}
@@ -141,7 +143,7 @@ function MemberRow({
   const email = m.email?.trim() ?? "";
   return (
     <li className="flex items-center gap-3 border-b border-line px-4 py-2 last:border-b-0 sm:px-gutter">
-      <div className="min-w-0 flex-1 sm:grid sm:grid-cols-2 sm:items-center sm:gap-4">
+      <div className="min-w-0 flex-1 @xl:grid @xl:grid-cols-2 @xl:items-center @xl:gap-4">
         <div className="min-w-0">
           <div className="truncate text-ui text-ink">
             {formatName(m)}
@@ -164,9 +166,9 @@ function MemberRow({
             <div className="truncate text-caption text-ink-faint">{m.mainOffice}</div>
           ) : null}
         </div>
-        <div className="mt-0.5 min-w-0 truncate text-caption sm:mt-0 sm:text-ui">
+        <div className="mt-0.5 min-w-0 truncate text-caption @xl:mt-0 @xl:text-ui">
           {isEmail(email) ? (
-            <a href={`mailto:${email}`} className="text-fir hover:underline">
+            <a href={`mailto:${email}`} title={email} className="text-fir hover:underline">
               {email}
             </a>
           ) : email ? (

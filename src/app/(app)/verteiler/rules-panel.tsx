@@ -118,7 +118,7 @@ export function RulesPanel({
                 ))}
                 <div className="w-full sm:w-56">
                   <Combobox
-                    aria-label={`${RULE_KIND_LABELS[kind]} als Regel hinzufügen`}
+                    aria-label={`${RULE_KIND_LABELS[kind]} hinzufügen`}
                     options={options[kind]}
                     value={null}
                     onChange={(v) => add(kind, v)}

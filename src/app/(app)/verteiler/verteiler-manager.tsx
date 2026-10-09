@@ -104,7 +104,7 @@ export function VerteilerManager({
               className="py-16"
               icon={Mail}
               title="Noch kein Verteiler angelegt."
-              description="Lege oben rechts über „Neuer Verteiler“ den ersten an – zum Beispiel für das Bundesthing."
+              description="Lege über „Neuer Verteiler“ den ersten an – zum Beispiel für das Bundesthing."
             />
           </div>
         )}

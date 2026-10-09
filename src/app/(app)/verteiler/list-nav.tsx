@@ -59,7 +59,13 @@ export function ListNav({
                   )}
                 >
                   <span className="min-w-0 flex-1 truncate">{l.name}</span>
-                  <span className="text-caption font-normal text-ink-faint tabular-nums">
+                  {/* ink-faint is too faint on the --active fill in dark mode (< 4.5:1). */}
+                  <span
+                    className={cn(
+                      "text-caption font-normal tabular-nums",
+                      active ? "text-ink-soft" : "text-ink-faint",
+                    )}
+                  >
                     <span className="sr-only">, </span>
                     {l.members.length}
                     <span className="sr-only"> {l.members.length === 1 ? "Mitglied" : "Mitglieder"}</span>
