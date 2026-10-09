@@ -364,7 +364,11 @@ export function PersonsTable({
       const res = await addMembers(listId, ids);
       if (!res.ok) return void toast.error(res.message);
       const listName = distributionLists.find((l) => l.id === listId)?.name ?? "Verteiler";
-      toast.success(`${ids.length} zu „${listName}“ hinzugefügt.`);
+      const skipped = res.skippedDeceased;
+      toast.success(
+        `${res.added} zu „${listName}“ hinzugefügt` +
+          (skipped > 0 ? ` (${skipped} ${skipped === 1 ? "verstorbene Person" : "verstorbene Personen"} übersprungen).` : "."),
+      );
       setAddToListOpen(false);
       setTargetListId(null);
     });

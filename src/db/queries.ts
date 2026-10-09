@@ -582,6 +582,8 @@ export type PersonOption = {
   lastName: string | null;
   scoutName: string | null;
   email: string | null;
+  /** Set for deceased persons: the duplicate hint keeps them, the member picker drops them. */
+  deathDate: string | null;
 };
 
 /** Minimal person list for the "add members" picker and the duplicate-person hint. */
@@ -593,6 +595,7 @@ export async function listPersonOptions(): Promise<PersonOption[]> {
       lastName: persons.lastName,
       scoutName: persons.scoutName,
       email: persons.email,
+      deathDate: persons.deathDate,
     })
     .from(persons);
   return rows.sort(byGermanName);

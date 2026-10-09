@@ -264,8 +264,9 @@ export function VerteilerManager({
   const addOptions = useMemo(() => {
     if (!activeList) return [];
     const memberIds = new Set(activeList.members.map((m) => m.personId));
+    // Deceased persons never count as members, so they are not offered.
     return personOptions
-      .filter((p) => !memberIds.has(p.id))
+      .filter((p) => !memberIds.has(p.id) && p.deathDate == null)
       .map((p) => ({
         value: p.id,
         label: formatNameWithScout(p),
@@ -331,7 +332,7 @@ export function VerteilerManager({
     startTransition(async () => {
       const res = await addMembers(activeList.id, ids);
       if (!res.ok) return void toast.error(res.message);
-      toast.success(`${ids.length} ${ids.length === 1 ? "Mitglied" : "Mitglieder"} hinzugefügt.`);
+      toast.success(`${res.added} ${res.added === 1 ? "Mitglied" : "Mitglieder"} hinzugefügt.`);
       setAddOpen(false);
       setAddSelection(new Set());
     });

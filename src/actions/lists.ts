@@ -1,11 +1,11 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
 import { RULE_TABLES } from "@/db/list-rules";
-import { distributionListMembers, distributionLists } from "@/db/schema";
+import { distributionListMembers, distributionLists, persons } from "@/db/schema";
 import {
   deletedMeanwhile,
   firstError,
@@ -20,6 +20,16 @@ import { actorName } from "@/lib/auth-helpers";
 import { RULE_KIND_LABELS, RULE_KINDS, type RuleKind } from "@/lib/rule-kinds";
 
 export type SaveListResult = { ok: true; id: number } | { ok: false; message: string };
+
+export type AddMembersResult =
+  | {
+      ok: true;
+      /** Living persons now on the list (including ones that already were). */
+      added: number;
+      /** Deceased persons that were left out. */
+      skippedDeceased: number;
+    }
+  | { ok: false; message: string };
 
 const RELOAD = "Bitte lade die Seite neu.";
 
@@ -86,12 +96,27 @@ export async function deleteList(id: number): Promise<ActionResult> {
   return { ok: true };
 }
 
-/** Add persons to a list; duplicates are ignored so re-adding is harmless. */
-export async function addMembers(listId: number, personIds: number[]): Promise<ActionResult> {
+/**
+ * Add persons to a list; duplicates are ignored so re-adding is harmless. Deceased persons
+ * are left out: effective membership never counts them, so adding them would report a
+ * success that never shows up on the list.
+ */
+export async function addMembers(listId: number, personIds: number[]): Promise<AddMembersResult> {
   const session = await getActionSession();
   if (!session) return SESSION_EXPIRED;
-  const ids = [...new Set(personIds.filter((n) => Number.isInteger(n) && n > 0))];
-  if (ids.length === 0) return { ok: true };
+  const requested = [...new Set(personIds.filter((n) => Number.isInteger(n) && n > 0))];
+  if (requested.length === 0) return { ok: true, added: 0, skippedDeceased: 0 };
+  const deceased = new Set(
+    (
+      await db
+        .select({ id: persons.id })
+        .from(persons)
+        .where(and(inArray(persons.id, requested), isNotNull(persons.deathDate)))
+    ).map((p) => p.id),
+  );
+  const ids = requested.filter((id) => !deceased.has(id));
+  if (ids.length === 0)
+    return { ok: false, message: "Verstorbene Personen können keinem Verteiler hinzugefügt werden." };
   try {
     await db
       .insert(distributionListMembers)
@@ -105,7 +130,7 @@ export async function addMembers(listId: number, personIds: number[]): Promise<A
   }
   await touchList(listId, actorName(session));
   revalidateApp();
-  return { ok: true };
+  return { ok: true, added: ids.length, skippedDeceased: deceased.size };
 }
 
 export async function removeMember(listId: number, personId: number): Promise<ActionResult> {
