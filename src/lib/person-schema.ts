@@ -8,22 +8,39 @@ import { todayIso } from "@/lib/format";
 
 // Generous upper bounds — real values are far shorter; this only blocks
 // accidental or hostile megabyte-sized payloads.
-const shortText = z.string().max(200, "Eingabe ist zu lang (max. 200 Zeichen).");
-const longText = z.string().max(2000, "Eingabe ist zu lang (max. 2000 Zeichen).");
 
-export const phoneInputSchema = z.object({
-  label: shortText,
-  number: shortText,
-});
+/** Optional free text: trimmed and bounded; blank (or missing) becomes null. */
+function optText(max: number) {
+  return z
+    .string()
+    .trim()
+    .max(max, `Eingabe ist zu lang (max. ${max} Zeichen).`)
+    .nullish()
+    .transform((v) => v || null);
+}
+const shortText = optText(200);
+const longText = optText(2000);
+const rowId = z.number().int().positive();
 
+/** One phone row as the form sends it; blank numbers are dropped by the person schema. */
+export const phoneInputSchema = z.object({ label: shortText, number: shortText });
+
+/**
+ * One "Ämter & Gliederung" row as the form sends it. `groupId` may be null only for a row
+ * the user left without a Gliederung: an entirely empty row is dropped, anything else
+ * (an Amt or a date without a Gliederung) is rejected instead of silently lost.
+ * A row with `endDate` or `endUnknown` is stored as a finished tenure (history), so past
+ * offices can be captured directly and "Amt beenden" can be buffered until Speichern.
+ */
 export const assignmentInputSchema = z.object({
-  groupId: z.number().int(),
-  officeId: z.number().int().nullable(),
+  groupId: rowId.nullable(),
+  officeId: rowId.nullable().default(null),
   // Amtszeit "seit" (issue #22). NULL = unknown.
-  startDate: shortText.nullable().default(null),
-  // Amtszeit "bis": NULL = active. A row with an end date is stored as a finished
-  // tenure (history), so past offices can be captured directly when creating a person.
-  endDate: shortText.nullable().default(null),
+  startDate: shortText,
+  // Amtszeit "bis": NULL = active (unless endUnknown).
+  endDate: shortText,
+  // "Ende unbekannt": stored with end_date = today as the documented upper bound.
+  endUnknown: z.boolean().default(false),
 });
 
 /**
@@ -33,8 +50,8 @@ export const assignmentInputSchema = z.object({
  * the `endDate` is mandatory and validated (against the target's start) server-side.
  */
 export const endPreviousInputSchema = z.object({
-  assignmentId: z.number().int().positive(),
-  endDate: shortText.nullable().default(null),
+  assignmentId: rowId,
+  endDate: shortText,
   endUnknown: z.boolean().default(false),
 });
 
@@ -118,64 +135,109 @@ export function resolveTenureEnd(input: {
   return { ok: true, endDate: end, endUnknown: false };
 }
 
+/** Which date field an assignment's `validateTenure` message belongs to. */
+function tenureErrorField(message: string): "startDate" | "endDate" {
+  return message === "Ungültiges Von-Datum." ? "startDate" : "endDate";
+}
+
+/**
+ * The person payload: parsing it trims every text, turns blanks into null, drops blank
+ * phone numbers and empty assignment rows, and checks every rule with a field path, so
+ * `savePerson` parses exactly once and the editor can mark the offending field.
+ */
 export const personInputSchema = z
   .object({
-    id: z.number().int().optional(),
-    salutation: shortText.nullable(),
-    title: shortText.nullable(),
-    firstName: shortText.nullable(),
-    lastName: shortText.nullable(),
-    scoutName: shortText.nullable(),
-    birthDate: shortText.nullable(),
-    deathDate: shortText.nullable(),
-    rankId: z.number().int().nullable(),
-    street: shortText.nullable(),
-    addressExtra: shortText.nullable(),
-    postalCode: shortText.nullable(),
-    city: shortText.nullable(),
-    email: shortText.nullable(),
-    phones: z.array(phoneInputSchema).max(20),
-    notes: longText.nullable(),
+    id: rowId.optional(),
+    /** `updated_at` of the record the form was loaded from — the optimistic-concurrency token. */
+    updatedAt: z.string().max(40).nullish(),
+    salutation: shortText,
+    title: shortText,
+    firstName: shortText,
+    lastName: shortText,
+    scoutName: shortText,
+    birthDate: shortText,
+    deathDate: shortText,
+    rankId: rowId.nullable(),
+    street: shortText,
+    addressExtra: shortText,
+    postalCode: shortText,
+    city: shortText,
+    email: shortText,
+    phones: z
+      .array(phoneInputSchema)
+      .max(20)
+      .transform((rows) =>
+        rows.flatMap((p) => (p.number ? [{ label: p.label ?? "Telefon", number: p.number }] : [])),
+      ),
+    notes: longText,
     doNotPrint: z.boolean(),
-    assignments: z.array(assignmentInputSchema),
+    assignments: z.array(assignmentInputSchema).max(100),
     endPrevious: z.array(endPreviousInputSchema).max(50).default([]),
-    distributionListIds: z.array(z.number().int()).default([]),
+    distributionListIds: z
+      .array(rowId)
+      .max(500)
+      .default([])
+      .transform((ids) => [...new Set(ids)]),
   })
   .superRefine((val, ctx) => {
-    const hasLast = !!val.lastName && val.lastName.trim().length > 0;
-    const hasScout = !!val.scoutName && val.scoutName.trim().length > 0;
-    if (!hasLast && !hasScout) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["lastName"],
-        message: "Nachname oder Fahrtenname ist erforderlich.",
-      });
-    }
-    if (val.email && val.email.trim().length > 0 && !EMAIL_RE.test(val.email.trim())) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["email"],
-        message: "Bitte eine gültige E-Mail-Adresse eingeben.",
-      });
-    }
-    if (val.postalCode && val.postalCode.trim().length > 0 && !/^\d{5}$/.test(val.postalCode.trim())) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["postalCode"],
-        message: "Die PLZ muss aus 5 Ziffern bestehen.",
-      });
-    }
-  });
+    if (!val.lastName && !val.scoutName)
+      ctx.addIssue({ code: "custom", path: ["lastName"], message: "Nachname oder Fahrtenname ist erforderlich." });
+    if (val.email && !EMAIL_RE.test(val.email))
+      ctx.addIssue({ code: "custom", path: ["email"], message: "Bitte eine gültige E-Mail-Adresse eingeben." });
+    if (val.postalCode && !/^\d{5}$/.test(val.postalCode))
+      ctx.addIssue({ code: "custom", path: ["postalCode"], message: "Die PLZ muss aus 5 Ziffern bestehen." });
 
-export type AssignmentInput = z.infer<typeof assignmentInputSchema>;
-export type PersonInput = z.infer<typeof personInputSchema>;
+    const dateError = validatePersonDates(val.birthDate, val.deathDate);
+    if (dateError) {
+      const field = val.birthDate != null && !isValidDate(val.birthDate) ? "birthDate" : "deathDate";
+      ctx.addIssue({ code: "custom", path: [field], message: dateError });
+    }
+
+    const seen = new Set<string>();
+    val.assignments.forEach((a, i) => {
+      const empty = a.groupId == null && a.officeId == null && !a.startDate && !a.endDate && !a.endUnknown;
+      if (empty) return;
+      if (a.groupId == null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["assignments", i, "groupId"],
+          message: "Bitte zu jedem Amt eine Gliederung wählen.",
+        });
+        return;
+      }
+      // "Ende unbekannt" needs no Bis-Datum (the server records today); only check the start.
+      const tenureError = validateTenure(a.startDate, a.endUnknown ? null : a.endDate);
+      if (tenureError)
+        ctx.addIssue({ code: "custom", path: ["assignments", i, tenureErrorField(tenureError)], message: tenureError });
+      // The end is part of the identity: one active row plus finished tenures of the same
+      // combination are fine, only exact duplicates are refused.
+      const key = `${a.groupId}:${a.officeId ?? "-"}:${a.endUnknown ? "unknown" : (a.endDate ?? "active")}`;
+      if (seen.has(key))
+        ctx.addIssue({
+          code: "custom",
+          path: ["assignments", i, "groupId"],
+          message: "Dieselbe Amt-Gliederungs-Kombination ist doppelt zugeordnet.",
+        });
+      seen.add(key);
+    });
+  })
+  .transform((val) => ({
+    ...val,
+    // Only empty rows can still lack a Gliederung here (superRefine rejected the rest).
+    assignments: val.assignments.flatMap((a) => (a.groupId == null ? [] : [{ ...a, groupId: a.groupId }])),
+  }));
+
+/** What the editor sends (raw form values; blanks allowed). */
+export type PersonInput = z.input<typeof personInputSchema>;
+/** What `savePerson` works with after parsing (normalised, validated). */
+export type PersonData = z.output<typeof personInputSchema>;
 
 export type FieldErrors = Record<string, string>;
 
 /** Parse + validate a person payload. Returns either clean data or field-keyed German errors. */
 export function parsePersonInput(
   raw: unknown,
-): { ok: true; data: PersonInput } | { ok: false; errors: FieldErrors } {
+): { ok: true; data: PersonData } | { ok: false; errors: FieldErrors } {
   const result = personInputSchema.safeParse(raw);
   if (result.success) return { ok: true, data: result.data };
   const errors: FieldErrors = {};
@@ -184,52 +246,4 @@ export function parsePersonInput(
     if (!errors[key]) errors[key] = issue.message;
   }
   return { ok: false, errors };
-}
-
-const trimOrNull = (v: string | null | undefined): string | null => {
-  const s = (v ?? "").trim();
-  return s.length > 0 ? s : null;
-};
-
-/** Drop empty numbers, default the label, dedupe assignments by (group, office). */
-export function cleanPersonInput(input: PersonInput): PersonInput {
-  const seen = new Set<string>();
-  const uniqueAssignments: AssignmentInput[] = [];
-  for (const a of input.assignments) {
-    if (!a.groupId) continue;
-    // The end date is part of the identity: the same combination may appear once
-    // active and once (or repeatedly) as finished tenures — only exact duplicates collapse.
-    const key = `${a.groupId}:${a.officeId ?? "null"}:${trimOrNull(a.endDate) ?? "active"}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    // Keep the tenure dates; blank strings become null (unknown / active).
-    uniqueAssignments.push({
-      groupId: a.groupId,
-      officeId: a.officeId ?? null,
-      startDate: trimOrNull(a.startDate),
-      endDate: trimOrNull(a.endDate),
-    });
-  }
-
-  return {
-    ...input,
-    distributionListIds: [...new Set(input.distributionListIds)],
-    salutation: trimOrNull(input.salutation),
-    title: trimOrNull(input.title),
-    firstName: trimOrNull(input.firstName),
-    lastName: trimOrNull(input.lastName),
-    scoutName: trimOrNull(input.scoutName),
-    birthDate: trimOrNull(input.birthDate),
-    deathDate: trimOrNull(input.deathDate),
-    street: trimOrNull(input.street),
-    addressExtra: trimOrNull(input.addressExtra),
-    postalCode: trimOrNull(input.postalCode),
-    city: trimOrNull(input.city),
-    email: trimOrNull(input.email),
-    notes: trimOrNull(input.notes),
-    phones: input.phones
-      .map((p) => ({ label: (p.label || "Telefon").trim() || "Telefon", number: (p.number ?? "").trim() }))
-      .filter((p) => p.number.length > 0),
-    assignments: uniqueAssignments,
-  };
 }

@@ -28,7 +28,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { GroupRow, HistoricalAssignment, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
+import type {
+  ActiveOfficeHolder,
+  GroupRow,
+  HistoricalAssignment,
+  OfficeRow,
+  PersonEditData,
+  RankRow,
+} from "@/db/queries";
 import { findSimilarPersons, type PersonCandidate } from "@/lib/duplicate-persons";
 import {
   SALUTATIONS,
@@ -73,6 +80,7 @@ export function PersonForm({
   offices,
   ranks,
   distributionLists,
+  activeHolders,
   existingPersons = [],
 }: {
   mode: "create" | "edit";
@@ -81,6 +89,8 @@ export function PersonForm({
   offices: OfficeRow[];
   ranks: RankRow[];
   distributionLists: { id: number; name: string }[];
+  /** Every active office tenure (preloaded) — drives the "Amtsinhaber-Warnung". */
+  activeHolders: ActiveOfficeHolder[];
   /** Existing persons' names — only used for the non-blocking duplicate hint in create mode. */
   existingPersons?: PersonCandidate[];
 }) {
@@ -211,7 +221,7 @@ export function PersonForm({
   const [histForm, setHistForm] = useState<HistForm | null>(null);
 
   // --- Amtsinhaber-Warnung (issue #26) -------------------------------------------
-  const otherHolders = useActiveHolders(assignments, person?.id);
+  const otherHolders = useActiveHolders(activeHolders, person?.id);
   // Buffered "end this foreign tenure on save" orders, keyed by the target assignmentId.
   // Nothing is written until savePerson runs them in its transaction.
   const [endPrevious, setEndPrevious] = useState<Map<number, EndPreviousOrder>>(new Map());
@@ -296,39 +306,40 @@ export function PersonForm({
         }
       }
     }
+    // Raw form values: the server schema trims, turns blanks into null, drops blank
+    // phone numbers and empty rows, and rejects an Amt without a Gliederung.
     const payload: PersonInput = {
       id: person?.id,
+      // Concurrency token: the props refresh after every history action, so this is
+      // the record's current version unless someone else saved it meanwhile.
+      updatedAt: person?.updatedAt,
       salutation: salutation === NONE ? null : salutation,
-      title: title || null,
-      firstName: firstName || null,
-      lastName: lastName || null,
-      scoutName: scoutName || null,
-      birthDate: birthDate || null,
-      deathDate: deathDate || null,
+      title,
+      firstName,
+      lastName,
+      scoutName,
+      birthDate,
+      deathDate,
       rankId: rankId === NONE ? null : Number(rankId),
-      street: street || null,
-      addressExtra: addressExtra || null,
-      postalCode: postalCode || null,
-      city: city || null,
-      email: email || null,
-      notes: notes || null,
-      phones: phones
-        .filter((p) => p.number.trim().length > 0)
-        .map((p) => ({ label: p.label, number: p.number })),
+      street,
+      addressExtra,
+      postalCode,
+      city,
+      email,
+      notes,
+      phones: phones.map((p) => ({ label: p.label, number: p.number })),
       doNotPrint,
-      assignments: assignments
-        .filter((a) => a.groupId != null)
-        .map((a) => ({
-          groupId: a.groupId as number,
-          officeId: a.officeId,
-          startDate: a.startDate || null,
-          endDate: a.endDate || null,
-        })),
+      assignments: assignments.map((a) => ({
+        groupId: a.groupId,
+        officeId: a.officeId,
+        startDate: a.startDate,
+        endDate: a.endDate,
+      })),
       // Buffered holder-warning follow-ups: end these foreign tenures in the same save.
-      // "Ende unbekannt" carries no date — the server sets end_date = today.
+      // With "Ende unbekannt" the server ignores the date and records today.
       endPrevious: liveOrders.map((o) => ({
         assignmentId: o.assignmentId,
-        endDate: o.endUnknown ? null : o.endDate || null,
+        endDate: o.endDate,
         endUnknown: o.endUnknown,
       })),
       distributionListIds: [...listIds],

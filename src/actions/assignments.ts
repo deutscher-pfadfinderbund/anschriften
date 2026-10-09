@@ -4,7 +4,6 @@ import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
-import type { ActiveHolder } from "@/db/queries";
 import { assignments, persons } from "@/db/schema";
 import {
   firstError,
@@ -15,7 +14,7 @@ import {
   type ActionResult,
 } from "@/lib/action-helpers";
 import { actorName } from "@/lib/auth-helpers";
-import { formatName, todayIso } from "@/lib/format";
+import { todayIso } from "@/lib/format";
 import { resolveTenureEnd } from "@/lib/person-schema";
 
 // Office-history mutations (issue #22). Active tenures are owned by `savePerson`
@@ -47,6 +46,8 @@ const endSchema = z.object({
  * End a currently active tenure by setting its `end_date`; the row becomes history
  * and stops counting towards the table, PDF, distribution rules and mail recipients.
  * With `endUnknown` the end is recorded as unknown (end_date = today upper bound).
+ * (savePerson accepts the same ending on a form row, so the editor can buffer it until
+ * Speichern instead — once it does, this immediate variant can go.)
  */
 export async function endAssignment(raw: z.infer<typeof endSchema>): Promise<ActionResult> {
   const session = await getActionSession();
@@ -74,44 +75,10 @@ export async function endAssignment(raw: z.infer<typeof endSchema>): Promise<Act
     .where(and(eq(assignments.id, assignmentId), isNull(assignments.endDate)))
     .returning({ id: assignments.id });
   if (updated.length === 0)
-    return { ok: false, message: "Zuordnung wurde zwischenzeitlich geändert. Bitte Seite neu laden." };
+    return { ok: false, message: "Dieses Amt wurde inzwischen geändert. Bitte lade die Seite neu." };
   await touchPerson(row.personId, actorName(session));
   revalidateApp();
   return { ok: true };
-}
-
-// --- active holders of an (office, group) combination ("Amtsinhaber-Warnung") ---
-
-/**
- * Active holders of a given office+group combination (issue #26). Drives the editor's
- * holder warning; session-guarded, on-demand (the form fetches per combination, no
- * polling). Returns every currently active tenure — the caller filters out the person
- * being edited so it never warns about themselves.
- */
-export async function getActiveHolders(officeId: number, groupId: number): Promise<ActiveHolder[]> {
-  // Read-only: without a session there is simply no warning to show.
-  if (!(await getActionSession())) return [];
-  if (!Number.isInteger(officeId) || !Number.isInteger(groupId)) return [];
-  const rows = await db
-    .select({
-      assignmentId: assignments.id,
-      personId: persons.id,
-      firstName: persons.firstName,
-      lastName: persons.lastName,
-      scoutName: persons.scoutName,
-      startDate: assignments.startDate,
-    })
-    .from(assignments)
-    .innerJoin(persons, eq(persons.id, assignments.personId))
-    .where(
-      and(eq(assignments.officeId, officeId), eq(assignments.groupId, groupId), isNull(assignments.endDate)),
-    );
-  return rows.map((r) => ({
-    assignmentId: r.assignmentId,
-    personId: r.personId,
-    name: formatName(r),
-    startDate: r.startDate,
-  }));
 }
 
 // --- create a past tenure ("Frühere Ämter" → hinzufügen) ------------------------
@@ -153,7 +120,7 @@ export async function addHistoricalAssignment(
   } catch (err) {
     // Race: the person, group or office was deleted between page load and this call.
     if (isForeignKeyViolation(err))
-      return { ok: false, message: "Anschrift, Gliederung oder Amt existiert nicht mehr. Bitte Seite neu laden." };
+      return { ok: false, message: "Person, Gliederung oder Amt existiert nicht mehr. Bitte lade die Seite neu." };
     throw err;
   }
   await touchPerson(personId, actorName(session));
@@ -227,7 +194,7 @@ export async function updateHistoricalAssignment(
   } catch (err) {
     // Race: the group or office was deleted between page load and this call.
     if (isForeignKeyViolation(err))
-      return { ok: false, message: "Gliederung oder Amt existiert nicht mehr. Bitte Seite neu laden." };
+      return { ok: false, message: "Gliederung oder Amt existiert nicht mehr. Bitte lade die Seite neu." };
     throw err;
   }
   await touchPerson(row.personId, actorName(session));
