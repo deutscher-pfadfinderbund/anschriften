@@ -115,8 +115,8 @@
   --ring: var(--fir);
   --radius: 0.5rem;
 
-  /* Height of the sticky mobile top bar (MobileNav), shown below lg only. Toasts and
-   * the directory's sticky table head keep clear of it. */
+  /* Height of the sticky mobile top bar (MobileNav), shown below lg only. Toasts,
+   * the scroll padding and the directory's sticky table head keep clear of it. */
   --top-bar: 3.5rem;
 }
 
@@ -233,6 +233,15 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Below lg the mobile top bar sticks over the page: a field that gets keyboard
+   * focus (or an anchor scrolled to) stays clear of it. Pages with more sticky
+   * bars add their own scroll padding (html:has(...)). */
+  html {
+    @variant max-lg {
+      scroll-padding-top: calc(var(--top-bar) + 0.5rem);
+    }
   }
 
   /* One solid focus indicator app-wide (fir, 2px, offset). Primitives that

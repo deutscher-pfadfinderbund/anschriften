@@ -234,7 +234,15 @@ export function Directory({
         ) : (
           <>
             {isDesktop !== false ? (
-              <table className={cn("w-full table-fixed text-ui", isDesktop == null && "hidden md:table")}>
+              <table
+                className={cn(
+                  "w-full table-fixed text-ui",
+                  // The page's scroll padding keeps a row that gets keyboard focus clear
+                  // of the sticky head (and the top bar above it, below lg).
+                  "md:[html:has(&)]:scroll-pt-[calc(var(--top-bar)+3rem)]",
+                  isDesktop == null && "hidden md:table",
+                )}
+              >
                 {/* Fixed widths: columns do not jump while the search narrows the list. */}
                 <colgroup>
                   <col className="w-11" />

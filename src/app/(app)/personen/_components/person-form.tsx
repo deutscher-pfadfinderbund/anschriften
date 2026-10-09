@@ -162,12 +162,11 @@ export function PersonForm({
       />
       <PageBody className="pb-0">
         {/* While the form is on the page, the page's scroll padding keeps a field that gets
-            keyboard focus clear of the sticky save bar (two rows on a phone) and, below lg,
-            of the sticky top bar. */}
+            keyboard focus clear of the sticky save bar (two rows on a phone). */}
         <form
           ref={formRef}
           noValidate
-          className="[html:has(&)]:scroll-pb-24 max-lg:[html:has(&)]:scroll-pt-16"
+          className="[html:has(&)]:scroll-pb-24"
           aria-label={person ? "Person bearbeiten" : "Neue Person"}
           onSubmit={(e) => {
             e.preventDefault();
