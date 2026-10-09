@@ -15,6 +15,8 @@ import type {
   PersonOption,
   RankRow,
 } from "@/db/queries";
+import { parseId } from "@/lib/ids";
+import { replaceQuery } from "@/lib/utils";
 
 import { ListDetail } from "./list-detail";
 import { ListFormDialog, type ListDraft } from "./list-form-dialog";
@@ -47,16 +49,13 @@ export function VerteilerManager({
   mailLog: MailLogEntry[];
 }) {
   const searchParams = useSearchParams();
-  const selectedId = Number(searchParams.get("list")) || null;
+  const selectedId = parseId(searchParams.get("list"));
   // A stale or unknown id (e.g. the list was just deleted) falls back to the first list.
   const activeList = lists.find((l) => l.id === selectedId) ?? lists[0] ?? null;
 
   const [draft, setDraft] = useState<ListDraft | null>(null);
 
-  function select(id: number | null) {
-    // Next.js syncs history.replaceState into useSearchParams; no server round trip.
-    window.history.replaceState(null, "", id == null ? "/verteiler" : `/verteiler?list=${id}`);
-  }
+  const select = (id: number | null) => replaceQuery({ list: id?.toString() ?? null });
 
   return (
     <>

@@ -4,11 +4,11 @@ import { Field } from "@/components/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { DistributionListWithMembers } from "@/db/queries";
 import { plural } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { NAV_ROW, cn } from "@/lib/utils";
 
 /**
- * The list of Verteiler. From `lg` up a quiet rail with the sidebar's active language
- * (--active fill, fir text, straight fir marker); below that a single select field, so
+ * The list of Verteiler. From `lg` up a quiet rail with the sidebar's NAV_ROW; below
+ * that a single select field, so
  * on a phone the chosen list's members start right under it instead of a screen lower.
  */
 export function ListNav({
@@ -51,12 +51,7 @@ export function ListNav({
                   type="button"
                   onClick={() => onSelect(l.id)}
                   aria-current={active ? "true" : undefined}
-                  className={cn(
-                    "relative flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-ui transition-colors",
-                    active
-                      ? "bg-active font-medium text-fir before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-fir"
-                      : "text-ink-soft hover:bg-hover hover:text-ink",
-                  )}
+                  className={cn(NAV_ROW.base, "gap-2 text-left", active ? NAV_ROW.active : NAV_ROW.idle)}
                 >
                   <span className="min-w-0 flex-1 truncate">{l.name}</span>
                   {/* ink-faint is too faint on the --active fill in dark mode (< 4.5:1). */}

@@ -60,3 +60,34 @@ export const TOUCH_HIT =
  */
 export const LINK =
   "text-fir underline decoration-fir/40 underline-offset-2 transition-colors hover:decoration-fir"
+
+/**
+ * A navigation row (sidebar, Verteiler rail). One "active" language app-wide: --active
+ * fill (always stronger than --hover), fir text and a straight fir marker bar.
+ */
+export const NAV_ROW = {
+  base: "relative flex w-full items-center rounded-md px-2.5 py-2 text-ui transition-colors",
+  active:
+    "bg-active font-medium text-fir before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-fir",
+  idle: "text-ink-soft hover:bg-hover hover:text-ink",
+}
+
+/** `pathname` and query `search` with `patch` applied: a value sets its param, null or "" drops it. */
+export function urlWith(pathname: string, search: string, patch: Record<string, string | null>): string {
+  const params = new URLSearchParams(search)
+  for (const [name, value] of Object.entries(patch)) {
+    if (value) params.set(name, value)
+    else params.delete(name)
+  }
+  const qs = params.toString()
+  return qs ? `${pathname}?${qs}` : pathname
+}
+
+/**
+ * Write query params into the address bar. The native History API (documented in Next's
+ * "Linking and Navigating" guide) keeps useSearchParams in sync without a navigation, so
+ * the page's data is not fetched from the server again.
+ */
+export function replaceQuery(patch: Record<string, string | null>): void {
+  window.history.replaceState(null, "", urlWith(window.location.pathname, window.location.search, patch))
+}

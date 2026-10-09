@@ -219,7 +219,7 @@ export function PersonForm({
           {/* Sticky: Speichern stays in reach on a long form and on a phone. The status
               line takes its own row on a phone and sits between the buttons from sm up. */}
           <div className="sticky bottom-0 z-10 -mx-4 mt-gutter flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-line bg-paper px-4 py-3 sm:-mx-6 sm:px-6">
-            <Button type="submit" aria-disabled={isSaving} className="aria-disabled:opacity-50">
+            <Button type="submit" aria-disabled={isSaving}>
               {isSaving ? "Speichern …" : "Speichern"}
             </Button>
             <Button

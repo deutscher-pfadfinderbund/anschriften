@@ -11,14 +11,17 @@ import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDownload } from "@/lib/download";
+import { SECTION_LABELS } from "@/lib/sections";
 import { LINK } from "@/lib/utils";
 
+const { bund, jungenbund, maedchenbund, bundesgilde, orden_st_georg, orden_st_christophorus } = SECTION_LABELS;
+
 const PROFILES = [
-  { id: "komplett", label: "Komplett", hint: "Alle Gliederungen mit Orden und Bundesgilde" },
-  { id: "nurBundesaemter", label: "Bundesämter", hint: "Bund, Jungenbund und Mädchenbund – ohne Älterengemeinschaften" },
-  { id: "nurBundesgilde", label: "Bundesgilde", hint: "Nur die Bundesgilde" },
-  { id: "nurOrdenStGeorg", label: "Orden St. Georg", hint: "Nur der Orden St. Georg" },
-  { id: "nurOrdenStChristophorus", label: "Orden St. Christophorus", hint: "Nur der Orden St. Christophorus" },
+  { id: "komplett", label: "Komplett", hint: `Alle Gliederungen mit Orden und ${bundesgilde}` },
+  { id: "nurBundesaemter", label: "Bundesämter", hint: `${bund}, ${jungenbund} und ${maedchenbund} – ohne Älterengemeinschaften` },
+  { id: "nurBundesgilde", label: bundesgilde, hint: `Nur die ${bundesgilde}` },
+  { id: "nurOrdenStGeorg", label: orden_st_georg, hint: `Nur der ${orden_st_georg}` },
+  { id: "nurOrdenStChristophorus", label: orden_st_christophorus, hint: `Nur der ${orden_st_christophorus}` },
 ] as const;
 
 const OPTIONS = [
@@ -109,7 +112,7 @@ export function ExportManager() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         {/* aria-disabled instead of disabled: a disabled button would drop keyboard focus
             while the PDF is generated. pdf.start ignores clicks while pending. */}
-        <Button onClick={downloadPdf} aria-disabled={pdf.pending} className="aria-disabled:opacity-60">
+        <Button onClick={downloadPdf} aria-disabled={pdf.pending}>
           {pdf.pending ? <LoaderCircle aria-hidden className="animate-spin" /> : null}
           {pdf.pending ? "PDF wird erzeugt …" : "PDF erzeugen"}
         </Button>

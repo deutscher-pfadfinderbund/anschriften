@@ -4,6 +4,7 @@ import type { PersonListRow } from "@/db/queries";
 import { buildBcc, type BccResult } from "@/lib/export";
 import { fold } from "@/lib/format";
 import { descendantIds } from "@/lib/groups";
+import { parseId } from "@/lib/ids";
 
 // --- URL state ------------------------------------------------------------------------
 
@@ -30,11 +31,6 @@ export type DirectoryFilters = {
 };
 
 type DirectoryParams = DirectoryFilters & { sortDesc: boolean };
-
-function parseId(value: string | null): number | null {
-  const n = Number(value);
-  return value && Number.isInteger(n) && n > 0 ? n : null;
-}
 
 /** Read the directory state from the URL; anything malformed counts as "not set". */
 export function parseDirectoryParams(params: { get(name: string): string | null }): DirectoryParams {

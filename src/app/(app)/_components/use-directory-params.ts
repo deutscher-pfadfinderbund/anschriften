@@ -4,31 +4,11 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { rememberDirectoryUrl } from "@/lib/directory-url";
+import { replaceQuery, urlWith } from "@/lib/utils";
 
 import { PARAM, SORT_DESC, parseDirectoryParams } from "./directory-filter";
 
-type ParamName = (typeof PARAM)[keyof typeof PARAM];
-
 const SEARCH_DEBOUNCE_MS = 300;
-
-function urlWith(pathname: string, search: string, patch: Partial<Record<ParamName, string | null>>): string {
-  const params = new URLSearchParams(search);
-  for (const [name, value] of Object.entries(patch)) {
-    if (value) params.set(name, value);
-    else params.delete(name);
-  }
-  const qs = params.toString();
-  return qs ? `${pathname}?${qs}` : pathname;
-}
-
-/**
- * Write params into the address bar. The native History API (documented in Next's
- * "Linking and Navigating" guide) keeps useSearchParams in sync without a navigation,
- * so the ~600 persons are not fetched from the server again on every filter change.
- */
-function replaceParams(pathname: string, patch: Partial<Record<ParamName, string | null>>) {
-  window.history.replaceState(null, "", urlWith(pathname, window.location.search, patch));
-}
 
 /**
  * Search, filters and sort order of the directory, kept in the URL so that a reload,
@@ -59,7 +39,7 @@ export function useDirectoryParams() {
   const writeQuery = (q: string) => {
     clearTimeout(timer.current);
     setUrlQuery((s) => ({ ...s, written: q }));
-    replaceParams(pathname, { [PARAM.q]: q });
+    replaceQuery({ [PARAM.q]: q });
   };
   const writeQueryLater = useEffectEvent(writeQuery);
   useEffect(() => {
@@ -91,15 +71,15 @@ export function useDirectoryParams() {
       const q = query.trim();
       if (q !== params.q) writeQuery(q);
     },
-    setGroupId: (id: number | null) => replaceParams(pathname, { [PARAM.groupId]: id?.toString() ?? null }),
-    setOfficeId: (id: number | null) => replaceParams(pathname, { [PARAM.officeId]: id?.toString() ?? null }),
-    setListId: (id: number | null) => replaceParams(pathname, { [PARAM.listId]: id?.toString() ?? null }),
-    setSortDesc: (desc: boolean) => replaceParams(pathname, { [PARAM.sort]: desc ? SORT_DESC : null }),
+    setGroupId: (id: number | null) => replaceQuery({ [PARAM.groupId]: id?.toString() ?? null }),
+    setOfficeId: (id: number | null) => replaceQuery({ [PARAM.officeId]: id?.toString() ?? null }),
+    setListId: (id: number | null) => replaceQuery({ [PARAM.listId]: id?.toString() ?? null }),
+    setSortDesc: (desc: boolean) => replaceQuery({ [PARAM.sort]: desc ? SORT_DESC : null }),
     /** Clear search and filters (the sort order stays). */
     resetFilters: () => {
       setQuery("");
       setUrlQuery((s) => ({ ...s, written: "" }));
-      replaceParams(pathname, {
+      replaceQuery({
         [PARAM.q]: null,
         [PARAM.groupId]: null,
         [PARAM.officeId]: null,

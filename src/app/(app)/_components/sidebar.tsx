@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 
 import { logout } from "@/actions/auth";
-import { TOUCH_HIT, cn } from "@/lib/utils";
+import { BundEyebrow, Raute } from "@/components/brand";
+import { NAV_ROW, TOUCH_HIT, cn } from "@/lib/utils";
 
 type NavEntry = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
@@ -38,9 +39,7 @@ function initials(name: string): string {
 export function Wordmark() {
   return (
     <div className="flex min-w-0 items-center font-display text-[18px] leading-tight font-semibold text-ink">
-      {/* shrink-0: the lozenge is the brand mark and must never be squeezed
-          to 0px by a long name. */}
-      <span aria-hidden className="mr-[7px] inline-block size-[9px] shrink-0 -translate-y-px rotate-45 bg-fir" />
+      <Raute className="mr-[7px] inline-block size-[9px] -translate-y-px" />
       {/* Soft hyphen: if a wide fallback serif does not fit, the name breaks
           as „Anschriften-/verzeichnis“ instead of overflowing its box. */}
       <span className="min-w-0">Anschriften&shy;verzeichnis</span>
@@ -64,16 +63,12 @@ function NavItem({
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
       className={cn(
-        "relative flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-ui transition-colors",
+        NAV_ROW.base,
         // Thumb-friendly rows wherever the primary pointer is a finger — keyed on
         // the input mode, not on "is inside the drawer", so a touch laptop gets
         // them in the desktop rail too. A mouse keeps py-2 at every width.
-        "pointer-coarse:py-3",
-        // One "active" language app-wide: --active fill (always stronger than
-        // --hover), fir text and a straight fir marker bar.
-        active
-          ? "bg-active font-medium text-fir before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-fir"
-          : "text-ink-soft hover:bg-hover hover:text-ink",
+        "gap-2.5 pointer-coarse:py-3",
+        active ? NAV_ROW.active : NAV_ROW.idle,
       )}
     >
       <Icon className="size-[15px] shrink-0 opacity-80" />
@@ -105,7 +100,7 @@ export function SidebarContent({
   return (
     <>
       <div className="border-b border-line px-5 pt-5 pb-4">
-        <p className="eyebrow mb-1">Deutscher Pfadfinderbund</p>
+        <BundEyebrow className="mb-1" />
         <Wordmark />
       </div>
 
