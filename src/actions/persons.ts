@@ -19,7 +19,11 @@ import { parsePersonInput, resolveTenureEnd, type FieldErrors, type PersonInput 
 
 export type SaveResult =
   | { ok: true; id: number }
-  | { ok: false; message: string; errors?: FieldErrors };
+  /** `reload`: the data changed underneath the form — only a reload can fix it. */
+  | { ok: false; message: string; errors?: FieldErrors; reload?: boolean };
+
+/** Rolls the save back because the form is out of date (concurrent edit, row gone). */
+class StaleError extends UserFacingError {}
 
 const TENURE_CHANGED = "Ein Amt wurde inzwischen geändert. Bitte lade die Seite neu.";
 
@@ -86,9 +90,9 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
           .from(persons)
           .where(eq(persons.id, personId))
           .for("update");
-        if (!current) throw new UserFacingError(deletedMeanwhile("Diese Person"));
+        if (!current) throw new StaleError(deletedMeanwhile("Diese Person"));
         if (current.updatedAt.toISOString() !== data.updatedAt)
-          throw new UserFacingError(
+          throw new StaleError(
             `Diese Person wurde inzwischen ${current.updatedBy ? `von ${current.updatedBy} ` : ""}geändert. Bitte lade die Seite neu.`,
           );
         await tx.update(persons).set(fields).where(eq(persons.id, personId));
@@ -109,7 +113,7 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
           .where(eq(assignments.id, ep.assignmentId))
           .limit(1);
         if (!target || target.endDate != null || target.personId === personId)
-          throw new UserFacingError(TENURE_CHANGED);
+          throw new StaleError(TENURE_CHANGED);
         const resolved = resolveTenureEnd({
           startDate: target.startDate,
           endDate: ep.endDate,
@@ -124,7 +128,7 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
             and(eq(assignments.id, ep.assignmentId), isNull(assignments.endDate), ne(assignments.personId, personId)),
           )
           .returning({ id: assignments.id });
-        if (ended.length === 0) throw new UserFacingError(TENURE_CHANGED);
+        if (ended.length === 0) throw new StaleError(TENURE_CHANGED);
         // Attribute the change on the former holder too, so their audit line reflects it.
         await tx.update(persons).set({ updatedBy: by, updatedAt: new Date() }).where(eq(persons.id, target.personId));
       }
@@ -158,15 +162,17 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
     });
   } catch (err) {
     // Every failure rolled the whole transaction back, so nothing changed.
-    if (err instanceof UserFacingError) return { ok: false, message: err.message };
+    if (err instanceof UserFacingError)
+      return { ok: false, message: err.message, reload: err instanceof StaleError };
     const pg = pgError(err);
     if (pg?.code === "23505" && pg.constraint === "assignments_active_person_group_office_key")
       // The active-tenure partial unique index: e.g. a concurrent save of the same person.
-      return { ok: false, message: "Diese Amt-Gliederungs-Kombination ist bereits aktiv zugeordnet." };
+      return { ok: false, message: "Diese Amt-Gliederungs-Kombination ist bereits aktiv zugeordnet.", reload: true };
     if (pg?.code === "23503")
       return {
         ok: false,
         message: FK_MESSAGES[pg.constraint ?? ""] ?? deletedMeanwhile("Ein gewählter Eintrag"),
+        reload: true,
       };
     throw err;
   }
