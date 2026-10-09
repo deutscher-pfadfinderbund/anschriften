@@ -128,7 +128,9 @@ export function Directory({
   );
 
   return (
-    <>
+    // The selection bar comes right after the toolbar in the DOM (keyboard users reach
+    // it without tabbing through every row) and is shown last, sticking to the bottom.
+    <div className="flex flex-col">
       <DirectoryToolbar
         query={params.query}
         onQueryChange={params.setQuery}
@@ -158,6 +160,20 @@ export function Directory({
           </div>
         }
       />
+
+      {selected.length > 0 ? (
+        <SelectionBar
+          className="order-last"
+          selected={selected}
+          hiddenCount={hiddenCount}
+          onKeepVisible={() =>
+            setRowSelection(Object.fromEntries(selected.filter((p) => shownIds.has(p.id)).map((p) => [p.id, true])))
+          }
+          onClear={() => setRowSelection({})}
+          distributionLists={distributionLists}
+          mailEnabled={mailEnabled}
+        />
+      ) : null}
 
       <div className="mt-3 overflow-clip rounded-lg border border-line bg-surface">
         {persons.length === 0 ? (
@@ -259,18 +275,6 @@ export function Directory({
         )}
       </div>
 
-      {selected.length > 0 ? (
-        <SelectionBar
-          selected={selected}
-          hiddenCount={hiddenCount}
-          onKeepVisible={() =>
-            setRowSelection(Object.fromEntries(selected.filter((p) => shownIds.has(p.id)).map((p) => [p.id, true])))
-          }
-          onClear={() => setRowSelection({})}
-          distributionLists={distributionLists}
-          mailEnabled={mailEnabled}
-        />
-      ) : null}
-    </>
+    </div>
   );
 }

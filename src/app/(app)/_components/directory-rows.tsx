@@ -129,7 +129,8 @@ export const PersonTableRow = memo(function PersonTableRow({
       onClick={(e) => {
         if (isRowNavigation(e)) onOpen(person.id);
       }}
-      className="cursor-pointer"
+      // --line vanishes on the --active fill; adjacent selected rows keep a divider.
+      className="cursor-pointer data-[state=selected]:border-line-strong"
     >
       <TableCell className="p-0 align-top">
         {/* The whole cell toggles, so a near miss does not open the person. */}
@@ -168,7 +169,7 @@ export const PersonCard = memo(function PersonCard({ person, selected, onSelecte
   return (
     <li
       data-state={selected ? "selected" : undefined}
-      className="relative flex items-start gap-3 border-b border-line px-3 py-3 transition-colors last:border-b-0 hover:bg-hover data-[state=selected]:bg-active"
+      className="relative flex items-start gap-3 border-b border-line px-3 py-3 transition-colors last:border-b-0 hover:bg-hover data-[state=selected]:border-line-strong data-[state=selected]:bg-active"
     >
       <Checkbox
         aria-label={selectLabel(person)}

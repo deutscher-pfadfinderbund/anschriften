@@ -30,6 +30,7 @@ import { mailSelection, personCount, skippedNote } from "./directory-filter";
  * selected persons the current filters hide — every action includes them.
  */
 export function SelectionBar({
+  className,
   selected,
   hiddenCount,
   onKeepVisible,
@@ -37,6 +38,8 @@ export function SelectionBar({
   distributionLists,
   mailEnabled,
 }: {
+  /** Placement in the parent's layout (e.g. its flex order). */
+  className?: string;
   selected: PersonListRow[];
   /** Selected persons not shown under the current search and filters. */
   hiddenCount: number;
@@ -84,7 +87,10 @@ export function SelectionBar({
       <div
         role="region"
         aria-label="Auswahl"
-        className="sticky bottom-3 z-20 mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line-strong bg-surface px-3 py-2.5 shadow-[0_6px_24px_-8px_rgb(0_0_0/0.25)] sm:px-4"
+        className={cn(
+          "sticky bottom-3 z-20 mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line-strong bg-surface px-3 py-2.5 shadow-[0_6px_24px_-8px_rgb(0_0_0/0.25)] sm:px-4",
+          className,
+        )}
       >
         <p className="order-1 min-w-0 flex-1 text-ui text-ink xl:flex-none">
           <span className="font-medium tabular-nums">{selected.length} ausgewählt</span>
