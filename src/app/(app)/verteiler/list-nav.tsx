@@ -3,6 +3,7 @@
 import { FormLabel } from "@/components/form-label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { DistributionListWithMembers } from "@/db/queries";
+import { plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -68,7 +69,7 @@ export function ListNav({
                   >
                     <span className="sr-only">, </span>
                     {l.members.length}
-                    <span className="sr-only"> {l.members.length === 1 ? "Mitglied" : "Mitglieder"}</span>
+                    <span className="sr-only"> {plural(l.members.length, "Mitglied", "Mitglieder")}</span>
                   </span>
                 </button>
               </li>

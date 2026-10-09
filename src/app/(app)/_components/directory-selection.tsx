@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { addMembers } from "@/actions/lists";
 import { Combobox } from "@/components/combobox";
-import { ComposeMailDialog, emailAddressCount } from "@/components/compose-mail-dialog";
+import { ComposeMailDialog } from "@/components/compose-mail-dialog";
 import { FormLabel } from "@/components/form-label";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,10 +21,10 @@ import {
 import type { PersonListRow } from "@/db/queries";
 import { callAction } from "@/lib/call-action";
 import { useDownload } from "@/lib/download";
-import { personCount } from "@/lib/format";
+import { emailAddressCount, personCount, plural, skippedNote } from "@/lib/format";
 import { LINK, TOUCH_HIT, cn } from "@/lib/utils";
 
-import { mailSelection, skippedNote } from "./directory-filter";
+import { mailSelection } from "./directory-filter";
 
 /**
  * Bulk actions for the ticked persons. Sticks to the bottom of the viewport while
@@ -213,7 +213,7 @@ function AddToListDialog({
         <DialogHeader>
           <DialogTitle>Zu Verteiler hinzufügen</DialogTitle>
           <DialogDescription>
-            {personCount(personIds.length)} {personIds.length === 1 ? "wird" : "werden"} dem
+            {personCount(personIds.length)} {plural(personIds.length, "wird", "werden")} dem
             gewählten Verteiler hinzugefügt. Bereits enthaltene Personen bleiben unverändert,
             verstorbene werden übersprungen.
           </DialogDescription>

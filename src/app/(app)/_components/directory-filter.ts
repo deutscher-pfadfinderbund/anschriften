@@ -158,12 +158,3 @@ export function mailSelection(
     ),
   };
 }
-
-/** "1 verstorbene Person und 2 ohne gültige E-Mail übersprungen", or "" when nothing was skipped. */
-export function skippedNote(deceased: number, withoutEmail: number): string {
-  const parts = [
-    deceased > 0 ? `${deceased} ${deceased === 1 ? "verstorbene Person" : "verstorbene Personen"}` : "",
-    withoutEmail > 0 ? `${withoutEmail} ohne gültige E-Mail` : "",
-  ].filter(Boolean);
-  return parts.length > 0 ? `${parts.join(" und ")} übersprungen` : "";
-}

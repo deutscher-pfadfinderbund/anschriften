@@ -54,10 +54,28 @@ export function formatFullName(p: PersonName): string {
   return name || p.scoutName?.trim() || "—";
 }
 
-/** "1 Person" / "80 Personen". */
-export function personCount(n: number): string {
-  return `${n} ${n === 1 ? "Person" : "Personen"}`;
+/** The word for `n` things: `one` for exactly one, else `many` ("wird"/"werden"). */
+export function plural(n: number, one: string, many: string): string {
+  return n === 1 ? one : many;
 }
+
+/** "1 Person" / "80 Personen". */
+export const personCount = (n: number) => `${n} ${plural(n, "Person", "Personen")}`;
+
+/** "1 E-Mail-Adresse" / "25 E-Mail-Adressen" — the one wording for address counts. */
+export const emailAddressCount = (n: number) => `${n} ${plural(n, "E-Mail-Adresse", "E-Mail-Adressen")}`;
+
+/** "1 verstorbene Person und 2 ohne gültige E-Mail übersprungen", or "" when nothing was skipped. */
+export function skippedNote(deceased: number, withoutEmail: number): string {
+  const parts = [
+    deceased > 0 ? `${deceased} verstorbene ${plural(deceased, "Person", "Personen")}` : "",
+    withoutEmail > 0 ? `${withoutEmail} ohne gültige E-Mail` : "",
+  ].filter(Boolean);
+  return parts.length > 0 ? `${parts.join(" und ")} übersprungen` : "";
+}
+
+/** "Amt suchen …" → "Amt suchen": accessible names read without the trailing ellipsis. */
+export const spoken = (s: string) => s.replace(/\s*…$/, "");
 
 /** German date for display: "24.06.2019". Input is an ISO date string or null. */
 export function formatDate(iso?: string | null): string {

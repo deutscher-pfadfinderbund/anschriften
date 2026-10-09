@@ -23,7 +23,7 @@ import {
 import type { DistributionListWithMembers, ListMemberRow, PersonOption } from "@/db/queries";
 import { callAction } from "@/lib/call-action";
 import { isEmail } from "@/lib/export";
-import { formatName, formatNameWithScout, personCount, scoutAddition } from "@/lib/format";
+import { formatName, formatNameWithScout, personCount, scoutAddition, skippedNote } from "@/lib/format";
 import { RULE_KIND_LABELS } from "@/lib/rule-kinds";
 
 import { RULE_ICONS } from "./rule-icons";
@@ -243,12 +243,8 @@ function AddMembersForm({
     startTransition(async () => {
       const res = await callAction(() => addMembers(list.id, [...selected]));
       if (!res.ok) return void toast.error(res.message);
-      toast.success(
-        `${personCount(res.added)} hinzugefügt.` +
-          (res.skippedDeceased > 0
-            ? ` ${res.skippedDeceased} ${res.skippedDeceased === 1 ? "verstorbene Person" : "verstorbene Personen"} übersprungen.`
-            : ""),
-      );
+      const note = skippedNote(res.skippedDeceased, 0);
+      toast.success(`${personCount(res.added)} hinzugefügt.${note ? ` ${note}.` : ""}`);
       onDone();
     });
   }

@@ -5,7 +5,7 @@ import { ChevronRight, Copy, Download, Pencil, Send, Trash2 } from "lucide-react
 import { toast } from "sonner";
 
 import { deleteList } from "@/actions/lists";
-import { ComposeMailDialog, emailAddressCount } from "@/components/compose-mail-dialog";
+import { ComposeMailDialog } from "@/components/compose-mail-dialog";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { Panel } from "@/components/panel";
 import { Tag } from "@/components/tag";
@@ -22,7 +22,7 @@ import type {
 import { callAction } from "@/lib/call-action";
 import { useDownload } from "@/lib/download";
 import { buildBcc, isEmail, type BccSeparator } from "@/lib/export";
-import { formatDateTime, formatNameWithScout } from "@/lib/format";
+import { emailAddressCount, formatDateTime, formatNameWithScout, plural } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { MembersPanel } from "./members-panel";
@@ -74,7 +74,7 @@ export function ListDetail({
       toast.success(`${emailAddressCount(bcc.count)} kopiert.`, {
         description:
           bcc.skipped > 0
-            ? `${bcc.skipped} ${bcc.skipped === 1 ? "Mitglied" : "Mitglieder"} ohne gültige E-Mail übersprungen.`
+            ? `${bcc.skipped} ${plural(bcc.skipped, "Mitglied", "Mitglieder")} ohne gültige E-Mail übersprungen.`
             : undefined,
       });
     } catch {
@@ -101,7 +101,7 @@ export function ListDetail({
       <header>
         <h2 className="font-display text-section font-semibold text-balance text-ink">{list.name}</h2>
         <p className="mt-0.5 text-ui text-ink-soft tabular-nums">
-          {members.length} {members.length === 1 ? "Mitglied" : "Mitglieder"}
+          {members.length} {plural(members.length, "Mitglied", "Mitglieder")}
           {members.length > 0 ? ` · ${withEmail} mit E-Mail` : null}
         </p>
         {list.description ? <p className="mt-1 text-ui text-ink-faint">{list.description}</p> : null}

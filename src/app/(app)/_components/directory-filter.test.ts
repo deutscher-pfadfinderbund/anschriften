@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PersonListRow } from "@/db/queries";
+import { skippedNote } from "@/lib/format";
 
 import {
   filterPersons,
@@ -8,7 +9,6 @@ import {
   mailSelection,
   parseDirectoryParams,
   searchIndex,
-  skippedNote,
   type DirectoryFilters,
 } from "./directory-filter";
 

@@ -11,6 +11,7 @@ import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
 import type { DistributionListWithMembers, GroupRow, OfficeRow, RankRow } from "@/db/queries";
 import { callAction } from "@/lib/call-action";
+import { personCount, plural } from "@/lib/format";
 import { RULE_KIND_LABELS, RULE_KINDS, type RuleKind } from "@/lib/rule-kinds";
 
 import { RULE_ICONS } from "./rule-icons";
@@ -150,7 +151,7 @@ export function RulesPanel({
               diesem Verteiler.{" "}
               {leaving === 0
                 ? "Niemand fällt dadurch aus dem Verteiler."
-                : `${leaving} ${leaving === 1 ? "Person fällt" : "Personen fallen"} dadurch aus dem Verteiler.`}
+                : `${personCount(leaving)} ${plural(leaving, "fällt", "fallen")} dadurch aus dem Verteiler.`}
             </>
           ) : null
         }

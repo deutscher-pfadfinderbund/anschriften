@@ -17,13 +17,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { emailAddressCount, personCount, plural } from "@/lib/format";
 
 const SUBJECT_MAX = 200;
 const BODY_MAX = 50000;
-
-/** "1 E-Mail-Adresse" / "25 E-Mail-Adressen" — the one wording for address counts. */
-export const emailAddressCount = (n: number) =>
-  `${n} ${n === 1 ? "E-Mail-Adresse" : "E-Mail-Adressen"}`;
 
 /** Whether the mailing targets a whole list or an explicit table selection. */
 export type ComposeTarget = { kind: "list"; listId: number } | { kind: "selection"; personIds: number[] };
@@ -168,11 +165,7 @@ export function ComposeMailDialog({
               <>
                 an <span className="font-medium text-ink">{emailAddressCount(recipientCount)}</span>
                 {skippedCount > 0
-                  ? ` · ${skippedCount} ${
-                      skippedCount === 1
-                        ? "Person ohne gültige E-Mail wird"
-                        : "Personen ohne gültige E-Mail werden"
-                    } übersprungen`
+                  ? ` · ${personCount(skippedCount)} ohne gültige E-Mail ${plural(skippedCount, "wird", "werden")} übersprungen`
                   : null}
               </>
             ) : (

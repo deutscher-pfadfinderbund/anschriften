@@ -7,6 +7,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { spoken } from "@/lib/format";
 import { matchesQuery } from "@/lib/utils";
 
 export type MultiOption = {
@@ -39,7 +40,7 @@ export function MultiSelectList({
 }) {
   return (
     <Command
-      label={searchPlaceholder.replace(/\s*…$/, "")}
+      label={spoken(searchPlaceholder)}
       filter={(itemValue, search) => (matchesQuery(itemValue, search) ? 1 : 0)}
     >
       <CommandInput placeholder={searchPlaceholder} />

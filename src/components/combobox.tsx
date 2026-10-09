@@ -11,12 +11,10 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { spoken } from "@/lib/format";
 import { FIELD, cn, matchesQuery } from "@/lib/utils";
 
 export type ComboOption = { value: string; label: string; depth?: number };
-
-/** "Amt suchen …" → "Amt suchen": accessible names read without the ellipsis. */
-const spoken = (s: string) => s.replace(/\s*…$/, "");
 
 /**
  * Searchable single-select (Popover + cmdk). Looks like a Select field;
