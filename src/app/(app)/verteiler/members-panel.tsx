@@ -152,10 +152,12 @@ function MemberRow({
           {m.via.length > 0 ? (
             <div className="mt-1 flex flex-wrap gap-1">
               {m.via.map((v) => {
-                const Icon = RULE_ICONS[v.kind];
                 return (
-                  <Tag key={`${v.kind}-${v.id}`} title={`Automatisch über ${RULE_KIND_LABELS[v.kind]} „${v.name}“`}>
-                    <Icon aria-hidden className="mr-1 inline align-[-2px]" />
+                  <Tag
+                    key={`${v.kind}-${v.id}`}
+                    icon={RULE_ICONS[v.kind]}
+                    title={`Automatisch über ${RULE_KIND_LABELS[v.kind]} „${v.name}“`}
+                  >
                     <span className="sr-only">{RULE_KIND_LABELS[v.kind]}: </span>
                     {v.name}
                   </Tag>

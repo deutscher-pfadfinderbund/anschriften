@@ -12,12 +12,15 @@ const TONES = {
 /** The one recipe for small chips on a record. */
 export function Tag({
   tone = "neutral",
+  icon: Icon,
   title,
   className,
   children,
 }: {
   /** neutral (default) | crit | brass. */
   tone?: keyof typeof TONES;
+  /** Leading icon (decorative), kept outside the truncated text. */
+  icon?: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   /** Tooltip with the full text (long values are truncated). */
   title?: string;
   /** Extra classes, e.g. a max width. */
@@ -33,6 +36,7 @@ export function Tag({
         className,
       )}
     >
+      {Icon ? <Icon aria-hidden /> : null}
       <span className="truncate">{children}</span>
     </span>
   );
