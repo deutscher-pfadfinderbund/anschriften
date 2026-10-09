@@ -22,7 +22,7 @@ import { actorName } from "@/lib/auth-helpers";
 
 const rankSchema = z.object({
   name: nameField,
-  sortOrder: orderNumber("Die Sortierung"),
+  sortOrder: orderNumber("Die Reihenfolge"),
 });
 
 export type RankInput = z.input<typeof rankSchema>;
@@ -41,7 +41,7 @@ export async function saveRank(id: number | null, raw: RankInput): Promise<Actio
         : await db.update(ranks).set(values).where(eq(ranks.id, id)).returning({ id: ranks.id });
     if (saved.length === 0) return { ok: false, message: deletedMeanwhile("Dieser Stand") };
   } catch (err) {
-    if (isUniqueViolation(err)) return { ok: false, message: "Ein Stand mit diesem Namen existiert bereits." };
+    if (isUniqueViolation(err)) return { ok: false, message: "Ein Stand mit diesem Namen gibt es schon." };
     throw err;
   }
   revalidateApp();

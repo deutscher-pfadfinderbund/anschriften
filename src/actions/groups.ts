@@ -34,7 +34,7 @@ const groupSchema = z.object({
     .max(200, "Eingabe ist zu lang (max. 200 Zeichen).")
     .nullish()
     .transform((v) => v || null),
-  sortKey: orderNumber("Der Sortierschlüssel"),
+  sortKey: orderNumber("Die Reihenfolge"),
 });
 
 export type GroupInput = z.input<typeof groupSchema>;
@@ -92,7 +92,7 @@ export async function saveGroup(id: number | null, raw: GroupInput): Promise<Act
   } catch (err) {
     if (err instanceof UserFacingError) return { ok: false, message: err.message };
     if (isUniqueViolation(err))
-      return { ok: false, message: "Eine Gliederung mit diesem Namen existiert bereits." };
+      return { ok: false, message: "Eine Gliederung mit diesem Namen gibt es schon." };
     // Race: the parent was deleted between the check above and the write.
     if (isForeignKeyViolation(err))
       return { ok: false, message: deletedMeanwhile("Die übergeordnete Gliederung") };
