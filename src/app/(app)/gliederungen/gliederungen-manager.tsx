@@ -28,6 +28,8 @@ type Draft = {
   parentId: number | null;
   /** Only decisive for a top-level group: a child always takes its parent's Bereich. */
   section: Section;
+  /** The groups when the dialog opened: a just-created group must not count as taken. */
+  taken: GroupRow[];
 };
 
 export function GliederungenManager({
@@ -46,6 +48,7 @@ export function GliederungenManager({
     order: "",
     parentId: null,
     section: "bund",
+    taken: [],
   });
   const { draft } = dialog;
 
@@ -64,8 +67,7 @@ export function GliederungenManager({
   const parent = draft.parentId != null ? groups.find((g) => g.id === draft.parentId) : undefined;
   const hasChildren = editId != null && groups.some((g) => g.parentId === editId);
   const sectionHint = hasChildren ? "Gilt auch für alle Untergliederungen." : undefined;
-  // Only while editing (see stammdaten-manager): a new Gliederung must not match itself.
-  const nameTaken = dialog.open && !dialog.pending && isDuplicateName(draft.name, groups, editId);
+  const nameTaken = isDuplicateName(draft.name, draft.taken, editId);
   const orderErr = orderError(draft.order);
 
   function openDialog(group: GroupRow | null) {
@@ -78,6 +80,7 @@ export function GliederungenManager({
             order: String(group.sortKey),
             parentId: group.parentId,
             section: group.section,
+            taken: groups,
           }
         : {
             group: null,
@@ -86,6 +89,7 @@ export function GliederungenManager({
             order: String(nextOrder(groups.map((g) => g.sortKey))),
             parentId: null,
             section: "bund",
+            taken: groups,
           },
     );
   }

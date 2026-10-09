@@ -17,18 +17,15 @@ export function ListNav({
   onSelect,
 }: {
   lists: DistributionListWithMembers[];
-  activeId: number | null;
+  activeId: number;
   onSelect: (id: number) => void;
 }) {
   return (
     <>
       <Field label="Verteiler" id="verteiler-wahl" className="lg:hidden">
-        <Select
-          value={activeId != null ? String(activeId) : undefined}
-          onValueChange={(v) => onSelect(Number(v))}
-        >
+        <Select value={String(activeId)} onValueChange={(v) => onSelect(Number(v))}>
           <SelectTrigger id="verteiler-wahl" className="w-full">
-            <SelectValue placeholder="Verteiler wählen" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent position="popper">
             {lists.map((l) => (

@@ -8,7 +8,6 @@ import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { FormError, TextField, focusSoon } from "@/components/field";
-import { NumberBadge } from "@/components/number-badge";
 import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,7 +87,13 @@ export function EntryRow({
         aria-describedby={meta ? `${id}-order ${id}-meta` : `${id}-order`}
         className="group/row flex w-full cursor-pointer items-start gap-3 px-4 py-2 text-left transition-colors hover:bg-hover focus-visible:-outline-offset-2 active:bg-active sm:px-gutter"
       >
-        <NumberBadge title={order == null ? orderText : orderLabel}>{order ?? "—"}</NumberBadge>
+        {/* Fixed width and tabular figures, so the column of numbers lines up. */}
+        <span
+          title={order == null ? orderText : orderLabel}
+          className="inline-block w-9 shrink-0 rounded-[4px] border border-line bg-surface-2 px-1 py-px text-right text-micro tabular-nums text-ink-faint"
+        >
+          {order ?? "—"}
+        </span>
         <span id={`${id}-order`} className="sr-only">
           {orderText}.
         </span>

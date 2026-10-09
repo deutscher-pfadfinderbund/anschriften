@@ -21,10 +21,19 @@ type Kind = "office" | "rank";
 /** An Amt or Stand reduced to what the list and the dialog need. */
 type Entry = { id: number; name: string; order: number };
 
-type Draft = { kind: Kind; entry: Entry | null; name: string; order: string };
+type Draft = {
+  kind: Kind;
+  entry: Entry | null;
+  name: string;
+  order: string;
+  /** The entries when the dialog opened: a just-created entry must not count as taken. */
+  taken: Entry[];
+};
 
-const COPY = {
+/** Everything that differs between Ämter and Stände. */
+const KINDS = {
   office: {
+    tab: "Ämter",
     create: "Neues Amt",
     edit: "Amt bearbeiten",
     created: "Amt angelegt.",
@@ -35,8 +44,21 @@ const COPY = {
     orderLabel: "Reihenfolge im PDF",
     orderHint: "Kleiner = weiter oben. Leer lassen: steht am Ende.",
     description: "Ämter stehen bei Personen und als Verteiler-Regel zur Auswahl.",
+    listDescription:
+      "Die Zahl links ist die Reihenfolge im PDF: kleiner = weiter oben. Zum Bearbeiten auf ein Amt klicken.",
+    empty: {
+      icon: Briefcase,
+      title: "Noch keine Ämter angelegt.",
+      description:
+        "Lege mit „Neues Amt“ das erste Amt an. Es steht danach bei Personen und als Verteiler-Regel zur Auswahl.",
+    },
+    /** An Amt may stay without Reihenfolge (stored as RANK_UNRANKED): it goes to the end. */
+    optionalOrder: true,
+    save: (id: number | null, name: string, order: number) => saveOffice(id, { name, rank: order }),
+    remove: deleteOffice,
   },
   rank: {
+    tab: "Stände",
     create: "Neuer Stand",
     edit: "Stand bearbeiten",
     created: "Stand angelegt.",
@@ -49,11 +71,23 @@ const COPY = {
     orderLabel: "Reihenfolge in Auswahllisten",
     orderHint: "Kleiner = weiter oben.",
     description: "Stände stehen bei Personen und als Verteiler-Regel zur Auswahl.",
+    listDescription:
+      "Die Zahl links ist die Reihenfolge in Auswahllisten: kleiner = weiter oben. Zum Bearbeiten auf einen Stand klicken.",
+    empty: {
+      icon: Award,
+      title: "Noch keine Stände angelegt.",
+      description:
+        "Lege mit „Neuer Stand“ den ersten Stand an. Er steht danach bei Personen und als Verteiler-Regel zur Auswahl.",
+    },
+    optionalOrder: false,
+    save: (id: number | null, name: string, order: number) => saveRank(id, { name, sortOrder: order }),
+    remove: deleteRank,
   },
 } as const;
 
-const officeEntry = (o: OfficeRow): Entry => ({ id: o.id, name: o.name, order: o.rank });
-const rankEntry = (r: RankRow): Entry => ({ id: r.id, name: r.name, order: r.sortOrder });
+/** The Reihenfolge as shown: null for an Amt without one. */
+const shownOrder = (kind: Kind, order: number) =>
+  KINDS[kind].optionalOrder && order === RANK_UNRANKED ? null : order;
 
 export function StammdatenManager({
   offices,
@@ -72,52 +106,35 @@ export function StammdatenManager({
 }) {
   // Controlled so the header shows the create action of the visible tab.
   const [tab, setTab] = useState<Kind>("office");
-  const dialog = useEntryDialog<Draft>({ kind: "office", entry: null, name: "", order: "" });
+  const dialog = useEntryDialog<Draft>({ kind: "office", entry: null, name: "", order: "", taken: [] });
   const { draft } = dialog;
 
-  const copy = COPY[draft.kind];
-  const entries = draft.kind === "office" ? offices.map(officeEntry) : ranks.map(rankEntry);
-  // Only while editing: once a create succeeds, the refreshed list holds the new entry
-  // itself, which must not flash "gibt es schon" while the dialog fades out.
-  const nameTaken =
-    dialog.open && !dialog.pending && isDuplicateName(draft.name, entries, draft.entry?.id ?? null);
-  // An Amt may stay without Reihenfolge (the RANK_UNRANKED sentinel, shown as empty).
-  const orderErr = orderError(draft.order, draft.kind === "office");
-  const blockers = draft.kind === "office" ? officeBlockers : rankBlockers;
+  const entries: Record<Kind, Entry[]> = {
+    office: offices.map((o) => ({ id: o.id, name: o.name, order: o.rank })),
+    rank: ranks.map((r) => ({ id: r.id, name: r.name, order: r.sortOrder })),
+  };
+  const blockers = { office: officeBlockers, rank: rankBlockers }[draft.kind];
+  const copy = KINDS[draft.kind];
+  const nameTaken = isDuplicateName(draft.name, draft.taken, draft.entry?.id ?? null);
+  const orderErr = orderError(draft.order, copy.optionalOrder);
 
   function openDialog(kind: Kind, entry: Entry | null) {
-    let order: string;
-    if (entry) order = entry.order === RANK_UNRANKED && kind === "office" ? "" : String(entry.order);
-    else
-      order = String(
-        nextOrder(
-          kind === "office"
-            ? offices.map((o) => o.rank).filter((r) => r !== RANK_UNRANKED)
-            : ranks.map((r) => r.sortOrder),
-        ),
-      );
-    dialog.show({ kind, entry, name: entry?.name ?? "", order });
+    const taken = entries[kind];
+    const order = entry
+      ? (shownOrder(kind, entry.order) ?? "")
+      : nextOrder(taken.map((e) => shownOrder(kind, e.order)).filter((o) => o != null));
+    dialog.show({ kind, entry, name: entry?.name ?? "", order: String(order), taken });
   }
 
   function submit() {
     const { kind, entry, name } = draft;
     const order = parseOrder(draft.order) ?? RANK_UNRANKED;
-    dialog.run(
-      () =>
-        kind === "office"
-          ? saveOffice(entry?.id ?? null, { name, rank: order })
-          : saveRank(entry?.id ?? null, { name, sortOrder: order }),
-      entry ? COPY[kind].saved : COPY[kind].created,
-    );
+    dialog.run(() => KINDS[kind].save(entry?.id ?? null, name, order), entry ? KINDS[kind].saved : KINDS[kind].created);
   }
 
   function confirmDelete() {
     const { kind, entry } = draft;
-    if (!entry) return;
-    dialog.run(
-      () => (kind === "office" ? deleteOffice(entry.id) : deleteRank(entry.id)),
-      COPY[kind].deleted,
-    );
+    if (entry) dialog.run(() => KINDS[kind].remove(entry.id), KINDS[kind].deleted);
   }
 
   return (
@@ -128,87 +145,58 @@ export function StammdatenManager({
         actions={
           <Button onClick={() => openDialog(tab, null)}>
             <Plus aria-hidden />
-            {COPY[tab].create}
+            {KINDS[tab].create}
           </Button>
         }
       />
       <PageBody>
         <Tabs value={tab} onValueChange={(v) => setTab(v as Kind)} className="gap-gutter">
           <TabsList>
-            <TabsTrigger value="office">Ämter ({offices.length})</TabsTrigger>
-            <TabsTrigger value="rank">Stände ({ranks.length})</TabsTrigger>
+            {(["office", "rank"] as const).map((kind) => (
+              <TabsTrigger key={kind} value={kind}>
+                {KINDS[kind].tab} ({entries[kind].length})
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <TabsContent value="office">
-            <EntryList
-              title="Ämter"
-              description="Die Zahl links ist die Reihenfolge im PDF: kleiner = weiter oben. Zum Bearbeiten auf ein Amt klicken."
-              emptyState={
-                offices.length === 0 ? (
-                  <EmptyState
-                    icon={Briefcase}
-                    title="Noch keine Ämter angelegt."
-                    description="Lege mit „Neues Amt“ das erste Amt an. Es steht danach bei Personen und als Verteiler-Regel zur Auswahl."
-                  />
-                ) : null
-              }
-            >
-              {offices.map((o) => {
-                const lists = officeListRules[o.id] ?? [];
-                return (
-                  <EntryRow
-                    key={o.id}
-                    order={o.rank === RANK_UNRANKED ? null : o.rank}
-                    orderLabel={COPY.office.orderLabel}
-                    name={o.name}
-                    meta={
-                      lists.length > 0 ? (
-                        <>
-                          <span className="sr-only">Verteiler: </span>
-                          {lists.map((l) => (
-                            <Tag
-                              key={l.listId}
-                              tone="brass"
-                              title={`Wer dieses Amt hat, ist automatisch im Verteiler „${l.listName}“.`}
-                            >
-                              {l.listName}
-                            </Tag>
-                          ))}
-                        </>
-                      ) : null
-                    }
-                    onOpen={() => openDialog("office", officeEntry(o))}
-                  />
-                );
-              })}
-            </EntryList>
-          </TabsContent>
-
-          <TabsContent value="rank">
-            <EntryList
-              title="Stände"
-              description="Die Zahl links ist die Reihenfolge in Auswahllisten: kleiner = weiter oben. Zum Bearbeiten auf einen Stand klicken."
-              emptyState={
-                ranks.length === 0 ? (
-                  <EmptyState
-                    icon={Award}
-                    title="Noch keine Stände angelegt."
-                    description="Lege mit „Neuer Stand“ den ersten Stand an. Er steht danach bei Personen und als Verteiler-Regel zur Auswahl."
-                  />
-                ) : null
-              }
-            >
-              {ranks.map((r) => (
-                <EntryRow
-                  key={r.id}
-                  order={r.sortOrder}
-                  orderLabel={COPY.rank.orderLabel}
-                  name={r.name}
-                  onOpen={() => openDialog("rank", rankEntry(r))}
-                />
-              ))}
-            </EntryList>
-          </TabsContent>
+          {(["office", "rank"] as const).map((kind) => (
+            <TabsContent key={kind} value={kind}>
+              <EntryList
+                title={KINDS[kind].tab}
+                description={KINDS[kind].listDescription}
+                emptyState={entries[kind].length === 0 ? <EmptyState {...KINDS[kind].empty} /> : null}
+              >
+                {entries[kind].map((e) => {
+                  const lists = kind === "office" ? (officeListRules[e.id] ?? []) : [];
+                  return (
+                    <EntryRow
+                      key={e.id}
+                      order={shownOrder(kind, e.order)}
+                      orderLabel={KINDS[kind].orderLabel}
+                      name={e.name}
+                      meta={
+                        lists.length > 0 ? (
+                          <>
+                            <span className="sr-only">Verteiler: </span>
+                            {lists.map((l) => (
+                              <Tag
+                                key={l.listId}
+                                tone="brass"
+                                title={`Wer dieses Amt hat, ist automatisch im Verteiler „${l.listName}“.`}
+                              >
+                                {l.listName}
+                              </Tag>
+                            ))}
+                          </>
+                        ) : null
+                      }
+                      onOpen={() => openDialog(kind, e)}
+                    />
+                  );
+                })}
+              </EntryList>
+            </TabsContent>
+          ))}
         </Tabs>
       </PageBody>
 
@@ -242,7 +230,7 @@ export function StammdatenManager({
           numeric
           value={draft.order}
           onValueChange={(order) => dialog.edit({ order })}
-          placeholder={draft.kind === "office" ? "am Ende" : undefined}
+          placeholder={copy.optionalOrder ? "am Ende" : undefined}
           hint={copy.orderHint}
           error={orderErr}
         />
