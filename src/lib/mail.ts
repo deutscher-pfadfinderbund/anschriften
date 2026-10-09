@@ -10,12 +10,27 @@ import { db } from "@/db";
 import { mailLog } from "@/db/schema";
 
 /**
- * True when the mail module is configured (SMTP host + From address present).
- * Read at call time — never captured at import — so restarting the server without
- * the SMTP vars really disables the module.
+ * The SMTP settings, or null when the module is off (SMTP host or From address missing).
+ * Read at call time — never captured at import — so restarting the server without the
+ * SMTP vars really disables the module.
  */
+function mailConfig() {
+  const host = process.env.SMTP_HOST?.trim();
+  const from = process.env.MAIL_FROM?.trim();
+  if (!host || !from) return null;
+  return {
+    host,
+    from,
+    port: Number(process.env.SMTP_PORT) || 587,
+    secure: process.env.SMTP_SECURE === "true",
+    user: process.env.SMTP_USER?.trim(),
+    pass: process.env.SMTP_PASS ?? "",
+  };
+}
+
+/** True when the mail module is configured; otherwise the UI hides it and the action refuses. */
 export function isMailEnabled(): boolean {
-  return Boolean(process.env.SMTP_HOST?.trim() && process.env.MAIL_FROM?.trim());
+  return mailConfig() != null;
 }
 
 /** Split `items` into consecutive chunks of at most `size` (clamped to ≥ 1). Pure. */
@@ -106,23 +121,18 @@ export function mailFailureMessage(result: { error: string; sent: number; recipi
  * a delivered mailing into a reported failure.
  */
 export async function sendListMail(input: SendListMailInput): Promise<SendListMailResult> {
-  const from = process.env.MAIL_FROM?.trim();
-  const host = process.env.SMTP_HOST?.trim();
+  const config = mailConfig();
   const recipientCount = input.recipients.length;
-  if (!from || !host)
-    return { ok: false, error: "Das Mail-Modul ist nicht konfiguriert.", sent: 0, recipientCount };
-  if (recipientCount === 0)
-    return { ok: false, error: "Keine Empfänger mit E-Mail-Adresse.", sent: 0, recipientCount };
-
-  const port = Number(process.env.SMTP_PORT) || 587;
-  const secure = process.env.SMTP_SECURE === "true";
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS ?? "";
+  if (!config) return { ok: false, error: "Das Mail-Modul ist nicht konfiguriert.", sent: 0, recipientCount };
+  const { host, from, port, secure, user, pass } = config;
 
   const transport = nodemailer.createTransport({
     host,
     port,
     secure,
+    // One connection for all BCC chunks, sent one after the other; close() below ends it.
+    pool: true,
+    maxConnections: 1,
     // When credentials are sent over a non-implicit-TLS port (STARTTLS on 587), require
     // STARTTLS: nodemailer then refuses to send rather than falling back to plaintext, so
     // credentials never travel in the clear. Auth-less relays (Mailpit in dev, internal
