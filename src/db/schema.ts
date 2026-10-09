@@ -183,9 +183,10 @@ export const distributionListMembers = pgTable(
 
 /**
  * Office-based membership rules: a list automatically contains whoever currently
- * holds one of the listed offices. Effective membership = manual members ∪ persons
- * assigned to a rule office (living only). Rules are maintained by the Kanzlei;
- * the import only ever writes manual memberships.
+ * holds one of the listed offices. Effective membership = manual members ∪ the matches
+ * of every rule (Amt, Stand, Gliederung), living persons only — see
+ * src/lib/effective-members.ts. Rules are maintained by the Kanzlei; the import only
+ * ever writes manual memberships.
  */
 export const distributionListOfficeRules = pgTable(
   "distribution_list_office_rules",
@@ -258,28 +259,10 @@ export const mailLog = pgTable("mail_log", {
   error: text("error"),
 });
 
-// --- Relations (for query-time joins in later milestones) ---
-
-export const ranksRelations = relations(ranks, ({ many }) => ({
-  persons: many(persons),
-  rankRules: many(distributionListRankRules),
-}));
-
-export const groupsRelations = relations(groups, ({ one, many }) => ({
-  parent: one(groups, {
-    fields: [groups.parentId],
-    references: [groups.id],
-    relationName: "group_tree",
-  }),
-  children: many(groups, { relationName: "group_tree" }),
-  assignments: many(assignments),
-  groupRules: many(distributionListGroupRules),
-}));
-
-export const officesRelations = relations(offices, ({ many }) => ({
-  assignments: many(assignments),
-  officeRules: many(distributionListOfficeRules),
-}));
+// --- Relations: only what the `db.query.persons` reads in src/db/queries.ts traverse ---
+// (persons → rank / assignments → group, office / distributionListMembers). A `many`
+// side needs its inverse `one`, hence assignments.person and distributionListMembers.person.
+// Relations are ORM-only: no migration.
 
 export const personsRelations = relations(persons, ({ one, many }) => ({
   rank: one(ranks, { fields: [persons.rankId], references: [ranks.id] }),
@@ -293,70 +276,9 @@ export const assignmentsRelations = relations(assignments, ({ one }) => ({
   office: one(offices, { fields: [assignments.officeId], references: [offices.id] }),
 }));
 
-export const distributionListsRelations = relations(distributionLists, ({ many }) => ({
-  members: many(distributionListMembers),
-  officeRules: many(distributionListOfficeRules),
-  rankRules: many(distributionListRankRules),
-  groupRules: many(distributionListGroupRules),
-  mailLog: many(mailLog),
-}));
-
-export const mailLogRelations = relations(mailLog, ({ one }) => ({
-  list: one(distributionLists, {
-    fields: [mailLog.listId],
-    references: [distributionLists.id],
-  }),
-}));
-
 export const distributionListMembersRelations = relations(distributionListMembers, ({ one }) => ({
-  list: one(distributionLists, {
-    fields: [distributionListMembers.listId],
-    references: [distributionLists.id],
-  }),
   person: one(persons, {
     fields: [distributionListMembers.personId],
     references: [persons.id],
   }),
 }));
-
-export const distributionListOfficeRulesRelations = relations(
-  distributionListOfficeRules,
-  ({ one }) => ({
-    list: one(distributionLists, {
-      fields: [distributionListOfficeRules.listId],
-      references: [distributionLists.id],
-    }),
-    office: one(offices, {
-      fields: [distributionListOfficeRules.officeId],
-      references: [offices.id],
-    }),
-  }),
-);
-
-export const distributionListRankRulesRelations = relations(
-  distributionListRankRules,
-  ({ one }) => ({
-    list: one(distributionLists, {
-      fields: [distributionListRankRules.listId],
-      references: [distributionLists.id],
-    }),
-    rank: one(ranks, {
-      fields: [distributionListRankRules.rankId],
-      references: [ranks.id],
-    }),
-  }),
-);
-
-export const distributionListGroupRulesRelations = relations(
-  distributionListGroupRules,
-  ({ one }) => ({
-    list: one(distributionLists, {
-      fields: [distributionListGroupRules.listId],
-      references: [distributionLists.id],
-    }),
-    group: one(groups, {
-      fields: [distributionListGroupRules.groupId],
-      references: [groups.id],
-    }),
-  }),
-);
