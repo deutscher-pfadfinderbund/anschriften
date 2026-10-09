@@ -19,7 +19,7 @@ type NavEntry = { href: string; label: string; icon: React.ComponentType<{ class
 const MAIN_NAV: NavEntry[] = [
   { href: "/", label: "Verzeichnis", icon: BookOpen },
   { href: "/verteiler", label: "Verteiler", icon: Mails },
-  { href: "/export", label: "PDF & Export", icon: FileDown },
+  { href: "/export", label: "PDF-Export", icon: FileDown },
 ];
 
 const MASTER_NAV: NavEntry[] = [
@@ -35,22 +35,15 @@ function initials(name: string): string {
 }
 
 /** Fir lozenge + app name. Shared by the sidebar header and the mobile top bar. */
-export function Wordmark({ className }: { className?: string }) {
+export function Wordmark() {
   return (
-    <div
-      className={cn(
-        "flex items-center font-display font-semibold text-ink",
-        className,
-        // Must stay AFTER `className`: callers pass a font size (text-[19px] in the
-        // rail, text-[17px] in the mobile top bar) and tailwind-merge treats a
-        // font-size utility as overriding `leading-*`. In the base string the
-        // leading would be dropped from the merge and the wordmark would inherit
-        // the body line-height instead of 1.25.
-        "leading-tight",
-      )}
-    >
-      <span className="mr-[7px] inline-block size-[9px] -translate-y-px rotate-45 bg-fir" />
-      Anschriftenverzeichnis
+    <div className="flex min-w-0 items-center font-display text-[18px] leading-tight font-semibold text-ink">
+      {/* shrink-0: the lozenge is the brand mark and must never be squeezed
+          to 0px by a long name. */}
+      <span aria-hidden className="mr-[7px] inline-block size-[9px] shrink-0 -translate-y-px rotate-45 bg-fir" />
+      {/* Soft hyphen: if a wide fallback serif does not fit, the name breaks
+          as „Anschriften-/verzeichnis“ instead of overflowing its box. */}
+      <span className="min-w-0">Anschriften&shy;verzeichnis</span>
     </div>
   );
 }
@@ -71,17 +64,16 @@ function NavItem({
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
       className={cn(
-        // pl-2 plus the 2px marker border keeps the label on the same x as px-2.5.
-        "flex w-full items-center gap-2.5 rounded-md border-l-2 py-2 pr-2.5 pl-2 text-[13.5px] transition-colors",
+        "relative flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-ui transition-colors",
         // Thumb-friendly rows wherever the primary pointer is a finger — keyed on
         // the input mode, not on "is inside the drawer", so a touch laptop gets
         // them in the desktop rail too. A mouse keeps py-2 at every width.
         "pointer-coarse:py-3",
-        "outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        // One "active" language app-wide: neutral surface, fir marker, fir text.
+        // One "active" language app-wide: --active fill (always stronger than
+        // --hover), fir text and a straight fir marker bar.
         active
-          ? "border-fir bg-surface font-medium text-fir"
-          : "border-transparent text-ink-soft hover:bg-sel hover:text-ink",
+          ? "bg-active font-medium text-fir before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-fir"
+          : "text-ink-soft hover:bg-hover hover:text-ink",
       )}
     >
       <Icon className="size-[15px] shrink-0 opacity-80" />
@@ -104,16 +96,17 @@ export function SidebarContent({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  // A person page belongs to the directory, so "Verzeichnis" stays marked there.
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+    href === "/"
+      ? pathname === "/" || pathname.startsWith("/personen")
+      : pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <>
-      <div className="border-b border-line px-5 pt-[22px] pb-[18px]">
-        <div className="mb-1 text-[10.5px] uppercase tracking-[0.14em] text-ink-faint">
-          Deutscher Pfadfinderbund
-        </div>
-        <Wordmark className="text-[19px]" />
+      <div className="border-b border-line px-5 pt-5 pb-4">
+        <p className="eyebrow mb-1">Deutscher Pfadfinderbund</p>
+        <Wordmark />
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 py-3.5">
@@ -125,9 +118,7 @@ export function SidebarContent({
             onNavigate={onNavigate}
           />
         ))}
-        <div className="px-2.5 pt-3.5 pb-1.5 text-[10.5px] uppercase tracking-[0.12em] text-ink-faint">
-          Stammdaten
-        </div>
+        <p className="eyebrow px-2.5 pt-4 pb-1.5">Stammdaten</p>
         {MASTER_NAV.map((entry) => (
           <NavItem
             key={entry.href}
@@ -139,19 +130,23 @@ export function SidebarContent({
       </nav>
 
       <div className="flex items-center gap-2.5 border-t border-line px-4 py-3.5">
-        <div className="grid size-[30px] place-items-center rounded-full bg-fir text-xs font-semibold text-on-fir">
+        {/* Neutral on purpose: the avatar is neither a link nor an active marker. */}
+        <div
+          aria-hidden
+          className="grid size-[30px] shrink-0 place-items-center rounded-full border border-line-strong bg-surface text-micro font-semibold text-ink-soft"
+        >
           {initials(userName)}
         </div>
-        <div className="min-w-0 flex-1 text-xs leading-tight">
-          <div className="truncate font-medium text-ink">{userName}</div>
-          <div className="text-[11px] text-ink-faint">via Keycloak</div>
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="truncate text-caption font-medium text-ink">{userName}</div>
+          <div className="text-micro text-ink-faint">via Keycloak</div>
         </div>
         <form action={logout}>
           <button
             type="submit"
             title="Abmelden"
             aria-label="Abmelden"
-            className="rounded-md p-1.5 text-ink-faint outline-none transition-colors hover:bg-sel hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
+            className="grid size-8 place-items-center rounded-md text-ink-faint transition-colors hover:bg-hover hover:text-ink pointer-coarse:size-11"
           >
             <LogOut className="size-4" />
           </button>
@@ -164,7 +159,7 @@ export function SidebarContent({
 /** Desktop rail. Below `lg` the same content is reachable through the drawer. */
 export function Sidebar({ userName }: { userName: string }) {
   return (
-    <aside className="sticky top-0 hidden h-screen w-58 shrink-0 flex-col border-r border-line bg-surface-2 lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface-2 lg:flex">
       <SidebarContent userName={userName} />
     </aside>
   );

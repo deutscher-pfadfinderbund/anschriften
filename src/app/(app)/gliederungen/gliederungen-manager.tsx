@@ -10,7 +10,7 @@ import { Combobox, type ComboOption } from "@/components/combobox";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { FormLabel } from "@/components/form-label";
-import { MonoBadge } from "@/components/mono-badge";
+import { NumberBadge } from "@/components/number-badge";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -162,7 +162,7 @@ export function GliederungenManager({
           </Button>
         }
       />
-      <div className="px-6 pt-[18px] pb-10">
+      <div className="px-4 pt-gutter pb-10 sm:px-6">
         <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
           {ordered.length === 0 ? (
             <EmptyState
@@ -182,7 +182,7 @@ export function GliederungenManager({
                     className="flex max-w-3xl flex-wrap items-center gap-2 px-[18px] py-1.5 text-[13.5px] sm:flex-nowrap"
                     style={{ paddingLeft: `${18 + depth * 16}px` }}
                   >
-                    <MonoBadge>{group.sortKey}</MonoBadge>
+                    <NumberBadge>{group.sortKey}</NumberBadge>
                     {/* flex-1 below sm (fills the line and wraps the text),
                         the original shrink-and-truncate from sm: up. */}
                     <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{group.name}</span>

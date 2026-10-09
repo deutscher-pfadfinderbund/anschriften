@@ -121,7 +121,7 @@ export function ComposeMailDialog({
               className="h-48 resize-y"
             />
           </div>
-          <p className="rounded-md border border-line bg-surface-2 px-3 py-2 text-[12.5px] text-ink-soft">
+          <p className="rounded-md border border-line bg-surface-2 px-3 py-2 text-caption text-ink-soft">
             {recipientCount > 0 ? (
               <>
                 an{" "}
@@ -145,7 +145,7 @@ export function ComposeMailDialog({
           </p>
         </div>
         {confirming ? (
-          <div className="rounded-md border border-line bg-surface-2 px-3 py-2 text-[13px] text-ink">
+          <div className="rounded-md border border-line bg-surface-2 px-3 py-2 text-ui text-ink">
             Wirklich an{" "}
             <span className="font-medium">
               {recipientCount} {recipientCount === 1 ? "Adresse" : "Adressen"}

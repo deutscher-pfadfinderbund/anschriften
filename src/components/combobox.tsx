@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronsUpDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -12,35 +11,36 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { fold } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { FIELD, cn, matchesQuery } from "@/lib/utils";
 
 export type ComboOption = { value: string; label: string; depth?: number };
 
+/** "Amt suchen …" → "Amt suchen": accessible names read without the ellipsis. */
+const spoken = (s: string) => s.replace(/\s*…$/, "");
+
 /**
- * Searchable single-select (Popover + cmdk Command). Values are unique labels;
- * filtering is umlaut-insensitive. `disabledValues` greys out options (e.g. to
- * prevent duplicate assignments or parent cycles).
+ * Searchable single-select (Popover + cmdk). Looks like a Select field;
+ * filtering is umlaut-insensitive and every typed word must match.
  */
 export function Combobox({
+  id,
   options,
   value,
   onChange,
   placeholder = "Auswählen …",
   searchPlaceholder = "Suchen …",
   emptyText = "Nichts gefunden.",
-  disabledValues,
-  className,
   "aria-label": ariaLabel,
 }: {
+  /** Forwarded to the trigger, so a <label htmlFor> can name it. */
+  id?: string;
   options: ComboOption[];
+  /** Selected option value, or null for none (shows the placeholder). */
   value: string | null;
   onChange: (value: string) => void;
   placeholder?: string;
   searchPlaceholder?: string;
   emptyText?: string;
-  disabledValues?: Set<string>;
-  className?: string;
   "aria-label"?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -49,52 +49,49 @@ export function Combobox({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
+        <button
+          id={id}
           type="button"
-          variant="outline"
+          // PopoverTrigger adds aria-controls at runtime; the linter can't see it.
+          // eslint-disable-next-line jsx-a11y/role-has-required-aria-props
           role="combobox"
           aria-expanded={open}
           aria-label={ariaLabel}
           className={cn(
-            // h-8 matches Input and SelectTrigger so mixed rows share a baseline.
-            "h-8 w-full justify-between font-normal",
+            FIELD,
+            "flex items-center justify-between gap-1.5 pr-2 text-left",
             !selected && "text-ink-faint",
-            className,
           )}
         >
           <span className="truncate">{selected ? selected.label : placeholder}</span>
-          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
-        </Button>
+          <ChevronDown aria-hidden className="size-4 shrink-0 text-ink-faint" />
+        </button>
       </PopoverTrigger>
       <PopoverContent
+        aria-label={ariaLabel ?? spoken(placeholder)}
         className="w-[var(--radix-popover-trigger-width)] min-w-[240px] p-0"
         align="start"
       >
         <Command
-          filter={(itemValue, search) =>
-            fold(itemValue).includes(fold(search)) ? 1 : 0
-          }
+          label={spoken(searchPlaceholder)}
+          filter={(itemValue, search) => (matchesQuery(itemValue, search) ? 1 : 0)}
         >
           <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
+          <CommandList label="Treffer">
             <CommandEmpty>{emptyText}</CommandEmpty>
-            {options.map((o) => {
-              const isDisabled = disabledValues?.has(o.value) ?? false;
-              return (
-                <CommandItem
-                  key={o.value}
-                  value={o.label}
-                  disabled={isDisabled}
-                  data-checked={o.value === value}
-                  onSelect={() => {
-                    onChange(o.value);
-                    setOpen(false);
-                  }}
-                >
-                  <span style={{ paddingLeft: `${(o.depth ?? 0) * 12}px` }}>{o.label}</span>
-                </CommandItem>
-              );
-            })}
+            {options.map((o) => (
+              <CommandItem
+                key={o.value}
+                value={o.label}
+                data-checked={o.value === value}
+                onSelect={() => {
+                  onChange(o.value);
+                  setOpen(false);
+                }}
+              >
+                <span style={{ paddingLeft: `${(o.depth ?? 0) * 12}px` }}>{o.label}</span>
+              </CommandItem>
+            ))}
           </CommandList>
         </Command>
       </PopoverContent>

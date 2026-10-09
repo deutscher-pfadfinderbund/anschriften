@@ -1,167 +1,155 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 /*
- * Dark mode is driven by the OS preference and an optional explicit override
- * on <html data-theme>. The `dark:` utility variant is wired to the same two
- * signals so shadcn's per-component dark tweaks track our design tokens.
+ * Dark mode follows the OS preference, with an optional explicit override on
+ * <html data-theme="light|dark">. Colors flip through `light-dark()` + the
+ * `color-scheme` below, so components need no `dark:` variants (Tailwind's
+ * built-in one would ignore data-theme anyway).
  */
-@custom-variant dark {
-  &:where([data-theme="dark"], [data-theme="dark"] *) {
+
+/*
+ * State variants used by the shadcn/Radix primitives (inlined from the shadcn
+ * CLI's tailwind.css so the CLI is not a runtime dependency). They match both
+ * Radix's `data-state="…"` and cmdk's boolean data attributes.
+ */
+@custom-variant data-open {
+  &:where([data-state="open"]),
+  &:where([data-open]:not([data-open="false"])) {
     @slot;
   }
-  @media (prefers-color-scheme: dark) {
-    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
-      @slot;
-    }
+}
+@custom-variant data-closed {
+  &:where([data-state="closed"]),
+  &:where([data-closed]:not([data-closed="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-checked {
+  &:where([data-state="checked"]),
+  &:where([data-checked]:not([data-checked="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-selected {
+  &:where([data-selected="true"]) {
+    @slot;
+  }
+}
+@custom-variant data-disabled {
+  &:where([data-disabled="true"]),
+  &:where([data-disabled]:not([data-disabled="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-horizontal {
+  &:where([data-orientation="horizontal"]) {
+    @slot;
+  }
+}
+@custom-variant data-vertical {
+  &:where([data-orientation="vertical"]) {
+    @slot;
   }
 }
 
 /*
- * Design-Tokens Anschriftenverzeichnis.
- * Grundton neutral (Papier/Anthrazit), Tannengrün NUR als Akzent
- * (Primär-Buttons, Links, aktive Markierung). Flächen und Hover neutral.
- * Die shadcn-Semantiktokens (--background, --primary …) sind auf diese
- * Grundtokens gemappt und flippen deshalb automatisch mit dem Theme.
+ * Design tokens. Every token is written once as light-dark(LIGHT, DARK).
+ * Neutral paper/anthracite base; fir green ONLY as accent (primary buttons,
+ * links, active marker); surfaces, chips and hover stay neutral.
  */
 :root {
-  /* Native controls (date pickers, checkboxes, scrollbars) follow the theme. */
   color-scheme: light dark;
-  --paper: #fafaf8;
-  --surface: #ffffff;
-  --surface-2: #f3f3f0;
-  --ink: #232724;
-  --ink-soft: #5b625d;
-  /* Darkened for WCAG AA (~4.8:1 on --surface / --surface-2); ink-faint carries
-   * real content (form labels, column headers, sublines, placeholders). */
-  --ink-faint: #676d68;
-  --line: #e5e5e0;
-  --line-strong: #cbccc5;
-  --fir: #2e5c46;
-  --fir-deep: #234b38;
-  --fir-tint: #eef2ef;
-  --brass: #a08028;
-  --brass-tint: #f4efdf;
-  --crit: #a63d2f;
-  --crit-tint: #f6e7e4;
-  --sel: #f0f1ee;
-  /* Text color on a --fir surface (green flips lightness across themes). */
-  --on-fir: #f6f8f6;
+
+  /* Surfaces */
+  --paper: light-dark(#fafaf8, #161917);
+  --surface: light-dark(#ffffff, #1d211e);
+  --surface-2: light-dark(#f3f3f0, #191d1a);
+  /* Fill of text fields, selects and checkboxes (dark: slightly inset). */
+  --field: light-dark(#ffffff, #191c1a);
+
+  /* Ink. ink-faint still carries real content (labels, sublines,
+   * placeholders), so it stays ≥ 4.5:1 on surface, field and --hover. */
+  --ink: light-dark(#232724, #e5e8e4);
+  --ink-soft: light-dark(#5b625d, #a8afa9);
+  --ink-faint: light-dark(#676d68, #8f968f);
+
+  /* Lines: --line/--line-strong separate regions; --control is the boundary
+   * of form controls (≥ 3:1 against surface, paper and field, WCAG 1.4.11). */
+  --line: light-dark(#e5e5e0, #2c312d);
+  --line-strong: light-dark(#cbccc5, #3f453f);
+  --control: light-dark(#858a84, #6f766f);
+
+  /* Interaction: --active is always visibly stronger than --hover, on every
+   * surface (paper, surface, surface-2) in both themes. */
+  --hover: light-dark(#edeeea, #272c28);
+  --active: light-dark(#e4e6e0, #2f3530);
+  /* Modal backdrop. */
+  --scrim: light-dark(rgb(35 39 36 / 0.24), rgb(0 0 0 / 0.55));
+
+  /* Fir accent. --fir is the text/marker/ring accent (bright mint in dark);
+   * --fir-fill is the calmer fill of primary buttons and checked boxes,
+   * --fir-deep its hover, --on-fir-fill the text on it. */
+  --fir: light-dark(#2e5c46, #85b99a);
+  --fir-fill: light-dark(#2e5c46, #3a6e54);
+  --fir-deep: light-dark(#234b38, #417559);
+  --on-fir-fill: light-dark(#f6f8f6, #eef3ef);
+
+  --brass: light-dark(#a08028, #c8a94e);
+  --brass-tint: light-dark(#f4efdf, #2e2a1c);
+  --crit: light-dark(#a63d2f, #d97a6a);
+  --crit-tint: light-dark(#f6e7e4, #382522);
 
   /* shadcn semantic tokens → design tokens */
   --background: var(--paper);
   --foreground: var(--ink);
-  --card: var(--surface);
-  --card-foreground: var(--ink);
   --popover: var(--surface);
   --popover-foreground: var(--ink);
-  --primary: var(--fir);
-  --primary-foreground: var(--on-fir);
+  --primary: var(--fir-fill);
+  --primary-foreground: var(--on-fir-fill);
   --secondary: var(--surface-2);
   --secondary-foreground: var(--ink);
   --muted: var(--surface-2);
-  --muted-foreground: var(--ink-soft);
-  --accent: var(--surface-2);
-  --accent-foreground: var(--ink);
   --destructive: var(--crit);
-  --destructive-foreground: var(--on-fir);
   --border: var(--line);
-  --input: var(--line-strong);
   --ring: var(--fir);
   --radius: 0.5rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #161917;
-    --surface: #1d211e;
-    --surface-2: #191d1a;
-    --ink: #e5e8e4;
-    --ink-soft: #a8afa9;
-    /* Raised for WCAG AA (~5:1 on the dark surfaces). */
-    --ink-faint: #8a918a;
-    --line: #2c312d;
-    --line-strong: #3f453f;
-    --fir: #85b99a;
-    --fir-deep: #a3cdb3;
-    --fir-tint: #222a24;
-    --brass: #c8a94e;
-    --brass-tint: #2e2a1c;
-    --crit: #d97a6a;
-    --crit-tint: #382522;
-    --sel: #222623;
-    --on-fir: #14201a;
-  }
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --paper: #161917;
-  --surface: #1d211e;
-  --surface-2: #191d1a;
-  --ink: #e5e8e4;
-  --ink-soft: #a8afa9;
-  --ink-faint: #8a918a;
-  --line: #2c312d;
-  --line-strong: #3f453f;
-  --fir: #85b99a;
-  --fir-deep: #a3cdb3;
-  --fir-tint: #222a24;
-  --brass: #c8a94e;
-  --brass-tint: #2e2a1c;
-  --crit: #d97a6a;
-  --crit-tint: #382522;
-  --sel: #222623;
-  --on-fir: #14201a;
-}
-
 :root[data-theme="light"] {
   color-scheme: light;
-  --paper: #fafaf8;
-  --surface: #ffffff;
-  --surface-2: #f3f3f0;
-  --ink: #232724;
-  --ink-soft: #5b625d;
-  --ink-faint: #676d68;
-  --line: #e5e5e0;
-  --line-strong: #cbccc5;
-  --fir: #2e5c46;
-  --fir-deep: #234b38;
-  --fir-tint: #eef2ef;
-  --brass: #a08028;
-  --brass-tint: #f4efdf;
-  --crit: #a63d2f;
-  --crit-tint: #f6e7e4;
-  --sel: #f0f1ee;
-  --on-fir: #f6f8f6;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 @theme inline {
-  /* Design tokens as Tailwind colors */
   --color-paper: var(--paper);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-field: var(--field);
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-ink-faint: var(--ink-faint);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-control: var(--control);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+  /* Legacy name for --hover, still used by page files (hover:bg-sel). */
+  --color-sel: var(--hover);
+  --color-scrim: var(--scrim);
   --color-fir: var(--fir);
+  --color-fir-fill: var(--fir-fill);
   --color-fir-deep: var(--fir-deep);
-  --color-fir-tint: var(--fir-tint);
-  --color-on-fir: var(--on-fir);
+  --color-on-fir-fill: var(--on-fir-fill);
   --color-brass: var(--brass);
   --color-brass-tint: var(--brass-tint);
   --color-crit: var(--crit);
   --color-crit-tint: var(--crit-tint);
-  --color-sel: var(--sel);
 
-  /* shadcn semantic colors */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
@@ -169,18 +157,36 @@
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
-  --color-input: var(--input);
   --color-ring: var(--ring);
 
+  /* Fira Sans for everything (UI and data, like the printed directory); the
+   * display serif only for page titles, the wordmark and panel/dialog titles. */
   --font-sans: var(--font-fira-sans), "Fira Sans", "Seravek", "Avenir Next", "Segoe UI", sans-serif;
   --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --font-mono: "Fira Code", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /*
+   * Type scale — pick from these instead of arbitrary text-[…px] values.
+   * micro: eyebrows, badges · caption: tags, hints, sublines, meta ·
+   * ui: table cells, nav, dense controls · body: running text, fields ·
+   * panel: panel and dialog titles · title: page titles.
+   */
+  --text-micro: 11px;
+  --text-micro--line-height: 1.35;
+  --text-caption: 12.5px;
+  --text-caption--line-height: 1.4;
+  --text-ui: 13.5px;
+  --text-ui--line-height: 1.45;
+  --text-body: 14px;
+  --text-body--line-height: 1.5;
+  --text-panel: 16px;
+  --text-panel--line-height: 1.3;
+  --text-title: 24px;
+  --text-title--line-height: 1.25;
+
+  /* Inner padding of panels and dialogs (p-gutter, px-gutter, gap-gutter). */
+  --spacing-gutter: 1.125rem;
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -191,16 +197,65 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-body {
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
+/* The one recipe for small uppercase labels (form labels, column headers,
+ * sidebar section titles, overlines). */
+@utility eyebrow {
+  font-size: var(--text-micro);
+  line-height: var(--text-micro--line-height);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* One solid focus indicator app-wide (fir, 2px, offset). Primitives that
+   * draw their own (fields: border + inset ring) opt out with outline-none. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Native search "clear" button, redrawn as a quiet X in the ink tokens
+   * instead of the platform glyph (a bold white ✖ in dark mode). */
+  input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    background-color: var(--ink-faint);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+  input[type="search"]::-webkit-search-cancel-button:hover {
+    background-color: var(--ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

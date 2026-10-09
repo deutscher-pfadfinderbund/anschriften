@@ -24,13 +24,13 @@ export function MobileNav({ userName }: { userName: string }) {
 
   return (
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-surface-2 pr-1.5 pl-4 lg:hidden">
-      <Wordmark className="min-w-0 truncate text-[17px]" />
+      <Wordmark />
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           <button
             type="button"
             aria-label="Menü öffnen"
-            className="grid size-11 shrink-0 place-items-center rounded-md text-ink-soft outline-none transition-colors hover:bg-sel hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
+            className="grid size-11 shrink-0 place-items-center rounded-md text-ink-soft transition-colors hover:bg-hover hover:text-ink"
           >
             <Menu className="size-5" />
           </button>
@@ -40,6 +40,16 @@ export function MobileNav({ userName }: { userName: string }) {
             into the shared SidebarContent. */}
         <DialogContent
           aria-describedby={undefined}
+          // Radix would focus the first non-link control — "Abmelden". Start on
+          // the current page's entry instead, so Enter cannot log out by accident.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            const drawer = event.currentTarget as HTMLElement;
+            (
+              drawer.querySelector<HTMLElement>('nav a[aria-current="page"]') ??
+              drawer.querySelector<HTMLElement>("nav a")
+            )?.focus();
+          }}
           // max-h-none/overflow-hidden opt out of DialogContent's viewport cap:
           // the drawer is meant to be exactly full height and scrolls inside its
           // own <nav>, so the shared max-h would leave a 2rem gap at the bottom.

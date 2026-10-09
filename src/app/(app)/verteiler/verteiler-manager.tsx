@@ -393,7 +393,7 @@ export function VerteilerManager({
         title="Verteiler"
         subtitle="Gremien-Verteiler pflegen und als BCC-Liste oder CSV exportieren"
       />
-      <div className="px-6 pt-[18px] pb-10">
+      <div className="px-4 pt-gutter pb-10 sm:px-6">
         <div className="grid grid-cols-1 items-start gap-[18px] lg:grid-cols-[260px_1fr]">
           {/* Left: list of distribution lists */}
           <section className="rounded-lg border border-line bg-surface shadow-sm">

@@ -3,32 +3,29 @@
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
-// Theme follows the OS preference (prefers-color-scheme); we don't use next-themes.
+// Colors come from the design tokens (which follow the OS theme and the
+// data-theme override); the inline style beats Sonner's own system-ui font.
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme="system"
-      className="toaster group"
+      containerAriaLabel="Benachrichtigungen"
       icons={{
-        success: <CircleCheckIcon className="size-4" />,
+        success: <CircleCheckIcon className="size-4 text-fir" />,
         info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4" />,
-        error: <OctagonXIcon className="size-4" />,
+        warning: <TriangleAlertIcon className="size-4 text-brass" />,
+        error: <OctagonXIcon className="size-4 text-crit" />,
         loading: <Loader2Icon className="size-4 animate-spin" />,
       }}
       style={
         {
+          fontFamily: "var(--font-sans)",
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
+          "--normal-border": "var(--line-strong)",
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }
-      toastOptions={{
-        classNames: {
-          toast: "cn-toast",
-        },
-      }}
       {...props}
     />
   )
