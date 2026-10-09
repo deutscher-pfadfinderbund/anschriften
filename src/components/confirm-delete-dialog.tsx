@@ -1,5 +1,6 @@
 "use client";
 
+import { FormError } from "@/components/field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,6 +18,7 @@ export function ConfirmDeleteDialog({
   title,
   description,
   confirmLabel,
+  error,
   pending,
   onConfirm,
 }: {
@@ -25,6 +27,8 @@ export function ConfirmDeleteDialog({
   title: string;
   description: React.ReactNode;
   confirmLabel: string;
+  /** The refused deletion's message. */
+  error?: string | null;
   pending: boolean;
   onConfirm: () => void;
 }) {
@@ -35,6 +39,7 @@ export function ConfirmDeleteDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        <FormError>{error}</FormError>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Abbrechen

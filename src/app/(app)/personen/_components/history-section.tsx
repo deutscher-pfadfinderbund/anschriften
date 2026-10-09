@@ -12,7 +12,7 @@ import {
 import { AddRowButton } from "@/components/add-row-button";
 import type { ComboOption } from "@/components/combobox";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
-import { ComboField, TextField, focusSoon } from "@/components/field";
+import { ComboField, FormError, TextField, focusSoon } from "@/components/field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -310,11 +310,7 @@ function HistoryForm({
           start={draft.startDate || null}
           error={endMissing ? "Bitte gib ein Bis-Datum an oder wähle „Ende unbekannt“." : undefined}
         />
-        {serverError ? (
-          <p role="alert" className="text-caption text-crit">
-            {serverError}
-          </p>
-        ) : null}
+        <FormError>{serverError}</FormError>
       </div>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone} disabled={pending}>

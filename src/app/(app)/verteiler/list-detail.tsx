@@ -252,14 +252,10 @@ export function ListDetail({
           <>
             „{list.name}“ wird mit allen Mitgliedschaften und Regeln gelöscht. Die Personen selbst
             bleiben erhalten. Das lässt sich nicht rückgängig machen.
-            {deleteError ? (
-              <span role="alert" className="mt-2 block text-crit">
-                {deleteError}
-              </span>
-            ) : null}
           </>
         }
         confirmLabel="Verteiler löschen"
+        error={deleteError}
         pending={isPending}
         onConfirm={confirmDelete}
       />

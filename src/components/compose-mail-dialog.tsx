@@ -5,7 +5,8 @@ import { Send } from "lucide-react";
 import { toast } from "sonner";
 
 import { sendMail, type SendMailResult } from "@/actions/mail";
-import { FormLabel } from "@/components/form-label";
+import { Field, TextField } from "@/components/field";
+import { Note } from "@/components/note";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,12 +16,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { emailAddressCount, personCount, plural } from "@/lib/format";
-
-const SUBJECT_MAX = 200;
-const BODY_MAX = 50000;
+import { BODY_MAX, SUBJECT_MAX } from "@/lib/limits";
 
 /** Whether the mailing targets a whole list or an explicit table selection. */
 export type ComposeTarget = { kind: "list"; listId: number } | { kind: "selection"; personIds: number[] };
@@ -138,19 +136,16 @@ export function ComposeMailDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
-          <div>
-            <FormLabel htmlFor="mail-subject">Betreff</FormLabel>
-            <Input
-              id="mail-subject"
-              autoFocus
-              maxLength={SUBJECT_MAX}
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Betreff der Rundmail"
-            />
-          </div>
-          <div>
-            <FormLabel htmlFor="mail-body">Nachricht</FormLabel>
+          <TextField
+            label="Betreff"
+            id="mail-subject"
+            autoFocus
+            maxLength={SUBJECT_MAX}
+            value={subject}
+            onValueChange={setSubject}
+            placeholder="Betreff der Rundmail"
+          />
+          <Field label="Nachricht" id="mail-body">
             <Textarea
               id="mail-body"
               maxLength={BODY_MAX}
@@ -159,8 +154,8 @@ export function ComposeMailDialog({
               placeholder="Nur Text – keine Formatierung, keine Anhänge."
               className="h-48 resize-y"
             />
-          </div>
-          <p className="rounded-md border border-line bg-surface-2 px-3 py-2 text-caption text-ink-soft">
+          </Field>
+          <Note className="text-caption">
             {recipientCount > 0 ? (
               <>
                 an <span className="font-medium text-ink">{emailAddressCount(recipientCount)}</span>
@@ -171,13 +166,13 @@ export function ComposeMailDialog({
             ) : (
               "Keine Empfänger mit gültiger E-Mail-Adresse."
             )}
-          </p>
+          </Note>
         </div>
         {confirming ? (
-          <p role="alert" className="rounded-md border border-line-strong bg-surface-2 px-3 py-2 text-ui text-ink">
+          <Note role="alert" className="border-line-strong text-ink">
             Wirklich an <span className="font-medium">{emailAddressCount(recipientCount)}</span> senden? Der
             Versand lässt sich nicht rückgängig machen.
-          </p>
+          </Note>
         ) : null}
         <DialogFooter>
           {/* Keyed, so the buttons are new elements: focus lands on Zurück instead of staying

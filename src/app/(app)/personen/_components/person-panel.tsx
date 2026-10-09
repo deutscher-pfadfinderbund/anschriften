@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 
 import { Field, TextField, fieldAria } from "@/components/field";
+import { Note } from "@/components/note";
 import { Panel } from "@/components/panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -127,7 +128,7 @@ export function PersonPanel({
         />
 
         {similar.length > 0 ? (
-          <div className="col-span-2 rounded-md border border-line bg-surface-2 px-3 py-2 text-ui text-ink-soft sm:col-span-6">
+          <Note className="col-span-2 sm:col-span-6">
             <p>Ähnliche Personen gibt es schon – bitte prüfen, ob es dieselbe ist:</p>
             <ul className="mt-1 flex flex-col gap-0.5">
               {similar.map((p) => (
@@ -144,7 +145,7 @@ export function PersonPanel({
                 </li>
               ))}
             </ul>
-          </div>
+          </Note>
         ) : null}
 
         <Field

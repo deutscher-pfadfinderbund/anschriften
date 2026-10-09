@@ -5,9 +5,8 @@ import { Copy, Download, Send, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { addMembers } from "@/actions/lists";
-import { Combobox } from "@/components/combobox";
 import { ComposeMailDialog } from "@/components/compose-mail-dialog";
-import { FormLabel } from "@/components/form-label";
+import { ComboField } from "@/components/field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -218,18 +217,16 @@ function AddToListDialog({
             verstorbene werden übersprungen.
           </DialogDescription>
         </DialogHeader>
-        <div>
-          <FormLabel htmlFor="add-to-list">Verteiler</FormLabel>
-          <Combobox
-            id="add-to-list"
-            options={distributionLists.map((l) => ({ value: String(l.id), label: l.name }))}
-            value={listId}
-            onChange={setListId}
-            placeholder="Verteiler wählen"
-            searchPlaceholder="Verteiler suchen …"
-            emptyText="Kein Verteiler gefunden."
-          />
-        </div>
+        <ComboField
+          label="Verteiler"
+          id="add-to-list"
+          options={distributionLists.map((l) => ({ value: String(l.id), label: l.name }))}
+          value={listId}
+          onChange={setListId}
+          placeholder="Verteiler wählen"
+          searchPlaceholder="Verteiler suchen …"
+          emptyText="Kein Verteiler gefunden."
+        />
         <DialogFooter>
           <DialogClose asChild>
             <Button variant="outline" disabled={isPending}>

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { saveList } from "@/actions/lists";
-import { FormLabel } from "@/components/form-label";
+import { Field, FormError, TextField } from "@/components/field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,9 +14,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { callAction } from "@/lib/call-action";
+import { DESCRIPTION_MAX, NAME_MAX } from "@/lib/limits";
 
 /** What the dialog edits: a new list (`id` null) or an existing one. */
 export type ListDraft = { id: number | null; name: string; description: string };
@@ -76,37 +76,28 @@ function ListForm({
           Ein Verteiler bündelt Personen für Rundmails, BCC-Listen und Serienbriefe.
         </DialogDescription>
       </DialogHeader>
-      <div>
-        <FormLabel htmlFor="verteiler-name">Name</FormLabel>
-        <Input
-          id="verteiler-name"
-          autoFocus
-          maxLength={200}
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            setError(null);
-          }}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? "verteiler-name-fehler" : undefined}
-          placeholder="z. B. Bundesthing"
-        />
-        {error ? (
-          <p id="verteiler-name-fehler" role="alert" className="mt-1.5 text-caption text-crit">
-            {error}
-          </p>
-        ) : null}
-      </div>
-      <div>
-        <FormLabel htmlFor="verteiler-beschreibung">Beschreibung (optional)</FormLabel>
+      <TextField
+        label="Name"
+        id="verteiler-name"
+        autoFocus
+        maxLength={NAME_MAX}
+        value={name}
+        onValueChange={(v) => {
+          setName(v);
+          setError(null);
+        }}
+        placeholder="z. B. Bundesthing"
+      />
+      <Field label="Beschreibung (optional)" id="verteiler-beschreibung">
         <Textarea
           id="verteiler-beschreibung"
-          maxLength={2000}
+          maxLength={DESCRIPTION_MAX}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Wofür wird dieser Verteiler verwendet?"
         />
-      </div>
+      </Field>
+      <FormError>{error}</FormError>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel} disabled={isPending}>
           Abbrechen

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { Note } from "@/components/note";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 
@@ -36,9 +37,9 @@ export function LoginButton() {
         {pending ? "Weiterleitung …" : "Anmelden mit DPB-Login"}
       </Button>
       {failed ? (
-        <p role="alert" className="mt-4 rounded-md border border-crit/40 bg-crit-tint p-4 text-ui text-ink">
+        <Note tone="crit" role="alert" className="mt-4 p-4">
           {LOGIN_FAILED}
-        </p>
+        </Note>
       ) : null}
     </>
   );

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { CalendarOff, Undo2 } from "lucide-react";
 
 import { Field, fieldAria } from "@/components/field";
+import { Note } from "@/components/note";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -169,11 +170,11 @@ export function RowNote({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-line bg-surface-2 px-2.5 py-1.5 text-caption text-ink-soft">
+    <Note className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5 text-caption">
       <Icon aria-hidden className="size-3.5 shrink-0 text-ink-faint" />
       <span className="min-w-0 flex-1">{children}</span>
       {action}
-    </div>
+    </Note>
   );
 }
 

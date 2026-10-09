@@ -4,9 +4,9 @@ import { useMemo } from "react";
 import { Building2, Plus } from "lucide-react";
 
 import { deleteGroup, saveGroup } from "@/actions/groups";
-import { Combobox, type ComboOption } from "@/components/combobox";
+import type { ComboOption } from "@/components/combobox";
 import { EmptyState } from "@/components/empty-state";
-import { FormLabel } from "@/components/form-label";
+import { ComboField, Field, fieldAria } from "@/components/field";
 import { PageBody, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -63,6 +63,7 @@ export function GliederungenManager({
 
   const parent = draft.parentId != null ? groups.find((g) => g.id === draft.parentId) : undefined;
   const hasChildren = editId != null && groups.some((g) => g.parentId === editId);
+  const sectionHint = hasChildren ? "Gilt auch für alle Untergliederungen." : undefined;
   // Only while editing (see stammdaten-manager): a new Gliederung must not match itself.
   const nameTaken = dialog.open && !dialog.pending && isDuplicateName(draft.name, groups, editId);
   const orderErr = orderError(draft.order);
@@ -198,21 +199,19 @@ export function GliederungenManager({
             error={orderErr}
           />
         </div>
-        <div>
-          <FormLabel htmlFor="group-parent">Übergeordnete Gliederung</FormLabel>
-          <Combobox
-            id="group-parent"
-            options={parentOptions}
-            value={draft.parentId != null ? String(draft.parentId) : PARENT_NONE}
-            onChange={(v) => {
-              const parentId = v === PARENT_NONE ? null : Number(v);
-              // Keep the inherited Bereich when the parent is cleared again.
-              const inherited = groups.find((g) => g.id === parentId)?.section;
-              dialog.edit({ parentId, section: inherited ?? draft.section });
-            }}
-            searchPlaceholder="Gliederung suchen …"
-          />
-        </div>
+        <ComboField
+          label="Übergeordnete Gliederung"
+          id="group-parent"
+          options={parentOptions}
+          value={draft.parentId != null ? String(draft.parentId) : PARENT_NONE}
+          onChange={(v) => {
+            const parentId = v === PARENT_NONE ? null : Number(v);
+            // Keep the inherited Bereich when the parent is cleared again.
+            const inherited = groups.find((g) => g.id === parentId)?.section;
+            dialog.edit({ parentId, section: inherited ?? draft.section });
+          }}
+          searchPlaceholder="Gliederung suchen …"
+        />
         {parent ? (
           // A child always takes its parent's Bereich (saveGroup enforces it): say so
           // instead of showing a locked select.
@@ -224,17 +223,9 @@ export function GliederungenManager({
             </p>
           </div>
         ) : (
-          <div>
-            <FormLabel htmlFor="group-section">Bereich</FormLabel>
-            <Select
-              value={draft.section}
-              onValueChange={(v) => dialog.edit({ section: v as Section })}
-            >
-              <SelectTrigger
-                id="group-section"
-                className="w-full"
-                aria-describedby={hasChildren ? "group-section-note" : undefined}
-              >
+          <Field label="Bereich" id="group-section" hint={sectionHint}>
+            <Select value={draft.section} onValueChange={(v) => dialog.edit({ section: v as Section })}>
+              <SelectTrigger {...fieldAria("group-section", undefined, sectionHint)} className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -245,12 +236,7 @@ export function GliederungenManager({
                 ))}
               </SelectContent>
             </Select>
-            {hasChildren ? (
-              <p id="group-section-note" className="mt-1 text-caption text-ink-faint">
-                Gilt auch für alle Untergliederungen.
-              </p>
-            ) : null}
-          </div>
+          </Field>
         )}
       </EntryDialog>
     </>

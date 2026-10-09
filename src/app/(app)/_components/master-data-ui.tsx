@@ -8,7 +8,7 @@ import { flushSync } from "react-dom";
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { TextField } from "@/components/field";
+import { FormError, TextField } from "@/components/field";
 import { NumberBadge } from "@/components/number-badge";
 import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import type { ActionResult } from "@/lib/action-helpers";
 import { callAction } from "@/lib/call-action";
+import { NAME_MAX } from "@/lib/limits";
 import { ORDER_MAX } from "@/lib/master-data";
 import { cn } from "@/lib/utils";
 
@@ -218,12 +219,6 @@ export function EntryDialog({
     deleteButton.current?.focus();
   }
 
-  const errorLine = error ? (
-    <p role="alert" className="text-ui text-crit">
-      {error}
-    </p>
-  ) : null;
-
   return (
     <Dialog
       open={open}
@@ -254,7 +249,7 @@ export function EntryDialog({
                 <span id={`${id}-confirm`}>{confirmation.description}</span>
               </DialogDescription>
             </DialogHeader>
-            {errorLine}
+            <FormError>{error}</FormError>
             <DialogFooter>
               <Button variant="outline" onClick={backToForm} disabled={pending} autoFocus>
                 Abbrechen
@@ -278,7 +273,7 @@ export function EntryDialog({
               <DialogDescription>{description}</DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4">{children}</div>
-            {errorLine}
+            <FormError>{error}</FormError>
             <DialogFooter className="sm:flex-wrap">
               {deletion ? (
                 <Button
@@ -332,8 +327,7 @@ export function EntryField({
     <TextField
       {...props}
       error={error ?? undefined}
-      // The server's limits: 200 characters for names and the Art, ORDER_MAX's digits.
-      maxLength={numeric ? String(ORDER_MAX).length : 200}
+      maxLength={numeric ? String(ORDER_MAX).length : NAME_MAX}
       inputMode={numeric ? "numeric" : undefined}
       autoComplete="off"
       className={cn(numeric && "[&_input]:w-28 [&_input]:tabular-nums")}

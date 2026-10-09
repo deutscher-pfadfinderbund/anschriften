@@ -1,7 +1,6 @@
 "use client";
 
 import { Combobox } from "@/components/combobox";
-import { FormLabel } from "@/components/form-label";
 import { Input } from "@/components/ui/input";
 
 type FieldBase = {
@@ -29,7 +28,9 @@ export function Field({ label, id, error, hint, className, children }: FieldBase
   const message = error ?? hint;
   return (
     <div className={className}>
-      <FormLabel htmlFor={id}>{label}</FormLabel>
+      <label htmlFor={id} className="eyebrow mb-1.5 block">
+        {label}
+      </label>
       {children}
       {message ? (
         <p id={`${id}-msg`} className={error ? "mt-1 text-caption text-crit" : "mt-1 text-caption text-ink-faint"}>
@@ -81,6 +82,15 @@ export function ComboField({
       <Combobox {...fieldAria(id, error, hint)} {...combo} />
     </Field>
   );
+}
+
+/** A refused save's message under a dialog form, announced when it appears. */
+export function FormError({ children }: { children: React.ReactNode }) {
+  return children ? (
+    <p role="alert" className="text-ui text-crit">
+      {children}
+    </p>
+  ) : null;
 }
 
 /** Focus an element by id once the current update is rendered (after a button vanished). */

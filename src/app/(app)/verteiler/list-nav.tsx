@@ -1,6 +1,6 @@
 "use client";
 
-import { FormLabel } from "@/components/form-label";
+import { Field } from "@/components/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { DistributionListWithMembers } from "@/db/queries";
 import { plural } from "@/lib/format";
@@ -22,8 +22,7 @@ export function ListNav({
 }) {
   return (
     <>
-      <div className="lg:hidden">
-        <FormLabel htmlFor="verteiler-wahl">Verteiler</FormLabel>
+      <Field label="Verteiler" id="verteiler-wahl" className="lg:hidden">
         <Select
           value={activeId != null ? String(activeId) : undefined}
           onValueChange={(v) => onSelect(Number(v))}
@@ -40,7 +39,7 @@ export function ListNav({
             ))}
           </SelectContent>
         </Select>
-      </div>
+      </Field>
 
       <nav aria-label="Verteiler" className="hidden lg:sticky lg:top-gutter lg:block">
         <ul className="flex flex-col gap-0.5">
