@@ -64,14 +64,15 @@ import type {
   PersonOption,
   RankRow,
 } from "@/db/queries";
-import { buildBcc, type BccSeparator } from "@/lib/export";
+import { buildBcc, isEmail, type BccSeparator } from "@/lib/export";
 import { formatDateTime, formatName, formatNameWithScout, scoutAddition } from "@/lib/format";
 import { HOVER_REVEAL, TOUCH_HIT_Y, cn } from "@/lib/utils";
 
 type ListFormState = { id: number | null; name: string; description: string };
 
+/** Same rule as the BCC copy and the mail send (collectEmails), so the lists agree. */
 function hasEmail(m: ListMemberRow): boolean {
-  return !!m.email && m.email.trim().length > 0;
+  return isEmail(m.email);
 }
 
 type RuleRow = { id: number; name: string };
@@ -718,7 +719,7 @@ export function VerteilerManager({
                           </div>
                         </div>
                         <div className="hidden min-w-0 flex-1 sm:block">
-                          {hasEmail(m) ? (
+                          {m.email?.trim() ? (
                             <a
                               href={`mailto:${m.email}`}
                               className="truncate text-fir hover:underline"

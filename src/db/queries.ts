@@ -780,7 +780,7 @@ export async function effectiveMemberIds(listId: number): Promise<number[]> {
 
 /**
  * Raw (nullable, unfiltered) e-mails for a set of person ids — the input to
- * `normalizeRecipients`. Deceased/do-not-print are NOT filtered here: for a
+ * `collectEmails` (src/lib/export.ts). Deceased/do-not-print are NOT filtered here: for a
  * hand-picked selection the caller sends to exactly whom they chose.
  */
 export async function personEmailsByIds(ids: number[]): Promise<(string | null)[]> {

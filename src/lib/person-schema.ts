@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { EMAIL_RE } from "@/lib/export";
+
 // Shared input contract for the person editor (client) and the save action (server).
 // German, field-keyed messages so the editor can show them inline.
 
@@ -34,8 +36,6 @@ export const endPreviousInputSchema = z.object({
   endDate: shortText.nullable().default(null),
   endUnknown: z.boolean().default(false),
 });
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ISO calendar date, e.g. "2019-03-01". The <input type="date"> emits exactly this.
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;

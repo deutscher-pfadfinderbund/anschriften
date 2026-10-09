@@ -31,14 +31,15 @@ export type CsvPerson = {
 
 /**
  * RFC-4180 field: quote when the value contains `"`, `;`, CR or LF; double inner quotes.
- * Values starting with =, + or @ get an apostrophe prefix so spreadsheet apps render them as
- * text instead of executing them as a formula (CSV injection — person data is not trusted
- * input). A leading `-` or tab is NOT guarded: those are not formula triggers on import and the
- * apostrophe would corrupt legitimate values like "- kein Briefkasten" (issue #13).
+ * Values that a spreadsheet would evaluate as a formula get an apostrophe prefix so they are
+ * rendered as text (CSV injection — person data is not trusted input): a leading =, + or @,
+ * and a leading `-` directly followed by another character (`-1+1`, `-HYPERLINK(…)`). A dash
+ * followed by a space ("- kein Briefkasten") or standing alone is a legitimate value and stays
+ * untouched (issue #13).
  */
 function csvField(value: string | null | undefined): string {
   let s = (value ?? "").trim();
-  if (/^[=+@]/.test(s)) s = `'${s}`;
+  if (/^(?:[=+@]|-(?=\S))/.test(s)) s = `'${s}`;
   return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -73,6 +74,48 @@ export function buildCsv(rows: CsvPerson[]): string {
 /** BOM so a byte-level check (`xxd | head -1` → efbbbf) and German Excel both see UTF-8. */
 export const CSV_BOM = "﻿";
 
+/**
+ * One plausible e-mail address: no whitespace, exactly one @, a dot in the domain. The single
+ * rule for the person form, the BCC copy/preview and the actual mail send. The legacy column is
+ * free text, so entries like "a@x.de, b@y.de" or notes exist and must not pass.
+ */
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** True when `value` (trimmed) is one plausible e-mail address. */
+export function isEmail(value: string | null | undefined): boolean {
+  return EMAIL_RE.test((value ?? "").trim());
+}
+
+export type CollectedEmails = {
+  /** Trimmed, valid addresses, deduplicated case-insensitively, in first-seen order. */
+  recipients: string[];
+  /** How many inputs were dropped because they were blank or not a valid address. */
+  skipped: number;
+};
+
+/**
+ * Turn raw person e-mails (some null/blank/malformed, possibly duplicated) into the actual
+ * recipient set. Used for the clipboard BCC, the compose preview AND the real send, so the
+ * count the user confirms is the count that goes out.
+ */
+export function collectEmails(emails: (string | null | undefined)[]): CollectedEmails {
+  const seen = new Set<string>();
+  const recipients: string[] = [];
+  let skipped = 0;
+  for (const raw of emails) {
+    const e = (raw ?? "").trim();
+    if (!EMAIL_RE.test(e)) {
+      skipped += 1;
+      continue;
+    }
+    const key = e.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    recipients.push(e);
+  }
+  return { recipients, skipped };
+}
+
 /** Separator flavour for the copied BCC list: Outlook/Thunderbird want `; `, Gmail wants `, `. */
 export type BccSeparator = "; " | ", ";
 
@@ -81,34 +124,17 @@ export type BccResult = {
   text: string;
   /** How many distinct addresses ended up in the list. */
   count: number;
-  /** How many members were skipped because they have no e-mail address. */
+  /** How many members were skipped because they have no (valid) e-mail address. */
   skipped: number;
 };
 
-/**
- * Turn a list of member e-mails (some may be null) into a BCC-ready string:
- * empties are counted as skipped, duplicates are collapsed case-insensitively,
- * and the rest are joined with the chosen separator (order preserved).
- */
+/** `collectEmails` joined with the chosen separator, ready for the clipboard / BCC field. */
 export function buildBcc(
   emails: (string | null | undefined)[],
   separator: BccSeparator,
 ): BccResult {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  let skipped = 0;
-  for (const raw of emails) {
-    const e = (raw ?? "").trim();
-    if (!e) {
-      skipped += 1;
-      continue;
-    }
-    const key = e.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(e);
-  }
-  return { text: out.join(separator), count: out.length, skipped };
+  const { recipients, skipped } = collectEmails(emails);
+  return { text: recipients.join(separator), count: recipients.length, skipped };
 }
 
 /** ASCII-safe slug for the download filename (umlauts folded, spaces → dashes). */
