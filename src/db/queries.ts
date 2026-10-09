@@ -14,7 +14,7 @@ import {
 } from "@/db/schema";
 import { computeEffectiveMembership, type MemberOrigin } from "@/lib/effective-members";
 import type { CsvPerson } from "@/lib/export";
-import { formatName } from "@/lib/format";
+import { fold, formatName, formatNameWithScout } from "@/lib/format";
 import { RULE_KINDS, type RuleKind, type RuleRef } from "@/lib/rule-kinds";
 import type { Section } from "@/lib/sections";
 
@@ -491,11 +491,6 @@ export type DistributionListWithMembers = {
   members: ListMemberRow[];
 };
 
-/** Sort members like the directory: by last name, else scout name. */
-function memberSortKey(m: ListMemberRow): string {
-  return (m.lastName || m.scoutName || "").toLowerCase();
-}
-
 /** Every distribution list with its rules and effective members — one shot for /verteiler. */
 export async function listDistributionLists(): Promise<DistributionListWithMembers[]> {
   const [lists, { membership, rules }, people, activeOffices] = await Promise.all([
@@ -549,7 +544,10 @@ export async function listDistributionLists(): Promise<DistributionListWithMembe
         via: viaRefs(origin.via),
       };
     });
-    members.sort((a, b) => memberSortKey(a).localeCompare(memberSortKey(b), "de"));
+    // By the displayed name (formatNameWithScout), folded like the directory (DIN 5007-2),
+    // so namesakes are ordered by first name too.
+    const key = new Map(members.map((m) => [m.personId, fold(formatNameWithScout(m))]));
+    members.sort((a, b) => key.get(a.personId)!.localeCompare(key.get(b.personId)!, "de"));
     return {
       ...dl,
       rules: rulesByList.get(dl.id) ?? { office: [], rank: [], group: [] },
