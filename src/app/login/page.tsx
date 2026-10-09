@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 
+import { StandaloneCard } from "@/components/standalone-card";
+
 import { LoginButton } from "./login-button";
+import { LOGIN_FAILED } from "./messages";
 
 export const metadata: Metadata = { title: "Anmelden" };
 
@@ -12,32 +15,22 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <main className="flex flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-sm rounded-xl border border-line bg-surface p-8 shadow-sm">
-        <div className="mb-8 text-center">
-          {/* Same Raute as the sidebar wordmark and the favicon — the only mark
-              this product has, so the first screen carries it too. */}
-          <span aria-hidden className="mx-auto mb-4 block size-[11px] rotate-45 bg-fir" />
-          <p className="text-[11px] uppercase tracking-widest text-ink-faint">
-            Deutscher Pfadfinderbund
+    <StandaloneCard title="Anschriftenverzeichnis">
+      {error === "access_denied" ? (
+        <div role="alert" className="mb-6 rounded-md border border-crit/40 bg-crit-tint p-4 text-ui">
+          <p className="font-medium text-ink">Kein Zugriff</p>
+          <p className="mt-1 text-ink-soft">
+            Dein Konto hat keine Berechtigung für das Anschriftenverzeichnis. Wende dich an die
+            Bundeskanzlei.
           </p>
-          <h1 className="mt-1 font-display text-2xl font-semibold text-ink">
-            Anschriftenverzeichnis
-          </h1>
         </div>
+      ) : error ? (
+        <p role="alert" className="mb-6 rounded-md border border-crit/40 bg-crit-tint p-4 text-ui text-ink">
+          {LOGIN_FAILED}
+        </p>
+      ) : null}
 
-        {error ? (
-          <div className="mb-6 rounded-md border border-crit/40 bg-crit-tint p-4 text-sm text-ink">
-            <p className="font-medium">Kein Zugriff</p>
-            <p className="mt-1 text-ink-soft">
-              Dein Konto hat keine Berechtigung für das Anschriftenverzeichnis.
-              Wende dich an die Bundeskanzlei.
-            </p>
-          </div>
-        ) : null}
-
-        <LoginButton />
-      </div>
-    </main>
+      <LoginButton />
+    </StandaloneCard>
   );
 }
