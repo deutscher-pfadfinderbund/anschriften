@@ -1,7 +1,7 @@
 // CSV export route (issue #4). GET /api/export/csv?listId=… OR ?ids=1,2,3
-// Runs on the Node runtime and is never cached. Session is required (401 otherwise);
-// we resolve it inline rather than via the throwing requireSession() helper, so an
-// unauthenticated request gets a clean 401 instead of a 500.
+// Runs on the Node runtime and is never cached. This session check is the gate (the proxy
+// skips /api): without a valid session the answer is a clean 401, which the client download
+// helper turns into "Sitzung abgelaufen" instead of saving an error page as .csv.
 import { getListName, personsForCsvByIds, personsForCsvByList } from "@/db/queries";
 import { auth } from "@/lib/auth";
 import { asciiSlug, buildCsv, CSV_BOM, type CsvPerson } from "@/lib/export";

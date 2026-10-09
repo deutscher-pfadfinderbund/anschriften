@@ -1,7 +1,7 @@
 // PDF export route handler (issue #5). GET /api/export/pdf?profile=…&birthdays=1&ranks=1&memorial=0
-// Runs on the Node runtime (spawns the Typst CLI) and is never cached. Session is
-// required (401 otherwise) — the proxy only guards pages, not /api routes, and this
-// endpoint serves the complete confidential directory.
+// Runs on the Node runtime (spawns the Typst CLI) and is never cached. This session check is
+// the gate (401 otherwise): the proxy skips /api, so an expired session reaches us and gets a
+// 401 the download helper recognises — this endpoint serves the confidential directory.
 import { auth } from "@/lib/auth";
 import { buildData, isProfile, type BuildOptions } from "@/pdf/build-data";
 import { compilePdf } from "@/pdf/compile";
