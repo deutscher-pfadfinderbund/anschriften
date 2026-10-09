@@ -151,18 +151,16 @@ function MemberRow({
           </div>
           {m.via.length > 0 ? (
             <div className="mt-1 flex flex-wrap gap-1">
-              {m.via.map((v) => {
-                return (
-                  <Tag
-                    key={`${v.kind}-${v.id}`}
-                    icon={RULE_ICONS[v.kind]}
-                    title={`Automatisch über ${RULE_KIND_LABELS[v.kind]} „${v.name}“`}
-                  >
-                    <span className="sr-only">{RULE_KIND_LABELS[v.kind]}: </span>
-                    {v.name}
-                  </Tag>
-                );
-              })}
+              {m.via.map((v) => (
+                <Tag
+                  key={`${v.kind}-${v.id}`}
+                  icon={RULE_ICONS[v.kind]}
+                  title={`Automatisch über ${RULE_KIND_LABELS[v.kind]} „${v.name}“`}
+                >
+                  <span className="sr-only">{RULE_KIND_LABELS[v.kind]}: </span>
+                  {v.name}
+                </Tag>
+              ))}
             </div>
           ) : m.mainOffice ? (
             <div className="truncate text-caption text-ink-faint">{m.mainOffice}</div>

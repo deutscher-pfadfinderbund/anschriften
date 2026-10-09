@@ -126,7 +126,7 @@ export function PersonForm({
         return;
       }
       toast.success(person ? "Person gespeichert." : "Person angelegt.");
-      router.push(directoryUrl());
+      router.push(backHref);
     });
   }
 
@@ -136,7 +136,7 @@ export function PersonForm({
       const res = await callAction(() => deletePerson(person.id));
       if (!res.ok) return void toast.error(res.message);
       toast.success("Person gelöscht.");
-      router.push(directoryUrl());
+      router.push(backHref);
     });
   }
 

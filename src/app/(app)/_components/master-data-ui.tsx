@@ -3,12 +3,11 @@
 // The building blocks the three master-data lists share (Ämter, Stände on /stammdaten,
 // Gliederungen on /gliederungen): the list card, a row that opens its edit dialog, and that
 // dialog with its Name and Reihenfolge fields. One recipe, so the lists look and behave alike.
-import { useId, useRef, useState, useTransition } from "react";
-import { flushSync } from "react-dom";
+import { useId, useState, useTransition } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormError, TextField } from "@/components/field";
+import { FormError, TextField, focusSoon } from "@/components/field";
 import { NumberBadge } from "@/components/number-badge";
 import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
@@ -211,12 +210,11 @@ export function EntryDialog({
 }) {
   const { open, pending, confirming, error, close, setConfirming } = state;
   const id = useId();
-  const deleteButton = useRef<HTMLButtonElement>(null);
   const confirmation = confirming && deletion ? deletion : null;
 
   function backToForm() {
-    flushSync(() => setConfirming(false));
-    deleteButton.current?.focus();
+    setConfirming(false);
+    focusSoon(`${id}-delete`);
   }
 
   return (
@@ -277,7 +275,7 @@ export function EntryDialog({
             <DialogFooter className="sm:flex-wrap">
               {deletion ? (
                 <Button
-                  ref={deleteButton}
+                  id={`${id}-delete`}
                   type="button"
                   variant="ghost"
                   className="text-crit hover:bg-crit-tint hover:text-crit sm:mr-auto"

@@ -60,6 +60,17 @@ const NEW_DRAFT: Draft = {
   end: { endDate: "", endUnknown: false },
 };
 
+/** The edit draft of a stored tenure. */
+const draftFrom = (h: HistoricalAssignment): Draft => ({
+  id: h.id,
+  groupId: h.groupId,
+  officeId: h.officeId,
+  startDate: h.startDate ?? "",
+  // An "Ende unbekannt" entry stores a synthetic end date (the recording day); the
+  // checkbox stands for it, not the date field.
+  end: { endDate: h.endUnknown ? "" : (h.endDate ?? ""), endUnknown: h.endUnknown },
+});
+
 export function HistorySection({
   personId,
   historical,
@@ -114,55 +125,48 @@ export function HistorySection({
             <p className="mb-2.5 text-caption text-ink-faint">Noch keine früheren Ämter erfasst.</p>
           ) : (
             <ul className="mb-2.5 divide-y divide-line rounded-md border border-line">
-              {historical.map((h) => (
-                <li key={h.id} className="group/row flex items-center gap-2 px-2.5 py-1.5 text-ui">
-                  <span className="min-w-0 flex-1 text-ink-soft">
-                    <span className="text-ink">{h.officeName ?? "Ohne Amt"}</span>
-                    {" · "}
-                    {h.groupName}
-                    <span className="block text-caption text-ink-faint tabular-nums sm:inline">
-                      <span className="max-sm:hidden"> · </span>
-                      {historyRange(h)}
+              {historical.map((h) => {
+                const office = h.officeName ?? "Ohne Amt";
+                return (
+                  <li key={h.id} className="group/row flex items-center gap-2 px-2.5 py-1.5 text-ui">
+                    <span className="min-w-0 flex-1 text-ink-soft">
+                      <span className="text-ink">{office}</span>
+                      {" · "}
+                      {h.groupName}
+                      <span className="block text-caption text-ink-faint tabular-nums sm:inline">
+                        <span className="max-sm:hidden"> · </span>
+                        {historyRange(h)}
+                      </span>
                     </span>
-                  </span>
-                  {/* A mouse sees the actions on hover or focus within the row; touch screens
-                      have no hover, so there they stay visible. */}
-                  <span className="flex shrink-0 items-center gap-0.5 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Bearbeiten: ${h.officeName ?? "Ohne Amt"} · ${h.groupName}`}
-                      title="Bearbeiten"
-                      className="text-ink-faint"
-                      onClick={() =>
-                        setDraft({
-                          id: h.id,
-                          groupId: h.groupId,
-                          officeId: h.officeId,
-                          startDate: h.startDate ?? "",
-                          // An "Ende unbekannt" entry stores a synthetic end date (the
-                          // recording day); the checkbox stands for it, not the date field.
-                          end: { endDate: h.endUnknown ? "" : (h.endDate ?? ""), endUnknown: h.endUnknown },
-                        })
-                      }
-                    >
-                      <Pencil className="size-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Löschen: ${h.officeName ?? "Ohne Amt"} · ${h.groupName}`}
-                      title="Löschen"
-                      className="text-ink-faint hover:text-crit"
-                      onClick={() => setRemoving(h)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </span>
-                </li>
-              ))}
+                    {/* A mouse sees the actions on hover or focus within the row; touch screens
+                        have no hover, so there they stay visible. */}
+                    <span className="flex shrink-0 items-center gap-0.5 transition-opacity pointer-fine:opacity-0 pointer-fine:group-hover/row:opacity-100 pointer-fine:group-focus-within/row:opacity-100">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Bearbeiten: ${office} · ${h.groupName}`}
+                        title="Bearbeiten"
+                        className="text-ink-faint"
+                        onClick={() => setDraft(draftFrom(h))}
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Löschen: ${office} · ${h.groupName}`}
+                        title="Löschen"
+                        className="text-ink-faint hover:text-crit"
+                        onClick={() => setRemoving(h)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <AddRowButton onClick={() => setDraft(NEW_DRAFT)}>Früheres Amt hinzufügen</AddRowButton>

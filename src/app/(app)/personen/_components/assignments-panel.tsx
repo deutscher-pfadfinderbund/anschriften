@@ -229,7 +229,7 @@ export function AssignmentsPanel({
                           focusSoon(rowId(row, "end"));
                         }}
                       >
-                        {capitalize(endingText(row.end))}
+                        {endingText(row.end).replace(/^./, (c) => c.toUpperCase())}
                         {row.end.keepMember ? `; bleibt Mitglied in „${labelOf(groupOptions, row.groupId)}“` : null}
                       </EndingNote>
                     ) : null}
@@ -267,8 +267,4 @@ export function AssignmentsPanel({
       <EndDateDialog request={ending} onClose={() => setEnding(null)} />
     </Panel>
   );
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }

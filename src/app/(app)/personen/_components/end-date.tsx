@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { CalendarOff, Undo2 } from "lucide-react";
 
-import { Field, fieldAria } from "@/components/field";
+import { Field, fieldAria, focusSoon } from "@/components/field";
 import { Note } from "@/components/note";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -81,43 +81,15 @@ export type EndRequest = {
  * the person is saved.
  */
 export function EndDateDialog({ request, onClose }: { request: EndRequest | null; onClose: () => void }) {
-  const focusAfter = useRef<string | null>(null);
   return (
     <Dialog open={request != null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
-        onCloseAutoFocus={(e) => {
-          const target = focusAfter.current ? document.getElementById(focusAfter.current) : null;
-          focusAfter.current = null;
-          if (target) {
-            e.preventDefault();
-            target.focus();
-          }
-        }}
-      >
-        {request ? (
-          <EndDateForm
-            request={request}
-            onClose={onClose}
-            onConfirmed={() => {
-              focusAfter.current = request.focusAfter;
-            }}
-          />
-        ) : null}
-      </DialogContent>
+      <DialogContent>{request ? <EndDateForm request={request} onClose={onClose} /> : null}</DialogContent>
     </Dialog>
   );
 }
 
 // Mounted per opening, so every dialog starts at today.
-function EndDateForm({
-  request,
-  onClose,
-  onConfirmed,
-}: {
-  request: EndRequest;
-  onClose: () => void;
-  onConfirmed: () => void;
-}) {
+function EndDateForm({ request, onClose }: { request: EndRequest; onClose: () => void }) {
   const [end, setEnd] = useState<EndChoice>(() => ({ endDate: todayIso(), endUnknown: false }));
   const [keepMember, setKeepMember] = useState(true);
   const ready = isEndChoiceReady(end, request.start);
@@ -132,8 +104,8 @@ function EndDateForm({
         e.stopPropagation();
         if (!ready) return;
         request.onConfirm(end, request.keepMemberIn != null && keepMember);
-        onConfirmed();
         onClose();
+        focusSoon(request.focusAfter);
       }}
     >
       <DialogHeader>

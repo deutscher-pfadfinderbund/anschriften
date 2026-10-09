@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { ChevronRight, Copy, Download, Pencil, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { deleteList } from "@/actions/lists";
 import { ComposeMailDialog } from "@/components/compose-mail-dialog";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { focusSoon } from "@/components/field";
 import { Panel } from "@/components/panel";
 import { Tag } from "@/components/tag";
 import { Button } from "@/components/ui/button";
@@ -54,7 +55,6 @@ export function ListDetail({
   const [isPending, startTransition] = useTransition();
   const [separator, setSeparator] = useState<BccSeparator>("; ");
   const [addressesOpen, setAddressesOpen] = useState(false);
-  const addressesRef = useRef<HTMLTextAreaElement>(null);
   const [composeOpen, setComposeOpen] = useState(false);
   const csv = useDownload("csv");
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -81,7 +81,7 @@ export function ListDetail({
       // No clipboard access (blocked permission, insecure context): open the list and
       // select it, so a plain Strg+C finishes the job.
       setAddressesOpen(true);
-      requestAnimationFrame(() => addressesRef.current?.focus());
+      focusSoon("verteiler-adressen");
       toast.error("Kopieren nicht möglich – die E-Mail-Adressen sind markiert, kopiere sie mit Strg+C.");
     }
   }
@@ -197,7 +197,7 @@ export function ListDetail({
               </div>
             </div>
             <Textarea
-              ref={addressesRef}
+              id="verteiler-adressen"
               readOnly
               value={bcc.text}
               aria-label="E-Mail-Adressen für das BCC-Feld"
