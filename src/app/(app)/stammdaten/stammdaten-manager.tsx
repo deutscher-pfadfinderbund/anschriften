@@ -1,84 +1,60 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Award, Briefcase, Pencil, Plus, Trash2 } from "lucide-react";
+import { Award, Briefcase, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { deleteOffice, saveOffice } from "@/actions/offices";
 import { deleteRank, saveRank } from "@/actions/ranks";
-import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { EmptyState } from "@/components/empty-state";
-import { FormLabel } from "@/components/form-label";
-import { NumberBadge } from "@/components/number-badge";
-import { PageHeader } from "@/components/page-header";
+import { PageBody, PageHeader } from "@/components/page-header";
+import { Tag } from "@/components/tag";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ListRef, OfficeRow, RankRow } from "@/db/queries";
+import { isDuplicateName, nextOrder, orderError, parseOrder } from "@/lib/master-data";
 import { RANK_UNRANKED } from "@/lib/rank";
-import { HOVER_REVEAL, cn } from "@/lib/utils";
 
-/** Rank input value for the form: the sentinel is shown as an empty field. */
-function rankToInput(rank: number): string {
-  return rank === RANK_UNRANKED ? "" : String(rank);
-}
+import { EntryDialog, EntryList, EntryRow, TextField } from "./_components/master-data-ui";
 
-/** …and back: an empty field means "ohne Rang", i.e. the sentinel — never 0. */
-function inputToRank(value: string): number {
-  const trimmed = value.trim();
-  return trimmed === "" ? RANK_UNRANKED : Number(trimmed) || 0;
-}
+type Kind = "office" | "rank";
 
-type OfficeForm = { id: number | null; name: string; rank: string };
-type RankForm = { id: number | null; name: string; sortOrder: string };
-type DeleteTarget = {
-  type: "office" | "rank";
-  id: number;
-  name: string;
-  /** Why the server would refuse the delete (same rule as the action), if it would. */
-  blockedMessage?: string;
-};
+/** An Amt or Stand reduced to what the list and the dialog need. */
+type Entry = { id: number; name: string; order: number };
 
-function LabeledInput({
-  id,
-  label,
-  value,
-  onChange,
-  type = "text",
-  numeric = false,
-  placeholder,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  numeric?: boolean;
-  placeholder?: string;
-}) {
-  return (
-    <div>
-      <FormLabel htmlFor={id}>{label}</FormLabel>
-      <Input
-        id={id}
-        type={type}
-        min={type === "number" ? 0 : undefined}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className={numeric ? "tabular-nums" : undefined}
-      />
-    </div>
-  );
-}
+type Draft = { kind: Kind; entry: Entry | null; name: string; order: string };
+
+const COPY = {
+  office: {
+    create: "Neues Amt",
+    edit: "Amt bearbeiten",
+    created: "Amt angelegt.",
+    saved: "Amt gespeichert.",
+    deleted: "Amt gelöscht.",
+    deleteTitle: "Amt löschen?",
+    duplicate: "Ein Amt mit diesem Namen gibt es schon.",
+    orderLabel: "Reihenfolge im PDF",
+    orderHint: "Kleiner = weiter oben. Leer lassen: steht am Ende.",
+    description: "Ämter stehen bei Personen und als Verteiler-Regel zur Auswahl.",
+  },
+  rank: {
+    create: "Neuer Stand",
+    edit: "Stand bearbeiten",
+    created: "Stand angelegt.",
+    saved: "Stand gespeichert.",
+    deleted: "Stand gelöscht.",
+    deleteTitle: "Stand löschen?",
+    duplicate: "Ein Stand mit diesem Namen gibt es schon.",
+    // The PDF does not order by Stand (it only prints a person's Stand after the name):
+    // this number orders the pickers.
+    orderLabel: "Reihenfolge in Auswahllisten",
+    orderHint: "Kleiner = weiter oben.",
+    description: "Stände stehen bei Personen und als Verteiler-Regel zur Auswahl.",
+  },
+} as const;
+
+const officeEntry = (o: OfficeRow): Entry => ({ id: o.id, name: o.name, order: o.rank });
+const rankEntry = (r: RankRow): Entry => ({ id: r.id, name: r.name, order: r.sortOrder });
 
 export function StammdatenManager({
   offices,
@@ -88,57 +64,73 @@ export function StammdatenManager({
   rankBlockers,
 }: {
   offices: OfficeRow[];
-  /** Per office id: why it cannot be deleted (absent = deletable). */
+  /** Per office id: why it cannot be deleted (absent = deletable), same rule as the action. */
   officeBlockers: Record<number, string>;
   officeListRules: Record<number, ListRef[]>;
   ranks: RankRow[];
-  /** Per rank id: why it cannot be deleted (absent = deletable). */
+  /** Per rank id: why it cannot be deleted (absent = deletable), same rule as the action. */
   rankBlockers: Record<number, string>;
 }) {
   const [isPending, startTransition] = useTransition();
+  // Controlled so the header shows the create action of the visible tab.
+  const [tab, setTab] = useState<Kind>("office");
 
-  // Controlled so the header row can show the action for the visible tab.
-  const [tab, setTab] = useState<"offices" | "ranks">("offices");
-  const [officeForm, setOfficeForm] = useState<OfficeForm | null>(null);
-  const [rankForm, setRankForm] = useState<RankForm | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  // `open` is kept apart from the draft so the dialog keeps its content while it fades out.
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<Draft>({ kind: "office", entry: null, name: "", order: "" });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  // The server's refusal, when a delete the page thought possible was refused after all.
+  const [deleteRefusal, setDeleteRefusal] = useState<string | null>(null);
 
-  function submitOffice() {
-    if (!officeForm) return;
-    const payload = { name: officeForm.name, rank: inputToRank(officeForm.rank) };
-    startTransition(async () => {
-      const res = await saveOffice(officeForm.id, payload);
-      if (!res.ok) return void toast.error(res.message);
-      toast.success(officeForm.id != null ? "Amt gespeichert." : "Amt angelegt.");
-      setOfficeForm(null);
-    });
+  const copy = COPY[draft.kind];
+  const entries = draft.kind === "office" ? offices.map(officeEntry) : ranks.map(rankEntry);
+  const nameTaken = isDuplicateName(draft.name, entries, draft.entry?.id ?? null);
+  // An Amt may stay without Reihenfolge (the RANK_UNRANKED sentinel, shown as empty).
+  const orderErr = orderError(draft.order, draft.kind === "office");
+  const blockers = draft.kind === "office" ? officeBlockers : rankBlockers;
+
+  function openDialog(kind: Kind, entry: Entry | null) {
+    let order: string;
+    if (entry) order = entry.order === RANK_UNRANKED && kind === "office" ? "" : String(entry.order);
+    else
+      order = String(
+        nextOrder(
+          kind === "office"
+            ? offices.map((o) => o.rank).filter((r) => r !== RANK_UNRANKED)
+            : ranks.map((r) => r.sortOrder),
+        ),
+      );
+    setDraft({ kind, entry, name: entry?.name ?? "", order });
+    setFormError(null);
+    setConfirmOpen(false);
+    setOpen(true);
   }
 
-  function submitRank() {
-    if (!rankForm) return;
-    const payload = { name: rankForm.name, sortOrder: Number(rankForm.sortOrder) || 0 };
+  function submit() {
+    const { kind, entry, name } = draft;
+    const order = parseOrder(draft.order) ?? RANK_UNRANKED;
+    setFormError(null);
     startTransition(async () => {
-      const res = await saveRank(rankForm.id, payload);
-      if (!res.ok) return void toast.error(res.message);
-      toast.success(rankForm.id != null ? "Stand gespeichert." : "Stand angelegt.");
-      setRankForm(null);
+      const res =
+        kind === "office"
+          ? await saveOffice(entry?.id ?? null, { name, rank: order })
+          : await saveRank(entry?.id ?? null, { name, sortOrder: order });
+      if (!res.ok) return setFormError(res.message);
+      toast.success(entry ? COPY[kind].saved : COPY[kind].created);
+      setOpen(false);
     });
   }
 
   function confirmDelete() {
-    if (!deleteTarget) return;
+    const { kind, entry } = draft;
+    if (!entry) return;
     startTransition(async () => {
-      const res =
-        deleteTarget.type === "office"
-          ? await deleteOffice(deleteTarget.id)
-          : await deleteRank(deleteTarget.id);
-      if (!res.ok) {
-        toast.error(res.message);
-        setDeleteTarget(null);
-        return;
-      }
-      toast.success(deleteTarget.type === "office" ? "Amt gelöscht." : "Stand gelöscht.");
-      setDeleteTarget(null);
+      const res = kind === "office" ? await deleteOffice(entry.id) : await deleteRank(entry.id);
+      // Keep the confirmation open and let it say why (e.g. a Verteiler rule added meanwhile).
+      if (!res.ok) return setDeleteRefusal(res.message);
+      toast.success(COPY[kind].deleted);
+      setOpen(false); // takes the confirmation with it
     });
   }
 
@@ -146,238 +138,129 @@ export function StammdatenManager({
     <>
       <PageHeader
         title="Ämter & Stände"
-        subtitle="Lookup-Listen für den Editor · Rang und Sortierung steuern die Reihenfolge im PDF"
+        subtitle="Auswahllisten für Personen und Verteiler · die Reihenfolge der Ämter bestimmt den PDF-Druck"
+        actions={
+          <Button onClick={() => openDialog(tab, null)}>
+            <Plus aria-hidden />
+            {COPY[tab].create}
+          </Button>
+        }
       />
-      <div className="px-4 pt-gutter pb-10 sm:px-6">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "offices" | "ranks")}>
-          {/* One clean header row: tabs left, the action for the visible tab right. */}
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <TabsList>
-              <TabsTrigger value="offices">Ämter ({offices.length})</TabsTrigger>
-              <TabsTrigger value="ranks">Stände ({ranks.length})</TabsTrigger>
-            </TabsList>
-            {tab === "offices" ? (
-              <Button onClick={() => setOfficeForm({ id: null, name: "", rank: "" })}>
-                <Plus className="size-4" />
-                Neues Amt
-              </Button>
-            ) : (
-              <Button onClick={() => setRankForm({ id: null, name: "", sortOrder: "0" })}>
-                <Plus className="size-4" />
-                Neuer Stand
-              </Button>
-            )}
-          </div>
+      <PageBody>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as Kind)} className="gap-gutter">
+          <TabsList>
+            <TabsTrigger value="office">Ämter ({offices.length})</TabsTrigger>
+            <TabsTrigger value="rank">Stände ({ranks.length})</TabsTrigger>
+          </TabsList>
 
-          {/* Ämter */}
-          <TabsContent value="offices">
-            <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
-              {offices.length === 0 ? (
-                <EmptyState
-                  icon={Briefcase}
-                  title="Noch keine Ämter angelegt."
-                  description="Lege über „Neues Amt“ das erste Amt an — Ämter stehen danach im Anschriften-Editor und als Verteiler-Regel zur Auswahl."
+          <TabsContent value="office">
+            <EntryList
+              title="Reihenfolge im PDF"
+              description="Kleiner = weiter oben. Zum Bearbeiten auf ein Amt klicken."
+              emptyState={
+                offices.length === 0 ? (
+                  <EmptyState
+                    icon={Briefcase}
+                    title="Noch keine Ämter angelegt."
+                    description="Lege über „Neues Amt“ oben rechts das erste Amt an. Es steht danach bei Personen und als Verteiler-Regel zur Auswahl."
+                  />
+                ) : null
+              }
+            >
+              {offices.map((o) => (
+                <EntryRow
+                  key={o.id}
+                  order={o.rank === RANK_UNRANKED ? "—" : o.rank}
+                  orderTitle={
+                    o.rank === RANK_UNRANKED ? "Ohne Reihenfolge – steht am Ende" : "Reihenfolge im PDF"
+                  }
+                  name={o.name}
+                  meta={(officeListRules[o.id] ?? []).map((l) => (
+                    <Tag
+                      key={l.listId}
+                      tone="brass"
+                      title={`Wer dieses Amt hat, ist automatisch im Verteiler „${l.listName}“.`}
+                    >
+                      {l.listName}
+                    </Tag>
+                  ))}
+                  onOpen={() => openDialog("office", officeEntry(o))}
                 />
-              ) : (
-              <ul>
-                {offices.map((o) => (
-                  <li
-                    key={o.id}
-                    className="group/row border-b border-line last:border-b-0 hover:bg-sel"
-                  >
-                    {/* max-w keeps name and actions in one readable band instead of
-                        stretching across the whole viewport. Below `sm` the row
-                        wraps: the Verteiler chips move to a second line so the Amt
-                        name gets the width it needs instead of ending in „Bund…“. */}
-                    <div className="flex max-w-3xl flex-wrap items-center gap-2.5 px-[18px] py-1.5 text-[13.5px] sm:flex-nowrap">
-                      {/* RANK_UNRANKED is an internal sentinel — never show the raw 999. */}
-                      <NumberBadge title={o.rank === RANK_UNRANKED ? "ohne Rang" : undefined}>
-                        {o.rank === RANK_UNRANKED ? "—" : o.rank}
-                      </NumberBadge>
-                      {/* flex-1 below sm (fills the line and wraps the text),
-                          the original shrink-and-truncate from sm: up. */}
-                      <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{o.name}</span>
-                      {(officeListRules[o.id] ?? []).length > 0 ? (
-                        <span
-                          className="flex flex-wrap items-center gap-1 max-sm:order-last max-sm:w-full"
-                          title="Inhaber dieses Amts sind automatisch in diesen Verteilern."
-                        >
-                          {officeListRules[o.id].map((r) => (
-                            <span
-                              key={r.listId}
-                              className="rounded-[4px] border border-brass/40 bg-brass-tint px-1.5 py-px text-[10.5px] text-ink-soft"
-                            >
-                              {r.listName}
-                            </span>
-                          ))}
-                        </span>
-                      ) : null}
-                      <span className={cn("ml-auto flex shrink-0 items-center gap-0.5", HOVER_REVEAL)}>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label="Bearbeiten"
-                          onClick={() =>
-                            setOfficeForm({ id: o.id, name: o.name, rank: rankToInput(o.rank) })
-                          }
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label="Löschen"
-                          className="text-ink-faint hover:text-crit"
-                          onClick={() =>
-                            setDeleteTarget({
-                              type: "office",
-                              id: o.id,
-                              name: o.name,
-                              blockedMessage: officeBlockers[o.id],
-                            })
-                          }
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              )}
-            </div>
+              ))}
+            </EntryList>
           </TabsContent>
 
-          {/* Stände */}
-          <TabsContent value="ranks">
-            <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
-              {ranks.length === 0 ? (
-                <EmptyState
-                  icon={Award}
-                  title="Noch keine Stände angelegt."
-                  description="Lege über „Neuer Stand“ den ersten Stand an — Stände stehen danach im Anschriften-Editor und als Verteiler-Regel zur Auswahl."
+          <TabsContent value="rank">
+            <EntryList
+              title="Reihenfolge in Auswahllisten"
+              description="Kleiner = weiter oben. Zum Bearbeiten auf einen Stand klicken."
+              emptyState={
+                ranks.length === 0 ? (
+                  <EmptyState
+                    icon={Award}
+                    title="Noch keine Stände angelegt."
+                    description="Lege über „Neuer Stand“ oben rechts den ersten Stand an. Er steht danach bei Personen und als Verteiler-Regel zur Auswahl."
+                  />
+                ) : null
+              }
+            >
+              {ranks.map((r) => (
+                <EntryRow
+                  key={r.id}
+                  order={r.sortOrder}
+                  orderTitle="Reihenfolge in Auswahllisten"
+                  name={r.name}
+                  onOpen={() => openDialog("rank", rankEntry(r))}
                 />
-              ) : (
-              <ul>
-                {ranks.map((r) => (
-                  <li
-                    key={r.id}
-                    className="group/row border-b border-line last:border-b-0 hover:bg-sel"
-                  >
-                    {/* No wrapping here (unlike Ämter/Gliederungen): the row has no
-                        full-width child, so badge + actions always share one line. */}
-                    <div className="flex max-w-3xl items-center gap-2.5 px-[18px] py-1.5 text-[13.5px]">
-                      <NumberBadge>{r.sortOrder}</NumberBadge>
-                      {/* flex-1 below sm (fills the line and wraps the text),
-                          the original shrink-and-truncate from sm: up. */}
-                      <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{r.name}</span>
-                      <span className={cn("ml-auto flex shrink-0 items-center gap-0.5", HOVER_REVEAL)}>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label="Bearbeiten"
-                          onClick={() =>
-                            setRankForm({ id: r.id, name: r.name, sortOrder: String(r.sortOrder) })
-                          }
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label="Löschen"
-                          className="text-ink-faint hover:text-crit"
-                          onClick={() =>
-                            setDeleteTarget({
-                              type: "rank",
-                              id: r.id,
-                              name: r.name,
-                              blockedMessage: rankBlockers[r.id],
-                            })
-                          }
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              )}
-            </div>
+              ))}
+            </EntryList>
           </TabsContent>
         </Tabs>
-      </div>
+      </PageBody>
 
-      {/* Office dialog */}
-      <Dialog open={officeForm != null} onOpenChange={(o) => !o && setOfficeForm(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{officeForm?.id != null ? "Amt bearbeiten" : "Neues Amt"}</DialogTitle>
-            <DialogDescription>
-              Der Rang steuert die Reihenfolge der Ämter im PDF (kleiner = weiter oben). Leer
-              lassen für „ohne Rang“ — diese Ämter stehen am Ende.
-            </DialogDescription>
-          </DialogHeader>
-          {officeForm ? (
-            <div className="flex flex-col gap-3">
-              <LabeledInput id="o-name" label="Name" value={officeForm.name} onChange={(v) => setOfficeForm({ ...officeForm, name: v })} />
-              <LabeledInput
-                id="o-rank"
-                label="Rang"
-                type="number"
-                numeric
-                placeholder="ohne Rang"
-                value={officeForm.rank}
-                onChange={(v) => setOfficeForm({ ...officeForm, rank: v })}
-              />
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOfficeForm(null)} disabled={isPending}>
-              Abbrechen
-            </Button>
-            <Button onClick={submitOffice} disabled={isPending}>
-              {isPending ? "Speichern …" : "Speichern"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Rank dialog */}
-      <Dialog open={rankForm != null} onOpenChange={(o) => !o && setRankForm(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{rankForm?.id != null ? "Stand bearbeiten" : "Neuer Stand"}</DialogTitle>
-            <DialogDescription>Die Sortierung steuert die Reihenfolge der Stände.</DialogDescription>
-          </DialogHeader>
-          {rankForm ? (
-            <div className="flex flex-col gap-3">
-              <LabeledInput id="r-name" label="Name" value={rankForm.name} onChange={(v) => setRankForm({ ...rankForm, name: v })} />
-              <LabeledInput id="r-sort" label="Sortierung" type="number" numeric value={rankForm.sortOrder} onChange={(v) => setRankForm({ ...rankForm, sortOrder: v })} />
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRankForm(null)} disabled={isPending}>
-              Abbrechen
-            </Button>
-            <Button onClick={submitRank} disabled={isPending}>
-              {isPending ? "Speichern …" : "Speichern"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete dialog */}
-      <ConfirmDeleteDialog
-        open={deleteTarget != null}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title={deleteTarget?.type === "office" ? "Amt löschen?" : "Stand löschen?"}
-        description={`„${deleteTarget?.name}“ wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
-        blockedMessage={deleteTarget?.blockedMessage}
+      <EntryDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={draft.entry ? copy.edit : copy.create}
+        description={copy.description}
+        canSave={draft.name.trim() !== "" && !nameTaken && orderErr == null}
         pending={isPending}
-        onConfirm={confirmDelete}
-      />
+        error={formError}
+        onSubmit={submit}
+        deletion={
+          draft.entry
+            ? {
+                title: copy.deleteTitle,
+                description: `„${draft.entry.name}“ wird gelöscht. Das kann nicht rückgängig gemacht werden.`,
+                blockedMessage: deleteRefusal ?? blockers[draft.entry.id],
+                open: confirmOpen,
+                onOpenChange: (o) => {
+                  if (o) setDeleteRefusal(null);
+                  setConfirmOpen(o);
+                },
+                onConfirm: confirmDelete,
+              }
+            : undefined
+        }
+      >
+        <TextField
+          id="entry-name"
+          label="Name"
+          value={draft.name}
+          onChange={(name) => setDraft((d) => ({ ...d, name }))}
+          error={nameTaken ? copy.duplicate : null}
+        />
+        <TextField
+          id="entry-order"
+          label={copy.orderLabel}
+          numeric
+          value={draft.order}
+          onChange={(order) => setDraft((d) => ({ ...d, order }))}
+          placeholder={draft.kind === "office" ? "am Ende" : undefined}
+          hint={copy.orderHint}
+          error={orderErr}
+        />
+      </EntryDialog>
     </>
   );
 }
