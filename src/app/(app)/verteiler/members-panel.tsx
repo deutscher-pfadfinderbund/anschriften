@@ -22,12 +22,10 @@ import {
 } from "@/components/ui/dialog";
 import type { DistributionListWithMembers, ListMemberRow, PersonOption } from "@/db/queries";
 import { isEmail } from "@/lib/export";
-import { formatName, formatNameWithScout, scoutAddition } from "@/lib/format";
+import { formatName, formatNameWithScout, personCount, scoutAddition } from "@/lib/format";
 import { RULE_KIND_LABELS } from "@/lib/rule-kinds";
 
 import { RULE_ICONS } from "./rule-icons";
-
-const personCount = (n: number) => `${n} ${n === 1 ? "Person" : "Personen"}`;
 
 const removeButtonId = (personId: number) => `mitglied-entfernen-${personId}`;
 

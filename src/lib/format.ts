@@ -54,6 +54,11 @@ export function formatFullName(p: PersonName): string {
   return name || p.scoutName?.trim() || "—";
 }
 
+/** "1 Person" / "80 Personen". */
+export function personCount(n: number): string {
+  return `${n} ${n === 1 ? "Person" : "Personen"}`;
+}
+
 /** German date for display: "24.06.2019". Input is an ISO date string or null. */
 export function formatDate(iso?: string | null): string {
   if (!iso) return "";

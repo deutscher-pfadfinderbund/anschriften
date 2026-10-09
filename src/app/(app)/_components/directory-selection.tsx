@@ -20,9 +20,10 @@ import {
 } from "@/components/ui/dialog";
 import type { PersonListRow } from "@/db/queries";
 import { downloadFile, toastDownloadError } from "@/lib/download";
+import { personCount } from "@/lib/format";
 import { TOUCH_HIT, cn } from "@/lib/utils";
 
-import { mailSelection, personCount, skippedNote } from "./directory-filter";
+import { mailSelection, skippedNote } from "./directory-filter";
 
 /**
  * Bulk actions for the ticked persons. Sticks to the bottom of the viewport while

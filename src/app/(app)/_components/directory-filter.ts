@@ -167,8 +167,3 @@ export function skippedNote(deceased: number, withoutEmail: number): string {
   ].filter(Boolean);
   return parts.length > 0 ? `${parts.join(" und ")} übersprungen` : "";
 }
-
-/** "1 Person" / "80 Personen". */
-export function personCount(n: number): string {
-  return `${n} ${n === 1 ? "Person" : "Personen"}`;
-}

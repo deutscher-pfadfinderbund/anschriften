@@ -11,10 +11,10 @@ import {
   listPersons,
 } from "@/db/queries";
 import { requirePageSession } from "@/lib/auth-helpers";
+import { personCount } from "@/lib/format";
 import { isMailEnabled } from "@/lib/mail";
 
 import { Directory } from "./_components/directory";
-import { personCount } from "./_components/directory-filter";
 
 export const metadata: Metadata = { title: "Verzeichnis" };
 
