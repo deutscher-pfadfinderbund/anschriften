@@ -1,11 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useDeferredValue, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useDeferredValue, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   type ColumnDef,
   type RowSelectionState,
-  type Table,
   getCoreRowModel,
   getSortedRowModel,
   useReactTable,
@@ -45,15 +44,36 @@ function subscribeDesktop(onChange: () => void) {
 const STICKY_HEAD = "sticky top-14 z-10 bg-surface-2 shadow-[inset_0_-1px_0_var(--line-strong)] lg:top-0";
 
 /**
- * Tri-state "select all": acts on the persons currently shown. The shared Checkbox
- * draws its check mark for "indeterminate" too; here the mixed state gets a dash.
+ * The focused control is about to unmount (a reset or clear button): move keyboard focus
+ * to `target`, so keyboard users keep their place instead of starting over at the page
+ * top. Pointer focus is left alone: a tap must not open the phone keyboard.
  */
-function SelectAllCheckbox({ table, filtered }: { table: Table<Indexed>; filtered: boolean }) {
+function keepKeyboardFocus(target: HTMLElement | null) {
+  if (document.activeElement?.matches(":focus-visible")) target?.focus();
+}
+
+/**
+ * Tri-state "select all" over the persons currently shown: selected persons the
+ * filters hide neither count nor change (the selection bar reports them). The shared
+ * Checkbox draws its check mark for "indeterminate" too; here the mixed state gets a dash.
+ */
+function SelectAllCheckbox({
+  ref,
+  checked,
+  onCheckedChange,
+  filtered,
+}: {
+  ref?: React.Ref<HTMLButtonElement>;
+  checked: boolean | "indeterminate";
+  onCheckedChange: (checked: boolean) => void;
+  filtered: boolean;
+}) {
   return (
     <Checkbox
+      ref={ref}
       aria-label={filtered ? "Alle angezeigten auswählen" : "Alle auswählen"}
-      checked={table.getIsAllRowsSelected() ? true : table.getIsSomeRowsSelected() ? "indeterminate" : false}
-      onCheckedChange={(v) => table.toggleAllRowsSelected(v === true)}
+      checked={checked}
+      onCheckedChange={(v) => onCheckedChange(v === true)}
       className="data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:before:h-0.5 data-[state=indeterminate]:before:w-2 data-[state=indeterminate]:before:rounded-full data-[state=indeterminate]:before:bg-primary-foreground data-[state=indeterminate]:[&_svg]:hidden"
     />
   );
@@ -103,6 +123,8 @@ export function Directory({
     getSortedRowModel: getSortedRowModel(),
   });
   const rows = table.getRowModel().rows;
+  const shownSelected = rows.filter((row) => row.getIsSelected()).length;
+  const allShownChecked = shownSelected === 0 ? false : shownSelected === rows.length ? true : "indeterminate";
 
   // Stable callbacks keep the memoized rows from re-rendering.
   const setSelected = useCallback((id: number, selected: boolean) => {
@@ -119,6 +141,18 @@ export function Directory({
   const shownIds = useMemo(() => new Set(filtered.map((p) => p.id)), [filtered]);
   const hiddenCount = selected.filter((p) => !shownIds.has(p.id)).length;
 
+  const searchRef = useRef<HTMLInputElement>(null);
+  const selectAllRef = useRef<HTMLButtonElement>(null);
+  const resetFilters = () => {
+    keepKeyboardFocus(searchRef.current);
+    params.resetFilters();
+  };
+  const clearSelection = () => {
+    // With every selected person hidden there is no list (and no select-all) to return to.
+    keepKeyboardFocus(selectAllRef.current ?? searchRef.current);
+    setRowSelection({});
+  };
+
   // Render only the layout that is on screen; null (server, hydration) renders both
   // and lets CSS decide, so the first paint is right on every device.
   const isDesktop = useSyncExternalStore(
@@ -132,6 +166,7 @@ export function Directory({
     // it without tabbing through every row) and is shown last, sticking to the bottom.
     <div className="flex flex-col">
       <DirectoryToolbar
+        searchRef={searchRef}
         query={params.query}
         onQueryChange={params.setQuery}
         groupId={groupId}
@@ -152,7 +187,7 @@ export function Directory({
             </p>
             {/* With no results the empty state offers the same button, larger. */}
             {filtering && rows.length > 0 ? (
-              <Button variant="ghost" size="sm" onClick={params.resetFilters} className="text-ink-soft">
+              <Button variant="ghost" size="sm" onClick={resetFilters} className="text-ink-soft">
                 <X />
                 Filter zurücksetzen
               </Button>
@@ -169,7 +204,7 @@ export function Directory({
           onKeepVisible={() =>
             setRowSelection(Object.fromEntries(selected.filter((p) => shownIds.has(p.id)).map((p) => [p.id, true])))
           }
-          onClear={() => setRowSelection({})}
+          onClear={clearSelection}
           distributionLists={distributionLists}
           mailEnabled={mailEnabled}
         />
@@ -192,7 +227,7 @@ export function Directory({
                 : `Niemand passt zu „${q.trim()}“.`
             }
             action={
-              <Button variant="outline" onClick={params.resetFilters}>
+              <Button variant="outline" onClick={resetFilters}>
                 <X />
                 {selectFilters ? "Filter zurücksetzen" : "Suche leeren"}
               </Button>
@@ -214,7 +249,12 @@ export function Directory({
                   <tr>
                     <TableHead className={cn(STICKY_HEAD, "p-0")}>
                       <label className="flex cursor-pointer py-3 pr-1 pl-3">
-                        <SelectAllCheckbox table={table} filtered={filtering} />
+                        <SelectAllCheckbox
+                          ref={selectAllRef}
+                          checked={allShownChecked}
+                          onCheckedChange={table.toggleAllRowsSelected}
+                          filtered={filtering}
+                        />
                       </label>
                     </TableHead>
                     <TableHead
@@ -256,7 +296,14 @@ export function Directory({
             {isDesktop !== true ? (
               <div className={cn(isDesktop == null && "md:hidden")}>
                 <label className="flex cursor-pointer items-center gap-3 border-b border-line-strong bg-surface-2 px-3 py-2.5">
-                  <SelectAllCheckbox table={table} filtered={filtering} />
+                  <SelectAllCheckbox
+                    // One ref for both layouts: the table's unmounting after hydration
+                    // would otherwise null it while this one stays.
+                    ref={isDesktop === false ? selectAllRef : undefined}
+                    checked={allShownChecked}
+                    onCheckedChange={table.toggleAllRowsSelected}
+                    filtered={filtering}
+                  />
                   <span className="eyebrow">{filtering ? "Alle angezeigten auswählen" : "Alle auswählen"}</span>
                 </label>
                 <ul>

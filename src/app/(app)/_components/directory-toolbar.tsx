@@ -84,11 +84,20 @@ function GroupItems({ groups }: { groups: GroupRow[] }) {
 }
 
 /** Search field with a quiet clear button (Escape clears too). */
-function SearchField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function SearchField({
+  inputRef,
+  value,
+  onChange,
+}: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
     <div className="relative w-full sm:w-72">
       <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-faint" />
       <Input
+        ref={inputRef}
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -106,7 +115,11 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
       {value ? (
         <button
           type="button"
-          onClick={() => onChange("")}
+          onClick={() => {
+            onChange("");
+            // The button unmounts; clearing is usually followed by a new search.
+            inputRef.current?.focus();
+          }}
           aria-label="Suche leeren"
           title="Suche leeren"
           // Already positioned, so the ::after tap band needs no TOUCH_HIT (whose
@@ -121,6 +134,7 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
 }
 
 export function DirectoryToolbar({
+  searchRef,
   query,
   onQueryChange,
   groupId,
@@ -134,6 +148,8 @@ export function DirectoryToolbar({
   distributionLists,
   status,
 }: {
+  /** The search field, for returning focus to it. */
+  searchRef: React.RefObject<HTMLInputElement | null>;
   query: string;
   onQueryChange: (q: string) => void;
   groupId: number | null;
@@ -150,7 +166,7 @@ export function DirectoryToolbar({
 }) {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-      <SearchField value={query} onChange={onQueryChange} />
+      <SearchField inputRef={searchRef} value={query} onChange={onQueryChange} />
       <FilterSelect
         label="Nach Gliederung filtern"
         allLabel="Alle Gliederungen"
