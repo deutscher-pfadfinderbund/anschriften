@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { memo } from "react";
 
+import { MailLink } from "@/components/mail-link";
 import { Tag } from "@/components/tag";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TableCell, TableRow } from "@/components/ui/table";
@@ -79,35 +80,14 @@ function groupNames(person: PersonListRow): string[] {
   return [...new Set(person.assignments.map((a) => a.groupName))];
 }
 
-/**
- * E-mail (ink; fir only on hover, so the list is no green stripe) and the first phone.
- * A long address wraps, first before the "@", instead of being cut: touch screens have
- * no tooltip to reveal the rest.
- */
+/** E-mail and the first phone; `raised` lifts the link above the card's stretched name link. */
 function Contact({ person, raised = false }: { person: PersonListRow; raised?: boolean }) {
   const phone = person.phones[0];
-  const at = person.email?.lastIndexOf("@") ?? -1;
   return (
     <>
       {person.email ? (
         <div>
-          <a
-            href={`mailto:${person.email}`}
-            className={cn(
-              "rounded-sm text-ink underline-offset-2 transition-colors wrap-anywhere hover:text-fir hover:underline",
-              raised && "relative z-10",
-            )}
-          >
-            {at > 0 ? (
-              <>
-                {person.email.slice(0, at)}
-                <wbr />
-                {person.email.slice(at)}
-              </>
-            ) : (
-              person.email
-            )}
-          </a>
+          <MailLink email={person.email} className={raised ? "relative z-10" : undefined} />
         </div>
       ) : null}
       {phone ? (

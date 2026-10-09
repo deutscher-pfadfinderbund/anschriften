@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { addMembers, removeMember } from "@/actions/lists";
 import { EmptyState } from "@/components/empty-state";
+import { MailLink } from "@/components/mail-link";
 import { MultiSelectList } from "@/components/multi-select-list";
 import { Panel } from "@/components/panel";
 import { Tag } from "@/components/tag";
@@ -166,11 +167,9 @@ function MemberRow({
             <div className="truncate text-caption text-ink-faint">{m.mainOffice}</div>
           ) : null}
         </div>
-        <div className="mt-0.5 min-w-0 truncate text-caption @xl:mt-0 @xl:text-ui">
+        <div className="mt-0.5 min-w-0 text-caption @xl:mt-0 @xl:text-ui">
           {isEmail(email) ? (
-            <a href={`mailto:${email}`} title={email} className="text-fir hover:underline">
-              {email}
-            </a>
+            <MailLink email={email} />
           ) : email ? (
             <span className="text-ink-faint">{email} (keine gültige E-Mail)</span>
           ) : (
