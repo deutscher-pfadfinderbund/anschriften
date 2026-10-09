@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 
+import { TextField } from "@/components/field";
 import { Panel } from "@/components/panel";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { PersonEditData } from "@/db/queries";
@@ -11,7 +12,6 @@ import type { FieldErrors } from "@/lib/person-schema";
 import { RULE_KIND_LABELS } from "@/lib/rule-kinds";
 import { LINK, TOUCH_HIT, cn } from "@/lib/utils";
 
-import { TextField } from "./field";
 import type { FormValues, SetValue } from "./form-values";
 
 /** "Verteiler": manual memberships as checkboxes; rule-based ones locked and explained. */

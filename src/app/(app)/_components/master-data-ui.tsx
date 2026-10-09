@@ -8,7 +8,7 @@ import { flushSync } from "react-dom";
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { FormLabel } from "@/components/form-label";
+import { TextField } from "@/components/field";
 import { NumberBadge } from "@/components/number-badge";
 import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import type { ActionResult } from "@/lib/action-helpers";
 import { callAction } from "@/lib/call-action";
 import { ORDER_MAX } from "@/lib/master-data";
@@ -320,49 +319,25 @@ export function EntryDialog({
   );
 }
 
-/** Label, text input and a hint that an error replaces, wired up for screen readers. */
-export function TextField({
-  id,
-  label,
-  value,
-  onChange,
-  hint,
-  error,
-  placeholder,
+/** A master-data text field with the server's length limits; `numeric` for a Reihenfolge. */
+export function EntryField({
   numeric = false,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  hint?: string;
+  error,
+  ...props
+}: Omit<React.ComponentProps<typeof TextField>, "error" | "maxLength" | "inputMode"> & {
   error?: string | null;
-  placeholder?: string;
   /** Digits only: numeric keyboard on phones, tabular figures. */
   numeric?: boolean;
 }) {
-  const note = error ?? hint;
   return (
-    <div>
-      <FormLabel htmlFor={id}>{label}</FormLabel>
-      <Input
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        // The server's limits: 200 characters for names and the Art, ORDER_MAX's digits.
-        maxLength={numeric ? String(ORDER_MAX).length : 200}
-        inputMode={numeric ? "numeric" : undefined}
-        autoComplete="off"
-        aria-invalid={error ? true : undefined}
-        aria-describedby={note ? `${id}-note` : undefined}
-        className={cn(numeric && "w-28 tabular-nums")}
-      />
-      {note ? (
-        <p id={`${id}-note`} className={cn("mt-1 text-caption", error ? "text-crit" : "text-ink-faint")}>
-          {note}
-        </p>
-      ) : null}
-    </div>
+    <TextField
+      {...props}
+      error={error ?? undefined}
+      // The server's limits: 200 characters for names and the Art, ORDER_MAX's digits.
+      maxLength={numeric ? String(ORDER_MAX).length : 200}
+      inputMode={numeric ? "numeric" : undefined}
+      autoComplete="off"
+      className={cn(numeric && "[&_input]:w-28 [&_input]:tabular-nums")}
+    />
   );
 }

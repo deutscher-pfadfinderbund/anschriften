@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 
+import { Field, TextField, fieldAria } from "@/components/field";
 import { Panel } from "@/components/panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +13,6 @@ import { SALUTATIONS, formatNameWithScout, todayIso } from "@/lib/format";
 import type { FieldErrors } from "@/lib/person-schema";
 import { LINK } from "@/lib/utils";
 
-import { Field, TextField, fieldAria } from "./field";
 import { NONE, type FormValues, type SetValue } from "./form-values";
 
 const NOTES_HINT = "Interne Notiz – erscheint in keinem Druck.";

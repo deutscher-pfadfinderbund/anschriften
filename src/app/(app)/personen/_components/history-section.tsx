@@ -12,6 +12,7 @@ import {
 import { AddRowButton } from "@/components/add-row-button";
 import type { ComboOption } from "@/components/combobox";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { ComboField, TextField, focusSoon } from "@/components/field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,7 +29,6 @@ import { formatDate, todayIso } from "@/lib/format";
 import { TOUCH_HIT, cn } from "@/lib/utils";
 
 import { EndDateChoice } from "./end-date";
-import { ComboField, TextField, focusSoon } from "./field";
 import { GROUP_PICKER, NONE, OFFICE_PICKER, isEndChoiceReady, type EndChoice } from "./form-values";
 
 // "Frühere Ämter": ended tenures. Unlike the rows above they are written immediately —

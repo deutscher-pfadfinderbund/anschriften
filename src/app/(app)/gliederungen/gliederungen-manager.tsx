@@ -15,7 +15,7 @@ import { descendantIds, orderGroups } from "@/lib/groups";
 import { isDuplicateName, nextOrder, orderError, parseOrder } from "@/lib/master-data";
 import { SECTIONS, SECTION_LABELS, type Section } from "@/lib/sections";
 
-import { EntryDialog, EntryList, EntryRow, TextField, useEntryDialog } from "../_components/master-data-ui";
+import { EntryDialog, EntryField, EntryList, EntryRow, useEntryDialog } from "../_components/master-data-ui";
 
 const PARENT_NONE = "none";
 
@@ -172,28 +172,28 @@ export function GliederungenManager({
             : undefined
         }
       >
-        <TextField
+        <EntryField
           id="group-name"
           label="Name"
           value={draft.name}
-          onChange={(name) => dialog.edit({ name })}
+          onValueChange={(name) => dialog.edit({ name })}
           error={nameTaken ? "Eine Gliederung mit diesem Namen gibt es schon." : null}
         />
         <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-          <TextField
+          <EntryField
             id="group-kind"
             label="Art"
             value={draft.kind}
-            onChange={(kind) => dialog.edit({ kind })}
+            onValueChange={(kind) => dialog.edit({ kind })}
             placeholder="z. B. Gau, Horte, Konvent"
             hint="Optional."
           />
-          <TextField
+          <EntryField
             id="group-order"
             label="Reihenfolge im PDF"
             numeric
             value={draft.order}
-            onChange={(order) => dialog.edit({ order })}
+            onValueChange={(order) => dialog.edit({ order })}
             hint="Kleiner = weiter oben."
             error={orderErr}
           />

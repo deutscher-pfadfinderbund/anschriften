@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 
 import { AddRowButton } from "@/components/add-row-button";
+import { TextField, focusSoon } from "@/components/field";
 import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { phoneLabelOptions } from "@/lib/format";
 import type { FieldErrors } from "@/lib/person-schema";
 
-import { TextField, focusSoon } from "./field";
 import { newKey, type FormValues, type PhoneRow, type SetValue } from "./form-values";
 
 /** "Anschrift & Kontakt": postal address, e-mail and the phone list. */

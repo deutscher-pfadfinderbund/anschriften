@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { CalendarOff, Undo2 } from "lucide-react";
 
+import { Field, fieldAria } from "@/components/field";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -18,7 +19,6 @@ import { Input } from "@/components/ui/input";
 import { formatDate, todayIso } from "@/lib/format";
 import { TOUCH_HIT, cn } from "@/lib/utils";
 
-import { Field, fieldAria } from "./field";
 import { endChoiceError, isEndChoiceReady, type EndChoice } from "./form-values";
 
 /** "Bis" date plus „Ende unbekannt“, which disables the date (the server then records today). */

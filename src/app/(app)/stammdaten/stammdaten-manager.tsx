@@ -14,7 +14,7 @@ import type { ListRef, OfficeRow, RankRow } from "@/db/queries";
 import { isDuplicateName, nextOrder, orderError, parseOrder } from "@/lib/master-data";
 import { RANK_UNRANKED } from "@/lib/rank";
 
-import { EntryDialog, EntryList, EntryRow, TextField, useEntryDialog } from "../_components/master-data-ui";
+import { EntryDialog, EntryField, EntryList, EntryRow, useEntryDialog } from "../_components/master-data-ui";
 
 type Kind = "office" | "rank";
 
@@ -229,19 +229,19 @@ export function StammdatenManager({
             : undefined
         }
       >
-        <TextField
+        <EntryField
           id="entry-name"
           label="Name"
           value={draft.name}
-          onChange={(name) => dialog.edit({ name })}
+          onValueChange={(name) => dialog.edit({ name })}
           error={nameTaken ? copy.duplicate : null}
         />
-        <TextField
+        <EntryField
           id="entry-order"
           label={copy.orderLabel}
           numeric
           value={draft.order}
-          onChange={(order) => dialog.edit({ order })}
+          onValueChange={(order) => dialog.edit({ order })}
           placeholder={draft.kind === "office" ? "am Ende" : undefined}
           hint={copy.orderHint}
           error={orderErr}

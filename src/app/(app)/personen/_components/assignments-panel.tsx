@@ -5,6 +5,7 @@ import { CalendarOff, X } from "lucide-react";
 
 import { AddRowButton } from "@/components/add-row-button";
 import type { ComboOption } from "@/components/combobox";
+import { ComboField, TextField, focusSoon } from "@/components/field";
 import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
 import type { ActiveHolder, GroupRow, HistoricalAssignment, OfficeRow } from "@/db/queries";
@@ -12,7 +13,6 @@ import { orderGroups } from "@/lib/groups";
 import type { FieldErrors } from "@/lib/person-schema";
 
 import { EndDateDialog, EndingNote, endingText, type EndRequest } from "./end-date";
-import { ComboField, TextField, focusSoon } from "./field";
 import {
   GROUP_PICKER,
   NONE,
