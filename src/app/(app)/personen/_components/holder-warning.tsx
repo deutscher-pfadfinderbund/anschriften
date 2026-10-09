@@ -52,7 +52,7 @@ export function HolderNotes({
   return holders.map((h) => {
     const order = orders.find((o) => o.assignmentId === h.assignmentId);
     return order ? (
-      <EndingNote key={h.assignmentId} onUndo={() => onUndo(h.assignmentId)}>
+      <EndingNote key={h.assignmentId} undoId={`h-${h.assignmentId}-undo`} onUndo={() => onUndo(h.assignmentId)}>
         Amtszeit von <span className="font-medium text-ink">{h.name}</span> {endingText(order)}
       </EndingNote>
     ) : (
@@ -60,7 +60,7 @@ export function HolderNotes({
         key={h.assignmentId}
         icon={TriangleAlert}
         action={
-          <NoteButton onClick={() => onEnd(h)} className="text-fir hover:underline">
+          <NoteButton id={`h-${h.assignmentId}-end`} onClick={() => onEnd(h)} className="text-fir hover:underline">
             Amtszeit beenden …
           </NoteButton>
         }

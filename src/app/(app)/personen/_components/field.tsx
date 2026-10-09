@@ -97,3 +97,8 @@ export function ComboField({
     </Field>
   );
 }
+
+/** Focus an element by id once the current update is rendered (after a button vanished). */
+export function focusSoon(id: string): void {
+  requestAnimationFrame(() => document.getElementById(id)?.focus());
+}

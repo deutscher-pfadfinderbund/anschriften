@@ -43,7 +43,7 @@ export type AssignmentRow = {
 };
 
 /** Buffered "end the current holder's tenure on save" (holder warning). */
-export type EndPreviousOrder = EndChoice & { assignmentId: number; name: string };
+export type EndPreviousOrder = EndChoice & { assignmentId: number };
 
 export type FormValues = {
   salutation: string;

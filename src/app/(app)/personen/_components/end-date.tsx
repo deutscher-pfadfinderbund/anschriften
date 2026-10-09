@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CalendarOff, Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,8 @@ export type EndRequest = {
   /** Start of the tenure, if known: the earliest possible end. */
   start?: string | null;
   onConfirm: (end: EndChoice) => void;
+  /** id to focus after confirming (the opener is gone then: it became a note). */
+  focusAfter: string;
 };
 
 /**
@@ -76,15 +78,43 @@ export type EndRequest = {
  * the person is saved.
  */
 export function EndDateDialog({ request, onClose }: { request: EndRequest | null; onClose: () => void }) {
+  const focusAfter = useRef<string | null>(null);
   return (
     <Dialog open={request != null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>{request ? <EndDateForm request={request} onClose={onClose} /> : null}</DialogContent>
+      <DialogContent
+        onCloseAutoFocus={(e) => {
+          const target = focusAfter.current ? document.getElementById(focusAfter.current) : null;
+          focusAfter.current = null;
+          if (target) {
+            e.preventDefault();
+            target.focus();
+          }
+        }}
+      >
+        {request ? (
+          <EndDateForm
+            request={request}
+            onClose={onClose}
+            onConfirmed={() => {
+              focusAfter.current = request.focusAfter;
+            }}
+          />
+        ) : null}
+      </DialogContent>
     </Dialog>
   );
 }
 
 // Mounted per opening, so every dialog starts at today.
-function EndDateForm({ request, onClose }: { request: EndRequest; onClose: () => void }) {
+function EndDateForm({
+  request,
+  onClose,
+  onConfirmed,
+}: {
+  request: EndRequest;
+  onClose: () => void;
+  onConfirmed: () => void;
+}) {
   const [end, setEnd] = useState<EndChoice>(() => ({ endDate: todayIso(), endUnknown: false }));
   const ready = isEndChoiceReady(end, request.start);
 
@@ -98,6 +128,7 @@ function EndDateForm({ request, onClose }: { request: EndRequest; onClose: () =>
         e.stopPropagation();
         if (!ready) return;
         request.onConfirm(end);
+        onConfirmed();
         onClose();
       }}
     >
@@ -153,12 +184,20 @@ export function NoteButton({ className, ...props }: React.ComponentProps<"button
 }
 
 /** A buffered ending under its row ("Endet am …"), undoable until the person is saved. */
-export function EndingNote({ children, onUndo }: { children: React.ReactNode; onUndo: () => void }) {
+export function EndingNote({
+  undoId,
+  onUndo,
+  children,
+}: {
+  undoId: string;
+  onUndo: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <RowNote
       icon={CalendarOff}
       action={
-        <NoteButton onClick={onUndo} className="text-ink-soft hover:text-ink">
+        <NoteButton id={undoId} onClick={onUndo} className="text-ink-soft hover:text-ink">
           <Undo2 aria-hidden className="size-3.5" />
           Rückgängig
         </NoteButton>

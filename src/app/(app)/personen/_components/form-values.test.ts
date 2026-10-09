@@ -80,7 +80,7 @@ describe("toPayload", () => {
       { ...v.assignments[0], end: { endDate: "2026-10-01", endUnknown: false } },
       { key: "k1", id: null, groupId: 3, officeId: null, startDate: "", end: { endDate: "2026-10-01", endUnknown: true } },
     ];
-    const p = toPayload(v, person, [{ assignmentId: 1, name: "Anna Müller", endDate: "", endUnknown: true }]);
+    const p = toPayload(v, person, [{ assignmentId: 1, endDate: "", endUnknown: true }]);
     expect(p.salutation).toBeNull();
     expect(p.rankId).toBe(3);
     expect(p.updatedAt).toBe(person.updatedAt);

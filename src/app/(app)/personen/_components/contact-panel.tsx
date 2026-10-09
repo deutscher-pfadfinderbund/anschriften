@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { phoneLabelOptions } from "@/lib/format";
 import type { FieldErrors } from "@/lib/person-schema";
 
-import { TextField } from "./field";
+import { TextField, focusSoon } from "./field";
 import { newKey, type FormValues, type PhoneRow, type SetValue } from "./form-values";
 
 /** "Anschrift & Kontakt": postal address, e-mail and the phone list. */
@@ -95,7 +95,7 @@ function PhoneList({
   function add() {
     const key = newKey();
     onChange([...phones, { key, label: phones.length === 0 ? "Mobil" : "Telefon", number: "" }]);
-    requestAnimationFrame(() => document.getElementById(`tel-${key}`)?.focus());
+    focusSoon(`tel-${key}`);
   }
 
   return (
@@ -133,7 +133,10 @@ function PhoneList({
                 aria-label="Telefonnummer entfernen"
                 title="Telefonnummer entfernen"
                 className="text-ink-faint hover:text-crit"
-                onClick={() => onChange(phones.filter((r) => r.key !== p.key))}
+                onClick={() => {
+                  onChange(phones.filter((r) => r.key !== p.key));
+                  focusSoon("tel-add");
+                }}
               >
                 <X />
               </Button>
@@ -141,7 +144,9 @@ function PhoneList({
           ))}
         </ul>
       ) : null}
-      <AddRowButton onClick={add}>Telefonnummer hinzufügen</AddRowButton>
+      <AddRowButton id="tel-add" onClick={add}>
+        Telefonnummer hinzufügen
+      </AddRowButton>
     </fieldset>
   );
 }

@@ -12,13 +12,13 @@ import { orderGroups } from "@/lib/groups";
 import type { FieldErrors } from "@/lib/person-schema";
 
 import { EndDateDialog, EndingNote, endingText, type EndRequest } from "./end-date";
-import { ComboField, TextField } from "./field";
+import { ComboField, TextField, focusSoon } from "./field";
 import { NONE, newKey, type AssignmentRow, type FormValues, type SetValue } from "./form-values";
 import { HistorySection } from "./history-section";
 import { HolderNotes } from "./holder-warning";
 
 /** id of a row's control, e.g. "a-n3-group". */
-const rowId = (row: AssignmentRow, field: "group" | "office" | "start") => `a-${row.key}-${field}`;
+const rowId = (row: AssignmentRow, part: "group" | "office" | "start" | "end" | "undo") => `a-${row.key}-${part}`;
 
 /** "Ämter & Gliederungen": the active rows, their endings and holder warnings, plus the history. */
 export function AssignmentsPanel({
@@ -68,8 +68,12 @@ export function AssignmentsPanel({
   function addRow() {
     const key = newKey();
     set("assignments", [...rows, { key, id: null, groupId: null, officeId: null, startDate: "", end: null }]);
-    // Focus the new row's first field once it is rendered.
-    requestAnimationFrame(() => document.getElementById(`a-${key}-group`)?.focus());
+    focusSoon(`a-${key}-group`);
+  }
+
+  function removeRow(key: string) {
+    set("assignments", rows.filter((r) => r.key !== key));
+    focusSoon("a-add"); // the pressed button is gone: keep the focus in the panel
   }
 
   function endRow(row: AssignmentRow) {
@@ -85,19 +89,21 @@ export function AssignmentsPanel({
       ),
       start: row.startDate || null,
       onConfirm: (end) => updateRow(row.key, { end }, "endDate"),
+      focusAfter: rowId(row, "undo"),
     });
   }
 
   function endHolder(h: ActiveHolder) {
     setEnding({
       title: `Amtszeit von ${h.name} beenden`,
-      description: "Die Amtszeit wird erst beim Speichern beendet. Bis dahin kannst du es rückgängig machen.",
+      description: "Die Amtszeit endet erst, wenn du speicherst – bis dahin lässt sich das rückgängig machen.",
       start: h.startDate,
       onConfirm: (end) =>
         set("endPrevious", [
           ...values.endPrevious.filter((o) => o.assignmentId !== h.assignmentId),
-          { assignmentId: h.assignmentId, name: h.name, ...end },
+          { assignmentId: h.assignmentId, ...end },
         ]),
+      focusAfter: `h-${h.assignmentId}-undo`,
     });
   }
 
@@ -160,6 +166,7 @@ export function AssignmentsPanel({
                     <div className="flex items-center justify-end">
                       {row.id != null && !row.end ? (
                         <Button
+                          id={rowId(row, "end")}
                           type="button"
                           variant="ghost"
                           className="text-ink-soft"
@@ -175,7 +182,7 @@ export function AssignmentsPanel({
                         variant="ghost"
                         className="text-ink-soft hover:text-crit"
                         title="Entfernen – nur bei einer Fehleingabe"
-                        onClick={() => set("assignments", rows.filter((r) => r.key !== row.key))}
+                        onClick={() => removeRow(row.key)}
                       >
                         <X aria-hidden className="max-sm:hidden" />
                         Entfernen
@@ -187,7 +194,13 @@ export function AssignmentsPanel({
                     warnings appear here after picking an Amt. */}
                 <div aria-live="polite" className="col-span-full mt-2 flex flex-col gap-1.5 empty:mt-0">
                   {row.end ? (
-                    <EndingNote onUndo={() => updateRow(row.key, { end: null }, "endDate")}>
+                    <EndingNote
+                      undoId={rowId(row, "undo")}
+                      onUndo={() => {
+                        updateRow(row.key, { end: null }, "endDate");
+                        focusSoon(rowId(row, "end"));
+                      }}
+                    >
                       {capitalize(endingText(row.end))}
                     </EndingNote>
                   ) : null}
@@ -196,12 +209,13 @@ export function AssignmentsPanel({
                     holders={otherHolders(row)}
                     orders={values.endPrevious}
                     onEnd={endHolder}
-                    onUndo={(id) =>
+                    onUndo={(id) => {
                       set(
                         "endPrevious",
                         values.endPrevious.filter((o) => o.assignmentId !== id),
-                      )
-                    }
+                      );
+                      focusSoon(`h-${id}-end`);
+                    }}
                   />
                 </div>
               </li>
@@ -209,7 +223,9 @@ export function AssignmentsPanel({
           })}
         </ul>
       )}
-      <AddRowButton onClick={addRow}>Gliederung/Amt hinzufügen</AddRowButton>
+      <AddRowButton id="a-add" onClick={addRow}>
+        Gliederung/Amt hinzufügen
+      </AddRowButton>
 
       {history ? (
         <HistorySection
