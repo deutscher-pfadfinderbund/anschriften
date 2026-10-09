@@ -23,9 +23,9 @@ export function EmptyState({
   return (
     <div className={cn("flex flex-col items-center px-6 py-10 text-center", className)}>
       <Icon aria-hidden className="mb-3 size-6 text-ink-faint opacity-50" />
-      <p className="text-[14px] text-ink">{title}</p>
+      <p className="text-body text-ink">{title}</p>
       {description ? (
-        <p className="mt-1 max-w-sm text-[13px] text-ink-faint">{description}</p>
+        <p className="mt-1 max-w-sm text-ui text-ink-faint">{description}</p>
       ) : null}
       {action ? <div className="mt-4">{action}</div> : null}
     </div>

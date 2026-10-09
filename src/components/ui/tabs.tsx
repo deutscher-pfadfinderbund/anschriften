@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
 import { Tabs as TabsPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
@@ -31,32 +30,17 @@ function Tabs({
  * shadow would be a second idiom, so the list stays transparent and the marker
  * lives on the trigger.
  */
-const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center justify-center gap-1 bg-transparent text-ink-soft group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col group-data-vertical/tabs:items-stretch",
-  {
-    variants: {
-      variant: {
-        default: "",
-        line: "",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
-
 function TabsList({
   className,
-  variant = "default",
   ...props
-}: React.ComponentProps<typeof TabsPrimitive.List> &
-  VariantProps<typeof tabsListVariants>) {
+}: React.ComponentProps<typeof TabsPrimitive.List>) {
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
-      data-variant={variant}
-      className={cn(tabsListVariants({ variant }), className)}
+      className={cn(
+        "group/tabs-list inline-flex w-fit items-center justify-center gap-1 bg-transparent text-ink-soft group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col group-data-vertical/tabs:items-stretch",
+        className
+      )}
       {...props}
     />
   )
@@ -70,9 +54,9 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "relative inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-[13.5px] font-medium whitespace-nowrap text-ink-soft transition-colors",
+        "relative inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-ui font-medium whitespace-nowrap text-ink-soft transition-colors",
         "group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start",
-        "outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring",
+        "hover:text-ink",
         "disabled:pointer-events-none disabled:opacity-50",
         "data-[state=active]:text-fir",
         // Fir marker: underline when horizontal, left bar when vertical.
@@ -95,10 +79,10 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn("flex-1 text-sm outline-none", className)}
+      className={cn("flex-1 text-body outline-none", className)}
       {...props}
     />
   )
 }
 
-export { Tabs, TabsList, TabsTrigger, TabsContent, tabsListVariants }
+export { Tabs, TabsList, TabsTrigger, TabsContent }

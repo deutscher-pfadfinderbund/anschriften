@@ -1,7 +1,6 @@
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-/** Uppercase caption above a form field — the shared style used across all editors. */
+/** Caption above a form field: the app-wide `eyebrow` label recipe. */
 export function FormLabel({
   htmlFor,
   className,
@@ -12,14 +11,8 @@ export function FormLabel({
   children: React.ReactNode;
 }) {
   return (
-    <Label
-      htmlFor={htmlFor}
-      className={cn(
-        "mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-ink-faint",
-        className,
-      )}
-    >
+    <label htmlFor={htmlFor} className={cn("eyebrow mb-1.5 block", className)}>
       {children}
-    </Label>
+    </label>
   );
 }
