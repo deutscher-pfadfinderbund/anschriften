@@ -3,7 +3,7 @@
 // skips /api): without a valid session the answer is a clean 401, which the client download
 // helper turns into "Sitzung abgelaufen" instead of saving an error page as .csv.
 import { getListName, personsForCsvByIds, personsForCsvByList } from "@/db/queries";
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/auth-helpers";
 import { asciiSlug, buildCsv, CSV_BOM, type CsvPerson } from "@/lib/export";
 import { todayIso } from "@/lib/format";
 
@@ -11,8 +11,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) {
+  if (!(await getSession(request.headers))) {
     return new Response("Nicht angemeldet.", { status: 401 });
   }
 

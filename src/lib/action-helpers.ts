@@ -1,8 +1,7 @@
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/auth-helpers";
 import { ORDER_MAX } from "@/lib/master-data";
 
 // Shared helpers for the Server Actions in src/actions/*. Every action follows the same
@@ -28,7 +27,7 @@ export type ActionResult = { ok: true } | { ok: false; message: string };
  * /login, answers them.)
  */
 export async function getActionSession() {
-  return auth.api.getSession({ headers: await headers() });
+  return getSession();
 }
 
 /** Failure result for an action called without a valid session (see `getActionSession`). */
