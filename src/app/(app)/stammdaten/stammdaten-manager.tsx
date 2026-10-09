@@ -138,8 +138,8 @@ export function StammdatenManager({
 
           <TabsContent value="office">
             <EntryList
-              title="Reihenfolge im PDF"
-              description="Kleiner = weiter oben. Zum Bearbeiten auf ein Amt klicken."
+              title="Ämter"
+              description="Die Zahl links ist die Reihenfolge im PDF: kleiner = weiter oben. Zum Bearbeiten auf ein Amt klicken."
               emptyState={
                 offices.length === 0 ? (
                   <EmptyState
@@ -183,8 +183,8 @@ export function StammdatenManager({
 
           <TabsContent value="rank">
             <EntryList
-              title="Reihenfolge in Auswahllisten"
-              description="Kleiner = weiter oben. Zum Bearbeiten auf einen Stand klicken."
+              title="Stände"
+              description="Die Zahl links ist die Reihenfolge in Auswahllisten: kleiner = weiter oben. Zum Bearbeiten auf einen Stand klicken."
               emptyState={
                 ranks.length === 0 ? (
                   <EmptyState

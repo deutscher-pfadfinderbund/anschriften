@@ -119,7 +119,7 @@ export function GliederungenManager({
     <>
       <PageHeader
         title="Gliederungen"
-        subtitle="Aufbau des Bundes · Grundlage für Personen, Verteiler und den PDF-Druck"
+        subtitle="Grundlage für Personen, Verteiler und den PDF-Druck"
         actions={
           <Button onClick={() => openDialog(null)}>
             <Plus aria-hidden />
@@ -129,8 +129,8 @@ export function GliederungenManager({
       />
       <PageBody>
         <EntryList
-          title="Reihenfolge im PDF"
-          description="Kleiner = weiter oben, Untergliederungen eingerückt. Zum Bearbeiten auf eine Gliederung klicken."
+          title="Aufbau des Bundes"
+          description="Die Zahl links ist die Reihenfolge im PDF: kleiner = weiter oben. Untergliederungen sind eingerückt. Zum Bearbeiten auf eine Gliederung klicken."
           emptyState={
             ordered.length === 0 ? (
               <EmptyState
