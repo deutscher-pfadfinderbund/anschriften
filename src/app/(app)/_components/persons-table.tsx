@@ -21,7 +21,7 @@ import { addMembers } from "@/actions/lists";
 import { Combobox } from "@/components/combobox";
 import { ComposeMailDialog } from "@/components/compose-mail-dialog";
 import { PageHeader } from "@/components/page-header";
-import { Badge } from "@/components/ui/badge";
+import { Tag } from "@/components/tag";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -246,14 +246,9 @@ export function PersonsTable({
           return (
             <div className="flex flex-wrap gap-1">
               {offs.map((a) => (
-                <Badge
-                  key={a.id}
-                  variant="secondary"
-                  title={`${a.officeName} · ${a.groupName}`}
-                  className="rounded-[4px] border border-line font-normal text-ink-soft"
-                >
+                <Tag key={a.id} title={`${a.officeName} · ${a.groupName}`}>
                   {a.officeName}
-                </Badge>
+                </Tag>
               ))}
             </div>
           );
@@ -404,7 +399,7 @@ export function PersonsTable({
         title="Verzeichnis"
         subtitle={`${persons.length} ${persons.length === 1 ? "Anschrift" : "Anschriften"}`}
       />
-      <div className="px-6 pt-[18px] pb-10">
+      <div className="px-4 pt-gutter pb-10 sm:px-6">
         <div className="mb-3 flex flex-wrap items-center gap-2.5">
           <div className="relative flex-1 sm:max-w-[380px] sm:basis-[260px]">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-faint" />
@@ -753,13 +748,7 @@ function PersonCard({ row }: { row: Row<Indexed> }) {
           {offices.length > 0 ? (
             <div className="mt-1.5 flex flex-wrap gap-1">
               {offices.map((a) => (
-                <Badge
-                  key={a.id}
-                  variant="secondary"
-                  className="rounded-[4px] border border-line font-normal text-ink-soft"
-                >
-                  {a.officeName}
-                </Badge>
+                <Tag key={a.id}>{a.officeName}</Tag>
               ))}
             </div>
           ) : null}

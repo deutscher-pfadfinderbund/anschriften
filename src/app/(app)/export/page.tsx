@@ -18,7 +18,7 @@ export default async function ExportPage() {
         title="PDF-Export"
         subtitle="Anschriftenverzeichnis als druckfertiges PDF erzeugen. Wähle ein Profil und die gewünschten Optionen."
       />
-      <div className="px-6 pt-[18px] pb-10">
+      <div className="px-4 pt-gutter pb-10 sm:px-6">
         <div className="max-w-3xl">
           <ExportManager />
         </div>

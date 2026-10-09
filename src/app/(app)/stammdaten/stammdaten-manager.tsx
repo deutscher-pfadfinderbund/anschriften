@@ -10,7 +10,7 @@ import { createRank, deleteRank, updateRank } from "@/actions/ranks";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { FormLabel } from "@/components/form-label";
-import { MonoBadge } from "@/components/mono-badge";
+import { NumberBadge } from "@/components/number-badge";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -151,7 +151,7 @@ export function StammdatenManager({
         title="Ämter & Stände"
         subtitle="Lookup-Listen für den Editor · Rang und Sortierung steuern die Reihenfolge im PDF"
       />
-      <div className="px-6 pt-[18px] pb-10">
+      <div className="px-4 pt-gutter pb-10 sm:px-6">
         <Tabs value={tab} onValueChange={(v) => setTab(v as "offices" | "ranks")}>
           {/* One clean header row: tabs left, the action for the visible tab right. */}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -194,9 +194,9 @@ export function StammdatenManager({
                         name gets the width it needs instead of ending in „Bund…“. */}
                     <div className="flex max-w-3xl flex-wrap items-center gap-2.5 px-[18px] py-1.5 text-[13.5px] sm:flex-nowrap">
                       {/* RANK_UNRANKED is an internal sentinel — never show the raw 999. */}
-                      <MonoBadge title={o.rank === RANK_UNRANKED ? "ohne Rang" : undefined}>
+                      <NumberBadge title={o.rank === RANK_UNRANKED ? "ohne Rang" : undefined}>
                         {o.rank === RANK_UNRANKED ? "—" : o.rank}
-                      </MonoBadge>
+                      </NumberBadge>
                       {/* flex-1 below sm (fills the line and wraps the text),
                           the original shrink-and-truncate from sm: up. */}
                       <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{o.name}</span>
@@ -282,7 +282,7 @@ export function StammdatenManager({
                     {/* No wrapping here (unlike Ämter/Gliederungen): the row has no
                         full-width child, so badge + actions always share one line. */}
                     <div className="flex max-w-3xl items-center gap-2.5 px-[18px] py-1.5 text-[13.5px]">
-                      <MonoBadge>{r.sortOrder}</MonoBadge>
+                      <NumberBadge>{r.sortOrder}</NumberBadge>
                       {/* flex-1 below sm (fills the line and wraps the text),
                           the original shrink-and-truncate from sm: up. */}
                       <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{r.name}</span>

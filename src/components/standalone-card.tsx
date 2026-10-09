@@ -1,0 +1,35 @@
+import { cn } from "@/lib/utils";
+
+/**
+ * Centered card for the pages outside the app shell (login, 404, error): the
+ * fir lozenge, the "Deutscher Pfadfinderbund" eyebrow and a serif title, then
+ * the page's own content. Renders the page's <main>.
+ */
+export function StandaloneCard({
+  title,
+  className,
+  children,
+}: {
+  /** Page title (h1, display serif). */
+  title: string;
+  /** Extra classes on the card body (e.g. text alignment). */
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <main className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
+      <div className="w-full max-w-sm rounded-xl border border-line bg-surface px-6 py-8 sm:px-8">
+        <div className="mb-6 text-center">
+          {/* The Raute from the sidebar wordmark and the favicon — the only
+              mark this product has. */}
+          <span aria-hidden className="mx-auto mb-4 block size-[11px] rotate-45 bg-fir" />
+          <p className="eyebrow">Deutscher Pfadfinderbund</p>
+          <h1 className="mt-1 font-display text-title font-semibold text-balance text-ink">
+            {title}
+          </h1>
+        </div>
+        <div className={cn("text-body text-ink-soft", className)}>{children}</div>
+      </div>
+    </main>
+  );
+}
