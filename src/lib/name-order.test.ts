@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { formatName } from "@/lib/format";
-import { byDirectoryName } from "@/lib/name-order";
+import { sortByDirectoryName } from "@/lib/name-order";
 
 const person = (lastName: string | null, firstName: string | null, scoutName: string | null = null) => ({
   lastName,
@@ -9,9 +9,9 @@ const person = (lastName: string | null, firstName: string | null, scoutName: st
   scoutName,
 });
 
-const order = (people: ReturnType<typeof person>[]) => [...people].sort(byDirectoryName).map(formatName);
+const order = (people: ReturnType<typeof person>[]) => sortByDirectoryName(people).map(formatName);
 
-describe("byDirectoryName", () => {
+describe("sortByDirectoryName", () => {
   it("keeps a surname together before longer hyphenated or multi-word surnames", () => {
     expect(
       order([

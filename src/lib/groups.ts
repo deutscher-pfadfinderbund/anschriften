@@ -1,3 +1,4 @@
+import { byName } from "@/lib/name-order";
 import { SECTIONS } from "@/lib/sections";
 
 export type GroupNode = {
@@ -28,8 +29,7 @@ export function orderGroups<T extends GroupNode>(groups: T[]): OrderedGroup<T>[]
     byParent.get(key)!.push(g);
   }
 
-  const cmp = (a: T, b: T) =>
-    a.sortKey - b.sortKey || a.name.localeCompare(b.name, "de");
+  const cmp = (a: T, b: T) => a.sortKey - b.sortKey || byName(a, b);
   for (const list of byParent.values()) list.sort(cmp);
 
   const rootCmp = (a: T, b: T) => {

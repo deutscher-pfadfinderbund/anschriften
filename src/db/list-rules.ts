@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { cache } from "react";
 
 import { db } from "@/db";
 import {
@@ -10,6 +11,7 @@ import {
   offices,
   ranks,
 } from "@/db/schema";
+import { collateDe } from "@/lib/name-order";
 import { RULE_KINDS, type RuleKind } from "@/lib/rule-kinds";
 
 // Server-side mapping of the three rule kinds (src/lib/rule-kinds.ts) onto their tables.
@@ -75,19 +77,21 @@ export async function loadRules(): Promise<LoadedRule[]> {
 /** A distribution list a target is used in as a rule (for chips and delete guards). */
 export type ListRef = { listId: number; listName: string };
 
-/** Per target id of one kind: the lists that have a rule on it, ordered by list name. */
-export async function listsUsingRuleTarget(kind: RuleKind): Promise<Map<number, ListRef[]>> {
+/**
+ * Per target id of one kind: the lists that have a rule on it, ordered by list name.
+ * Memoized per request (the Ämter page needs it for the chips and the delete guards).
+ */
+export const listsUsingRuleTarget = cache(async (kind: RuleKind): Promise<Map<number, ListRef[]>> => {
   const t = RULE_TABLES[kind];
   const rows = await db
     .select({ targetId: t.ruleTarget, listId: distributionLists.id, listName: distributionLists.name })
     .from(t.rules)
     .innerJoin(distributionLists, eq(distributionLists.id, t.rules.listId));
   const map = new Map<number, ListRef[]>();
-  // German collation in TS: the DB's C collation would put umlauts after Z.
-  for (const r of rows.sort((a, b) => a.listName.localeCompare(b.listName, "de"))) {
+  for (const r of rows.sort((a, b) => collateDe(a.listName, b.listName))) {
     const arr = map.get(r.targetId) ?? [];
     arr.push({ listId: r.listId, listName: r.listName });
     map.set(r.targetId, arr);
   }
   return map;
-}
+});

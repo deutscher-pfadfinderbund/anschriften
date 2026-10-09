@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { cache } from "react";
 
 import { db } from "@/db";
 import { listsUsingRuleTarget, loadRules, type ListRef, type LoadedRule } from "@/db/list-rules";
@@ -15,7 +16,7 @@ import {
 import { computeEffectiveMembership, type MemberOrigin } from "@/lib/effective-members";
 import type { CsvPerson } from "@/lib/export";
 import { formatFullName } from "@/lib/format";
-import { byDirectoryName } from "@/lib/name-order";
+import { byName, sortByDirectoryName } from "@/lib/name-order";
 import { RULE_KINDS, type RuleKind, type RuleRef } from "@/lib/rule-kinds";
 import type { Section } from "@/lib/sections";
 
@@ -24,8 +25,6 @@ export type { ListRef } from "@/db/list-rules";
 // Read side of the app. Every page loads through these functions; mutations live in
 // src/actions/*. Sorting by name happens in TS with German collation: the DB cluster's
 // C collation would put umlauts after Z.
-
-const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, "de");
 
 // --- effective Verteiler membership (manual ∪ rules) ---------------------------------
 
@@ -37,7 +36,7 @@ function byRuleOrder(a: Omit<LoadedRule, "listId">, b: Omit<LoadedRule, "listId"
   return (
     RULE_KINDS.indexOf(a.kind) - RULE_KINDS.indexOf(b.kind) ||
     a.sort - b.sort ||
-    a.name.localeCompare(b.name, "de")
+    byName(a, b)
   );
 }
 
@@ -54,8 +53,8 @@ function viaResolver(rules: LoadedRule[]): (via: MemberOrigin["via"]) => RuleRef
 /**
  * THE loader for effective membership: reads every input once and computes membership
  * for all lists (~600 persons — trivial). Used by the directory filter, the Verteiler
- * page, the person editor, the CSV export and the mail recipients, so all of them agree.
- * Also returns the resolved rules for naming `via` refs.
+ * page, the CSV export and the mail recipients, so all of them agree. Also returns the
+ * resolved rules for naming `via` refs.
  */
 async function loadEffectiveMembership(): Promise<{
   membership: Map<number, Map<number, MemberOrigin>>;
@@ -80,7 +79,7 @@ async function loadEffectiveMembership(): Promise<{
   ]);
   const membership = computeEffectiveMembership({
     manualMembers,
-    rules: rules.map((r) => ({ listId: r.listId, kind: r.kind, targetId: r.targetId })),
+    rules,
     assignments: activeAssignments,
     persons: people,
   });
@@ -128,18 +127,32 @@ export type PersonListRow = {
 
 /**
  * All persons with their active assignments and rank — one shot for the table, in
- * directory order (`byDirectoryName`, like the Verteiler members).
+ * directory order (like the Verteiler members).
  */
 export async function listPersons(): Promise<PersonListRow[]> {
   const [rows, { membership }] = await Promise.all([
     db.query.persons.findMany({
+      columns: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        scoutName: true,
+        birthDate: true,
+        deathDate: true,
+        street: true,
+        city: true,
+        email: true,
+        phones: true,
+        doNotPrint: true,
+      },
       with: {
-        rank: true,
+        rank: { columns: { name: true } },
         // Only active tenures (end_date IS NULL) drive the Ämter badges and the
         // Amt/Gliederung filters; ended offices live in the editor's history section.
         assignments: {
+          columns: { id: true, groupId: true, officeId: true },
           where: (a, { isNull }) => isNull(a.endDate),
-          with: { group: true, office: true },
+          with: { group: { columns: { name: true } }, office: { columns: { name: true } } },
         },
       },
     }),
@@ -156,29 +169,18 @@ export async function listPersons(): Promise<PersonListRow[]> {
     }
   }
 
-  const list: PersonListRow[] = rows.map((p) => ({
-    id: p.id,
-    firstName: p.firstName,
-    lastName: p.lastName,
-    scoutName: p.scoutName,
-    rankName: p.rank?.name ?? null,
-    birthDate: p.birthDate,
-    deathDate: p.deathDate,
-    street: p.street,
-    city: p.city,
-    email: p.email,
-    phones: p.phones,
-    doNotPrint: p.doNotPrint,
-    assignments: p.assignments.map((a) => ({
-      id: a.id,
-      groupId: a.groupId,
-      groupName: a.group.name,
-      officeId: a.officeId,
-      officeName: a.office?.name ?? null,
+  return sortByDirectoryName(
+    rows.map(({ rank, assignments: tenures, ...p }) => ({
+      ...p,
+      rankName: rank?.name ?? null,
+      assignments: tenures.map(({ group, office, ...a }) => ({
+        ...a,
+        groupName: group.name,
+        officeName: office?.name ?? null,
+      })),
+      effectiveListIds: listIdsByPerson.get(p.id) ?? [],
     })),
-    effectiveListIds: listIdsByPerson.get(p.id) ?? [],
-  }));
-  return list.sort(byDirectoryName);
+  );
 }
 
 // --- person editor --------------------------------------------------------------------
@@ -238,7 +240,7 @@ export type HistoricalAssignment = {
 
 /** One person shaped for the editor, or null if not found. */
 export async function getPersonForEdit(id: number): Promise<PersonEditData | null> {
-  const [p, { membership, rules }] = await Promise.all([
+  const [p, rules] = await Promise.all([
     db.query.persons.findFirst({
       where: eq(persons.id, id),
       with: {
@@ -246,7 +248,7 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
         distributionListMembers: true,
       },
     }),
-    loadEffectiveMembership(),
+    loadRules(),
   ]);
   if (!p) return null;
 
@@ -266,6 +268,14 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
       endUnknown: a.endUnknown,
     }));
 
+  // Membership of this one person: the same computation as `loadEffectiveMembership`,
+  // fed with only their own rows.
+  const membership = computeEffectiveMembership({
+    manualMembers: p.distributionListMembers,
+    rules,
+    assignments: p.assignments,
+    persons: [p],
+  });
   const viaRefs = viaResolver(rules);
   const ruleMemberships = [...membership].flatMap(([listId, members]) => {
     const origin = members.get(p.id);
@@ -495,15 +505,8 @@ export async function listDistributionLists(): Promise<DistributionListWithMembe
       .select({ id: distributionLists.id, name: distributionLists.name, description: distributionLists.description })
       .from(distributionLists),
     loadEffectiveMembership(),
-    db
-      .select({
-        id: persons.id,
-        firstName: persons.firstName,
-        lastName: persons.lastName,
-        scoutName: persons.scoutName,
-        email: persons.email,
-      })
-      .from(persons),
+    // Already in directory order, so members sort by their position here.
+    listPersonOptions(),
     db
       .select({ personId: assignments.personId, name: offices.name, rank: offices.rank })
       .from(assignments)
@@ -512,6 +515,7 @@ export async function listDistributionLists(): Promise<DistributionListWithMembe
   ]);
 
   const personById = new Map(people.map((p) => [p.id, p]));
+  const position = new Map(people.map((p, i) => [p.id, i]));
   // The senior *active* office per person (ended tenures never count as a main office).
   const mainOffice = new Map<number, { name: string; rank: number }>();
   for (const o of activeOffices) {
@@ -541,7 +545,7 @@ export async function listDistributionLists(): Promise<DistributionListWithMembe
         via: viaRefs(origin.via),
       };
     });
-    members.sort(byDirectoryName);
+    members.sort((a, b) => position.get(a.personId)! - position.get(b.personId)!);
     return {
       ...dl,
       rules: rulesByList.get(dl.id) ?? { office: [], rank: [], group: [] },
@@ -578,8 +582,11 @@ export type PersonOption = {
   deathDate: string | null;
 };
 
-/** Minimal person list for the "add members" picker and the duplicate-person hint. */
-export async function listPersonOptions(): Promise<PersonOption[]> {
+/**
+ * Minimal person list in directory order: the "add members" picker, the duplicate-person
+ * hint and the Verteiler members. Memoized per request (the Verteiler page needs it twice).
+ */
+export const listPersonOptions = cache(async (): Promise<PersonOption[]> => {
   const rows = await db
     .select({
       id: persons.id,
@@ -590,8 +597,8 @@ export async function listPersonOptions(): Promise<PersonOption[]> {
       deathDate: persons.deathDate,
     })
     .from(persons);
-  return rows.sort(byDirectoryName);
-}
+  return sortByDirectoryName(rows);
+});
 
 // --- CSV export -----------------------------------------------------------------------
 
@@ -620,8 +627,7 @@ export async function personsForCsvByList(listId: number): Promise<CsvPerson[]> 
  */
 export async function personsForCsvByIds(ids: number[]): Promise<CsvPerson[]> {
   if (ids.length === 0) return [];
-  const rows = await db.select(csvColumns).from(persons).where(inArray(persons.id, ids));
-  return rows.sort(byDirectoryName);
+  return sortByDirectoryName(await db.select(csvColumns).from(persons).where(inArray(persons.id, ids)));
 }
 
 // --- mail module (issue #19) ----------------------------------------------------------
