@@ -15,7 +15,6 @@ import { PersonForm } from "../_components/person-form";
 export const metadata: Metadata = { title: "Neue Person" };
 
 export default async function NewPersonPage() {
-  // Authoritative gate: the layout is not re-rendered on RSC navigations.
   await requirePageSession();
   const [groups, offices, ranks, distributionLists, existingPersons, activeHolders] = await Promise.all([
     listGroups(),

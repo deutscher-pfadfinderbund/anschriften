@@ -10,7 +10,6 @@ export const metadata: Metadata = { title: "PDF-Export" };
 // PDF export screen (issue #5): the shared page header plus the interactive form
 // (profile, options, download) in ExportManager.
 export default async function ExportPage() {
-  // Authoritative gate: the layout is not re-rendered on RSC navigations.
   await requirePageSession();
   return (
     <>

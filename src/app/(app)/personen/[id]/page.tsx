@@ -37,7 +37,6 @@ export default async function EditPersonPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  // Authoritative gate: the layout is not re-rendered on RSC navigations.
   await requirePageSession();
   const { id } = await params;
   const personId = parseId(id);

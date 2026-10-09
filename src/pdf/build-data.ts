@@ -257,8 +257,7 @@ export function buildProfileData(
   // Build one entry for a person's presence in a group (offices already collapsed).
   const makeEntry = (p: DataPerson, officeNames: string[], depth: number): Entry => {
     // Below the top level a leader office is implied by the (sub)group heading and dropped —
-    // but only that office, keeping any co-held non-leader offices (issue #7); previously a
-    // single leader office suppressed the whole list.
+    // but only that office, keeping any co-held non-leader offices (issue #7).
     let office: string | null = null;
     if (officeNames.length > 0) {
       const kept = officeNames.filter((n) => depth === 0 || !isLeaderOffice(n));
@@ -365,11 +364,9 @@ export function buildProfileData(
         return g != null && includedSections.has(g.section);
       }),
     );
-    // Nachname, then Vorname — compared as SEPARATE fields (see `compareFields`), exactly
-    // like the register. Joining them into one string lets the separator take part in the
-    // comparison, which reorders multi-word surnames („Meyer auf der Heide" ahead of „Meyer")
-    // and numbered names („Habicht II" ahead of „Habicht") against the register. Keys are
-    // normalized once per person (decorate–sort–undecorate) instead of inside the comparator.
+    // Nachname, then Vorname — compared as separate fields (see `compareFields`), exactly
+    // like the register, so „Meyer" precedes „Meyer auf der Heide". Keys are folded once
+    // per person, not inside the comparator.
     const decorated = inScope.map((p) => ({
       p,
       key: [fold(p.lastName ?? ""), fold(p.firstName ?? "")],

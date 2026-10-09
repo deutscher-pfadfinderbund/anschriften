@@ -20,7 +20,6 @@ export const metadata: Metadata = { title: "Verteiler" };
 // the selected list from `?list=<id>`). When the optional mail module is configured,
 // the per-list send history is loaded too.
 export default async function VerteilerPage() {
-  // Authoritative gate: the layout is not re-rendered on RSC navigations.
   await requirePageSession();
   const mailEnabled = isMailEnabled();
   const [lists, personOptions, offices, ranks, groups, mailLog] = await Promise.all([

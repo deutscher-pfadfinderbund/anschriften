@@ -21,7 +21,6 @@ export const metadata: Metadata = { title: "Verzeichnis" };
 // Server Component: load every person with assignments in one shot and hand the
 // full set to the client, which searches, filters and sorts (no pagination).
 export default async function DirectoryPage() {
-  // Authoritative gate: the layout is not re-rendered on RSC navigations.
   await requirePageSession();
   const [persons, groups, offices, distributionLists] = await Promise.all([
     listPersons(),

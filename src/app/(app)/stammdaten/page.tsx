@@ -14,7 +14,6 @@ import { StammdatenManager } from "./stammdaten-manager";
 export const metadata: Metadata = { title: "Ämter & Stände" };
 
 export default async function StammdatenPage() {
-  // Authoritative gate: the layout is not re-rendered on RSC navigations.
   await requirePageSession();
   const [offices, ranks, officeBlockers, rankBlockers, officeRules] = await Promise.all([
     listOffices(),
