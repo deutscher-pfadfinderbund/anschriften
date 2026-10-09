@@ -56,7 +56,7 @@ export function firstError(e: z.ZodError): string {
   return e.issues[0]?.message ?? "Ungültige Eingabe.";
 }
 
-/** Required display name of a master-data row (Amt, Stand, Gliederung). */
+/** Required display name of a master-data row (Amt, Stand, Gliederung) or a Verteiler. */
 export const nameField = z
   .string()
   .trim()
@@ -87,6 +87,11 @@ export class UserFacingError extends Error {}
 /** "… wurde inzwischen gelöscht" — an update or reference hit a row someone else removed. */
 export function deletedMeanwhile(what: string): string {
   return `${what} wurde inzwischen gelöscht. Bitte lade die Seite neu.`;
+}
+
+/** "Diese Person wurde inzwischen (von X) geändert" — the editor's concurrency token is stale. */
+export function changedMeanwhile(updatedBy: string | null): string {
+  return `Diese Person wurde inzwischen ${updatedBy ? `von ${updatedBy} ` : ""}geändert. Bitte lade die Seite neu.`;
 }
 
 /**

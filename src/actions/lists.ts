@@ -44,6 +44,16 @@ async function touchList(listId: number, by: string): Promise<void> {
     .where(eq(distributionLists.id, listId));
 }
 
+/**
+ * Bump the persons whose manual memberships changed. The person editor saves memberships
+ * as part of the person, so an editor opened before this change then refuses to save
+ * (its concurrency token is the person's `updatedAt`) instead of silently undoing it.
+ */
+async function touchPersons(ids: number[], by: string): Promise<void> {
+  if (ids.length === 0) return;
+  await db.update(persons).set({ updatedBy: by, updatedAt: new Date() }).where(inArray(persons.id, ids));
+}
+
 const listSchema = z.object({
   name: z
     .string()
@@ -117,18 +127,22 @@ export async function addMembers(listId: number, personIds: number[]): Promise<A
   const ids = requested.filter((id) => !deceased.has(id));
   if (ids.length === 0)
     return { ok: false, message: "Verstorbene Personen können keinem Verteiler hinzugefügt werden." };
+  let inserted: { personId: number }[];
   try {
-    await db
+    inserted = await db
       .insert(distributionListMembers)
       .values(ids.map((personId) => ({ listId, personId })))
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ personId: distributionListMembers.personId });
   } catch (err) {
     // Race: the list or a person was deleted between page load and this call.
     if (isForeignKeyViolation(err))
       return { ok: false, message: `Verteiler oder Person existiert nicht mehr. ${RELOAD}` };
     throw err;
   }
-  await touchList(listId, actorName(session));
+  const by = actorName(session);
+  await touchList(listId, by);
+  await touchPersons(inserted.map((r) => r.personId), by);
   revalidateApp();
   return { ok: true, added: ids.length, skippedDeceased: deceased.size };
 }
@@ -136,10 +150,13 @@ export async function addMembers(listId: number, personIds: number[]): Promise<A
 export async function removeMember(listId: number, personId: number): Promise<ActionResult> {
   const session = await getActionSession();
   if (!session) return SESSION_EXPIRED;
-  await db
+  const removed = await db
     .delete(distributionListMembers)
-    .where(and(eq(distributionListMembers.listId, listId), eq(distributionListMembers.personId, personId)));
-  await touchList(listId, actorName(session));
+    .where(and(eq(distributionListMembers.listId, listId), eq(distributionListMembers.personId, personId)))
+    .returning({ personId: distributionListMembers.personId });
+  const by = actorName(session);
+  await touchList(listId, by);
+  await touchPersons(removed.map((r) => r.personId), by);
   revalidateApp();
   return { ok: true };
 }

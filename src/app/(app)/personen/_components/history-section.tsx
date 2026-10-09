@@ -31,7 +31,8 @@ import { GROUP_PICKER, NONE, OFFICE_PICKER, isEndChoiceReady, type EndChoice } f
 
 // "Frühere Ämter": ended tenures. Unlike the rows above they are written immediately —
 // they are already history, so there is nothing to buffer until Speichern. Each action
-// revalidates the page, so the list (and the editor's concurrency token) follow at once.
+// checks the editor's concurrency token and hands back the new one, and revalidates the
+// page, so the list follows at once.
 
 /** "01.01.2015 – 31.12.2019", "01.01.2015 – Ende unbekannt", "bis 31.12.2019", "Ende unbekannt". */
 function historyRange(h: HistoricalAssignment): string {
@@ -61,11 +62,16 @@ const NEW_DRAFT: Draft = {
 export function HistorySection({
   personId,
   historical,
+  version,
+  onVersion,
   groupOptions,
   officeOptions,
 }: {
   personId: number;
   historical: HistoricalAssignment[];
+  /** The editor's concurrency token: sent with every write, replaced by the returned one. */
+  version: string;
+  onVersion: (version: string) => void;
   groupOptions: ComboOption[];
   officeOptions: ComboOption[];
 }) {
@@ -77,8 +83,9 @@ export function HistorySection({
   function remove() {
     if (!removing) return;
     startRemove(async () => {
-      const res = await deleteAssignment({ assignmentId: removing.id });
+      const res = await deleteAssignment({ assignmentId: removing.id, updatedAt: version });
       if (!res.ok) return void toast.error(res.message);
+      onVersion(res.updatedAt);
       setRemoving(null);
       toast.success("Früheres Amt gelöscht.");
     });
@@ -166,6 +173,8 @@ export function HistorySection({
           {draft ? (
             <HistoryForm
               personId={personId}
+              version={version}
+              onVersion={onVersion}
               initial={draft}
               groupOptions={groupOptions}
               officeOptions={officeOptions}
@@ -198,12 +207,16 @@ export function HistorySection({
 /** Add or edit one ended tenure. Mounted per opening, so it starts from `initial`. */
 function HistoryForm({
   personId,
+  version,
+  onVersion,
   initial,
   groupOptions,
   officeOptions,
   onDone,
 }: {
   personId: number;
+  version: string;
+  onVersion: (version: string) => void;
   initial: Draft;
   groupOptions: ComboOption[];
   officeOptions: ComboOption[];
@@ -222,6 +235,7 @@ function HistoryForm({
     setTried(true);
     if (draft.groupId == null || !isEndChoiceReady(draft.end, draft.startDate)) return;
     const values = {
+      updatedAt: version,
       groupId: draft.groupId,
       officeId: draft.officeId,
       startDate: draft.startDate || null,
@@ -234,6 +248,7 @@ function HistoryForm({
           ? await updateHistoricalAssignment({ assignmentId: draft.id, ...values })
           : await addHistoricalAssignment({ personId, ...values });
       if (!res.ok) return void setServerError(res.message);
+      onVersion(res.updatedAt);
       toast.success(isNew ? "Früheres Amt hinzugefügt." : "Früheres Amt gespeichert.");
       onDone();
     });

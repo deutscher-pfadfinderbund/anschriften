@@ -59,6 +59,8 @@ export function PersonForm({
   // stored state, so `dirty` only ever means "edits that Speichern would write".
   const baseline = useMemo(() => toFormValues(person), [person]);
   const [values, setValues] = useState<FormValues>(baseline);
+  // Concurrency token (see toPayload): replaced only by what a history action returns.
+  const [version, setVersion] = useState(person?.updatedAt ?? "");
   const dirty = useMemo(() => snapshot(values) !== snapshot(baseline), [values, baseline]);
   const { confirmLeave, release } = useUnsavedGuard(dirty);
 
@@ -95,7 +97,7 @@ export function PersonForm({
     );
     const rows = values.assignments;
     startSave(async () => {
-      const res = await savePerson(toPayload(values, person, orders));
+      const res = await savePerson(toPayload(values, person && { id: person.id, updatedAt: version }, orders));
       if (!res.ok) {
         const fieldErrors = keyRowErrors(res.errors ?? {}, rows);
         setErrors(fieldErrors);
@@ -190,7 +192,16 @@ export function PersonForm({
                 groups={groups}
                 offices={offices}
                 otherHolders={otherHolders}
-                history={person ? { personId: person.id, historical: person.historicalAssignments } : null}
+                history={
+                  person
+                    ? {
+                        personId: person.id,
+                        historical: person.historicalAssignments,
+                        version,
+                        onVersion: setVersion,
+                      }
+                    : null
+                }
               />
             </div>
             <div className="flex min-w-0 flex-col gap-gutter">

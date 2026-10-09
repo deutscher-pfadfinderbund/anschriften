@@ -5,6 +5,7 @@ import { and, eq, isNull, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { assignments, distributionListMembers, persons } from "@/db/schema";
 import {
+  changedMeanwhile,
   deletedMeanwhile,
   getActionSession,
   pgError,
@@ -92,9 +93,7 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
           .for("update");
         if (!current) throw new StaleError(deletedMeanwhile("Diese Person"));
         if (current.updatedAt.toISOString() !== data.updatedAt)
-          throw new StaleError(
-            `Diese Person wurde inzwischen ${current.updatedBy ? `von ${current.updatedBy} ` : ""}geändert. Bitte lade die Seite neu.`,
-          );
+          throw new StaleError(changedMeanwhile(current.updatedBy));
         await tx.update(persons).set(fields).where(eq(persons.id, personId));
       } else {
         const [row] = await tx.insert(persons).values(fields).returning({ id: persons.id });

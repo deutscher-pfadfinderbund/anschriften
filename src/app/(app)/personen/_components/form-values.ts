@@ -163,13 +163,14 @@ function endFields(end: EndChoice | null) {
  */
 export function toPayload(
   v: FormValues,
-  person: PersonEditData | undefined,
+  person: { id: number; updatedAt: string } | undefined,
   orders: EndPreviousOrder[],
 ): PersonInput {
   return {
     id: person?.id,
-    // Concurrency token: the props refresh after every history action, so this is the
-    // record's current version unless someone else saved it meanwhile.
+    // Concurrency token: the version the editor loaded, or the one its last history
+    // action returned. Never re-read from refreshed props, which may hold another
+    // editor's save.
     updatedAt: person?.updatedAt,
     salutation: v.salutation === NONE ? null : v.salutation,
     title: v.title,

@@ -44,8 +44,13 @@ export function AssignmentsPanel({
   groups: GroupRow[];
   offices: OfficeRow[];
   otherHolders: (row: AssignmentRow) => ActiveHolder[];
-  /** Edit mode only: the ended tenures. */
-  history: { personId: number; historical: HistoricalAssignment[] } | null;
+  /** Edit mode only: the ended tenures, and the editor's concurrency token they advance. */
+  history: {
+    personId: number;
+    historical: HistoricalAssignment[];
+    version: string;
+    onVersion: (version: string) => void;
+  } | null;
 }) {
   const [ending, setEnding] = useState<EndRequest | null>(null);
   const rows = values.assignments;
@@ -240,8 +245,7 @@ export function AssignmentsPanel({
 
       {history ? (
         <HistorySection
-          personId={history.personId}
-          historical={history.historical}
+          {...history}
           groupOptions={groupOptions}
           officeOptions={officeOptions}
         />
