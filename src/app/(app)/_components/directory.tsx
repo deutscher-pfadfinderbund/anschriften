@@ -157,6 +157,7 @@ export function Directory({
         searchRef={searchRef}
         query={params.query}
         onQueryChange={params.setQuery}
+        onQueryCommit={params.flushQuery}
         groupId={groupId}
         onGroupChange={params.setGroupId}
         officeId={officeId}

@@ -88,10 +88,12 @@ function SearchField({
   inputRef,
   value,
   onChange,
+  onBlur,
 }: {
   inputRef: React.RefObject<HTMLInputElement | null>;
   value: string;
   onChange: (value: string) => void;
+  onBlur: () => void;
 }) {
   return (
     <div className="relative w-full sm:w-72">
@@ -101,6 +103,7 @@ function SearchField({
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         onKeyDown={(e) => {
           if (e.key === "Escape" && value) {
             e.preventDefault();
@@ -137,6 +140,7 @@ export function DirectoryToolbar({
   searchRef,
   query,
   onQueryChange,
+  onQueryCommit,
   groupId,
   onGroupChange,
   officeId,
@@ -152,6 +156,8 @@ export function DirectoryToolbar({
   searchRef: React.RefObject<HTMLInputElement | null>;
   query: string;
   onQueryChange: (q: string) => void;
+  /** The field lost focus: write a pending search to the URL now. */
+  onQueryCommit: () => void;
   groupId: number | null;
   onGroupChange: (id: number | null) => void;
   officeId: number | null;
@@ -166,7 +172,7 @@ export function DirectoryToolbar({
 }) {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-      <SearchField inputRef={searchRef} value={query} onChange={onQueryChange} />
+      <SearchField inputRef={searchRef} value={query} onChange={onQueryChange} onBlur={onQueryCommit} />
       <FilterSelect
         label="Nach Gliederung filtern"
         allLabel="Alle Gliederungen"

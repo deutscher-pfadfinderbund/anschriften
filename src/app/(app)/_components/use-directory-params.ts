@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { rememberDirectoryUrl } from "@/lib/directory-url";
 
@@ -54,19 +54,21 @@ export function useDirectoryParams() {
     if (params.q !== urlQuery.written) setQuery(params.q);
   }
 
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  /** Write the search to the URL, noting it as our own write. */
+  const writeQuery = (q: string) => {
+    clearTimeout(timer.current);
+    setUrlQuery((s) => ({ ...s, written: q }));
+    replaceParams(pathname, { [PARAM.q]: q });
+  };
+  const writeQueryLater = useEffectEvent(writeQuery);
   useEffect(() => {
     const q = query.trim();
     if (q === params.q) return;
     // The cleanup cancels a pending write when typing goes on or the page unmounts.
-    const timer = setTimeout(
-      () => {
-        setUrlQuery((s) => ({ ...s, written: q }));
-        replaceParams(pathname, { [PARAM.q]: q });
-      },
-      q ? SEARCH_DEBOUNCE_MS : 0,
-    );
-    return () => clearTimeout(timer);
-  }, [query, params.q, pathname]);
+    timer.current = setTimeout(() => writeQueryLater(q), q ? SEARCH_DEBOUNCE_MS : 0);
+    return () => clearTimeout(timer.current);
+  }, [query, params.q]);
 
   // Remember the list as the user sees it, including a search still inside the
   // debounce pause, for the editor's way back.
@@ -80,6 +82,15 @@ export function useDirectoryParams() {
     /** The search field's text (ahead of the URL while typing). */
     query,
     setQuery,
+    /**
+     * Write a pending search to the URL now. Call it when the field loses focus: a
+     * `replaceState` while a navigation is under way makes Next drop that navigation, so
+     * a debounced write must never fire after a click on a person or a link.
+     */
+    flushQuery: () => {
+      const q = query.trim();
+      if (q !== params.q) writeQuery(q);
+    },
     setGroupId: (id: number | null) => replaceParams(pathname, { [PARAM.groupId]: id?.toString() ?? null }),
     setOfficeId: (id: number | null) => replaceParams(pathname, { [PARAM.officeId]: id?.toString() ?? null }),
     setListId: (id: number | null) => replaceParams(pathname, { [PARAM.listId]: id?.toString() ?? null }),
