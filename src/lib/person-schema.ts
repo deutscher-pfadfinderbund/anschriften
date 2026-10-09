@@ -65,6 +65,8 @@ export function isValidDate(value: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
 
+const INVALID_START = "Der Beginn ist kein gültiges Datum.";
+
 /**
  * Validate an Amtszeit (von/bis) for the office history. Pure (given `today`) so it can be
  * unit-tested and reused by every server action. Returns a German error message, or null
@@ -78,13 +80,14 @@ export function validateTenure(
   endDate: string | null,
   today: string = todayIso(),
 ): string | null {
-  if (startDate != null && !isValidDate(startDate)) return "Ungültiges Von-Datum.";
-  if (endDate != null && !isValidDate(endDate)) return "Ungültiges Bis-Datum.";
+  // Worded by "Beginn"/"Ende": the editor's rows say "Seit", the history dialog "Von"/"Bis".
+  if (startDate != null && !isValidDate(startDate)) return INVALID_START;
+  if (endDate != null && !isValidDate(endDate)) return "Das Ende ist kein gültiges Datum.";
   if (endDate != null && endDate > today)
-    return "Das Bis-Datum darf nicht in der Zukunft liegen – lass das Amt bis dahin aktiv.";
+    return "Das Ende darf nicht in der Zukunft liegen – lass das Amt bis dahin aktiv.";
   // ISO date strings compare lexicographically in chronological order.
   if (startDate != null && endDate != null && endDate < startDate)
-    return "Das Bis-Datum darf nicht vor dem Von-Datum liegen.";
+    return "Das Ende darf nicht vor dem Beginn liegen.";
   return null;
 }
 
@@ -143,7 +146,7 @@ export function resolveTenureEnd(input: {
 
 /** Which date field an assignment's `validateTenure` message belongs to. */
 function tenureErrorField(message: string): "startDate" | "endDate" {
-  return message === "Ungültiges Von-Datum." ? "startDate" : "endDate";
+  return message === INVALID_START ? "startDate" : "endDate";
 }
 
 /**

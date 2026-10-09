@@ -63,13 +63,17 @@ export function AssignmentsPanel({
   );
   const labelOf = (options: ComboOption[], id: number | null) =>
     options.find((o) => o.value === String(id))?.label;
+  /** "Bundeskanzlerin · Bundeskanzlei": names the row for its dialog and its buttons. */
+  const rowLabel = (row: AssignmentRow) =>
+    [labelOf(officeOptions, row.officeId), labelOf(groupOptions, row.groupId)].filter(Boolean).join(" · ") ||
+    "neue Zeile";
 
-  /** Patch one row; `field` is the error key the change resolves. */
-  function updateRow(key: string, patch: Partial<AssignmentRow>, field?: string) {
+  /** Patch one row; `fields` are the error keys the change resolves. */
+  function updateRow(key: string, patch: Partial<AssignmentRow>, fields: string[] = []) {
     set(
       "assignments",
       rows.map((r) => (r.key === key ? { ...r, ...patch } : r)),
-      field ? [`${key}.${field}`] : [],
+      fields.map((f) => `${key}.${f}`),
     );
   }
 
@@ -85,18 +89,13 @@ export function AssignmentsPanel({
   }
 
   function endRow(row: AssignmentRow) {
-    const office = labelOf(officeOptions, row.officeId);
-    const group = labelOf(groupOptions, row.groupId);
     setEnding({
       title: row.officeId != null ? "Amt beenden" : "Zugehörigkeit beenden",
       description: (
-        <>
-          „{office ? `${office} · ${group}` : group}“ wird beim Speichern beendet und steht dann unter
-          „Frühere Ämter“.
-        </>
+        <>„{rowLabel(row)}“ wird beim Speichern beendet und steht dann unter „Frühere Ämter“.</>
       ),
       start: row.startDate || null,
-      onConfirm: (end) => updateRow(row.key, { end }, "endDate"),
+      onConfirm: (end) => updateRow(row.key, { end }, ["endDate"]),
       focusAfter: rowId(row, "undo"),
     });
   }
@@ -127,105 +126,113 @@ export function AssignmentsPanel({
       {rows.length === 0 ? (
         <p className="mb-3 text-ui text-ink-faint">Noch keiner Gliederung zugeordnet.</p>
       ) : (
-        // One column template for all rows (subgrid), so the fields line up even when only
-        // some rows offer "Beenden".
-        <ul className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-x-2.5 divide-y divide-line sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_9.5rem_auto]">
-          {rows.map((row) => {
-            const endError = errors[`${row.key}.endDate`];
-            return (
-              <li key={row.key} className="col-span-full grid grid-cols-subgrid py-3 first:pt-0 last:pb-0">
-                <div className="col-span-full grid grid-cols-subgrid gap-y-2">
-                  <ComboField
-                    className="col-span-2 sm:col-span-1"
-                    label="Gliederung"
-                    id={rowId(row, "group")}
-                    error={errors[`${row.key}.groupId`]}
-                    options={groupOptions}
-                    value={row.groupId != null ? String(row.groupId) : null}
-                    onChange={(v) => updateRow(row.key, { groupId: Number(v) }, "groupId")}
-                    {...GROUP_PICKER}
-                  />
-                  <ComboField
-                    className="col-span-2 sm:col-span-1"
-                    label="Amt"
-                    id={rowId(row, "office")}
-                    options={officeOptions}
-                    value={row.officeId != null ? String(row.officeId) : null}
-                    onChange={(v) => updateRow(row.key, { officeId: v === NONE ? null : Number(v) })}
-                    {...OFFICE_PICKER}
-                  />
-                  <TextField
-                    label="Seit"
-                    id={rowId(row, "start")}
-                    type="date"
-                    error={errors[`${row.key}.startDate`]}
-                    value={row.startDate}
-                    onValueChange={(v) => updateRow(row.key, { startDate: v }, "startDate")}
-                  />
-                  <div>
-                    {/* Invisible caption: keeps the buttons level with the fields. */}
-                    <span aria-hidden className="eyebrow invisible mb-1.5 block">
-                      Aktion
-                    </span>
-                    <div className="flex items-center justify-end">
-                      {row.id != null && !row.end ? (
+        // Laid out by the panel's width, not the viewport's (the Verteiler column narrows it):
+        // stacked when narrow, Gliederung | Amt over Seit | buttons in between, one line when
+        // wide. One column template for all rows (subgrid), so the fields line up even when
+        // only some rows offer "Beenden".
+        <div className="mb-3 @container">
+          <ul className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2.5 divide-y divide-line @md:grid-cols-2 @4xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_9.5rem_auto]">
+            {rows.map((row) => {
+              const label = rowLabel(row);
+              return (
+                <li key={row.key} className="col-span-full grid grid-cols-subgrid py-3 first:pt-0 last:pb-0">
+                  <div role="group" aria-label={label} className="col-span-full grid grid-cols-subgrid gap-y-2">
+                    <ComboField
+                      className="col-span-2 @md:col-span-1"
+                      label="Gliederung"
+                      id={rowId(row, "group")}
+                      error={errors[`${row.key}.groupId`]}
+                      options={groupOptions}
+                      value={row.groupId != null ? String(row.groupId) : null}
+                      onChange={(v) => updateRow(row.key, { groupId: Number(v) }, ["groupId"])}
+                      {...GROUP_PICKER}
+                    />
+                    <ComboField
+                      className="col-span-2 @md:col-span-1"
+                      label="Amt"
+                      id={rowId(row, "office")}
+                      options={officeOptions}
+                      value={row.officeId != null ? String(row.officeId) : null}
+                      onChange={(v) => updateRow(row.key, { officeId: v === NONE ? null : Number(v) })}
+                      {...OFFICE_PICKER}
+                    />
+                    {/* A buffered ending can only clash with a later Seit (the dialog checked
+                        it against the Seit of then), so its error shows — and clears — here. */}
+                    <TextField
+                      className="max-w-38"
+                      label="Seit"
+                      id={rowId(row, "start")}
+                      type="date"
+                      error={errors[`${row.key}.startDate`] ?? errors[`${row.key}.endDate`]}
+                      value={row.startDate}
+                      onValueChange={(v) => updateRow(row.key, { startDate: v }, ["startDate", "endDate"])}
+                    />
+                    <div>
+                      {/* Invisible caption: keeps the buttons level with the fields. */}
+                      <span aria-hidden className="eyebrow invisible mb-1.5 block">
+                        Aktion
+                      </span>
+                      <div className="flex items-center justify-end">
+                        {row.id != null && !row.end ? (
+                          <Button
+                            id={rowId(row, "end")}
+                            type="button"
+                            variant="ghost"
+                            className="text-ink-soft"
+                            aria-label={`Beenden: ${label}`}
+                            title="Beenden – beim Speichern wird daraus ein früheres Amt"
+                            onClick={() => endRow(row)}
+                          >
+                            <CalendarOff aria-hidden className="@max-md:hidden" />
+                            Beenden
+                          </Button>
+                        ) : null}
                         <Button
-                          id={rowId(row, "end")}
                           type="button"
                           variant="ghost"
-                          className="text-ink-soft"
-                          title="Beenden – beim Speichern wird daraus ein früheres Amt"
-                          onClick={() => endRow(row)}
+                          className="text-ink-soft hover:text-crit"
+                          aria-label={`Entfernen: ${label}`}
+                          title="Entfernen – nur bei einer Fehleingabe"
+                          onClick={() => removeRow(row.key)}
                         >
-                          <CalendarOff aria-hidden className="max-sm:hidden" />
-                          Beenden
+                          <X aria-hidden className="@max-md:hidden" />
+                          Entfernen
                         </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="text-ink-soft hover:text-crit"
-                        title="Entfernen – nur bei einer Fehleingabe"
-                        onClick={() => removeRow(row.key)}
-                      >
-                        <X aria-hidden className="max-sm:hidden" />
-                        Entfernen
-                      </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-                {/* Always rendered (a live region must exist before it changes): holder
-                    warnings appear here after picking an Amt. */}
-                <div aria-live="polite" className="col-span-full mt-2 flex flex-col gap-1.5 empty:mt-0">
-                  {row.end ? (
-                    <EndingNote
-                      undoId={rowId(row, "undo")}
-                      onUndo={() => {
-                        updateRow(row.key, { end: null }, "endDate");
-                        focusSoon(rowId(row, "end"));
+                  {/* Always rendered (a live region must exist before it changes): holder
+                      warnings appear here after picking an Amt. */}
+                  <div aria-live="polite" className="col-span-full mt-2 flex flex-col gap-1.5 empty:mt-0">
+                    {row.end ? (
+                      <EndingNote
+                        undoId={rowId(row, "undo")}
+                        onUndo={() => {
+                          updateRow(row.key, { end: null }, ["endDate"]);
+                          focusSoon(rowId(row, "end"));
+                        }}
+                      >
+                        {capitalize(endingText(row.end))}
+                      </EndingNote>
+                    ) : null}
+                    <HolderNotes
+                      holders={otherHolders(row)}
+                      orders={values.endPrevious}
+                      onEnd={endHolder}
+                      onUndo={(id) => {
+                        set(
+                          "endPrevious",
+                          values.endPrevious.filter((o) => o.assignmentId !== id),
+                        );
+                        focusSoon(`h-${id}-end`);
                       }}
-                    >
-                      {capitalize(endingText(row.end))}
-                    </EndingNote>
-                  ) : null}
-                  {endError ? <p className="text-caption text-crit">{endError}</p> : null}
-                  <HolderNotes
-                    holders={otherHolders(row)}
-                    orders={values.endPrevious}
-                    onEnd={endHolder}
-                    onUndo={(id) => {
-                      set(
-                        "endPrevious",
-                        values.endPrevious.filter((o) => o.assignmentId !== id),
-                      );
-                      focusSoon(`h-${id}-end`);
-                    }}
-                  />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
       <AddRowButton id="a-add" onClick={addRow}>
         Gliederung/Amt hinzufügen
