@@ -132,7 +132,7 @@ export function resolveTenureEnd(input: {
   endDate: string | null;
   endUnknown: boolean;
   today: string;
-}): { ok: true; endDate: string; endUnknown: true } | { ok: true; endDate: string; endUnknown: false } | { ok: false; message: string } {
+}): { ok: true; endDate: string; endUnknown: boolean } | { ok: false; message: string } {
   if (input.endUnknown) {
     return { ok: true, endDate: input.today, endUnknown: true };
   }

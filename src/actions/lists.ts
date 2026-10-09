@@ -20,9 +20,9 @@ import { DESCRIPTION_MAX } from "@/lib/limits";
 import { optText } from "@/lib/person-schema";
 import { RULE_KIND_LABELS, RULE_KINDS, type RuleKind } from "@/lib/rule-kinds";
 
-export type SaveListResult = { ok: true; id: number } | { ok: false; message: string };
+type SaveListResult = { ok: true; id: number } | { ok: false; message: string };
 
-export type AddMembersResult =
+type AddMembersResult =
   | {
       ok: true;
       /** Living persons now on the list (including ones that already were). */
@@ -57,7 +57,7 @@ const listSchema = z.object({
   description: optText(DESCRIPTION_MAX),
 });
 
-export type ListInput = z.input<typeof listSchema>;
+type ListInput = z.input<typeof listSchema>;
 
 /** Create (`id` null) or rename/describe a list. Returns the id so the UI can select it. */
 export async function saveList(id: number | null, raw: ListInput): Promise<SaveListResult> {

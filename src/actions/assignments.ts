@@ -22,7 +22,7 @@ import { isValidDate, resolveTenureEnd, rowId } from "@/lib/person-schema";
 // These actions only manage rows that are ALREADY history: creating, editing and removing
 // past tenures as immediate, standalone writes, so a normal person save never touches them.
 
-export type HistoryResult =
+type HistoryResult =
   | {
       ok: true;
       /** The person's new `updatedAt`: the editor's concurrency token from now on. */
@@ -138,9 +138,9 @@ export async function updateHistoricalAssignment(
       // forward to today on every edit, weakening "was over by then at the latest".
       const keepBound = endUnknown && endDate == null && row.endUnknown && (startDate == null || startDate <= row.endDate);
       const resolved = keepBound
-        ? { endDate: row.endDate, endUnknown: true }
+        ? { ok: true as const, endDate: row.endDate, endUnknown: true }
         : resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
-      if ("message" in resolved) throw new UserFacingError(resolved.message);
+      if (!resolved.ok) throw new UserFacingError(resolved.message);
       const next = await bumpPerson(tx, row.personId, updatedAt, by);
       await tx
         .update(assignments)

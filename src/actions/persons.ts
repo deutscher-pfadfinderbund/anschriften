@@ -17,7 +17,7 @@ import {
 import { todayIso } from "@/lib/format";
 import { parsePersonInput, resolveTenureEnd, type FieldErrors, type PersonInput } from "@/lib/person-schema";
 
-export type SaveResult =
+type SaveResult =
   | { ok: true; id: number }
   /** `reload`: the data changed underneath the form — only a reload can fix it. */
   | { ok: false; message: string; errors?: FieldErrors; reload?: boolean };

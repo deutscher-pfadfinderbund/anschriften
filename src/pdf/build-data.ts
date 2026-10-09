@@ -25,7 +25,7 @@ import { SECTIONS, type Section } from "@/lib/sections";
 //  Types
 // ---------------------------------------------------------------------------------------
 
-export type Profile =
+type Profile =
   | "komplett"
   | "nurBundesaemter"
   | "nurBundesgilde"
@@ -83,7 +83,7 @@ export interface DataRank {
   id: number;
   name: string;
 }
-export interface DataAssignment {
+interface DataAssignment {
   id: number;
   personId: number;
   groupId: number;
@@ -123,7 +123,7 @@ export interface GroupNode {
   children: GroupNode[];
 }
 
-export interface RegisterEntry {
+interface RegisterEntry {
   label: string;
   lead: string; // bold lead token (Fahrtenname, / Vorname)
   rest: string; // remaining line incl. group/office breadcrumb

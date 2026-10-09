@@ -94,10 +94,10 @@ export async function effectiveMemberIds(listId: number): Promise<number[]> {
 
 // --- directory ("/") ------------------------------------------------------------------
 
-export type PhoneEntry = { label: string; number: string };
+type PhoneEntry = { label: string; number: string };
 
 /** An active assignment as the directory shows it (Ämter badges, Gliederung filter). */
-export type PersonAssignment = {
+type PersonAssignment = {
   id: number;
   groupId: number;
   groupName: string;

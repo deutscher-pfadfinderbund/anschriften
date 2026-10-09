@@ -24,7 +24,7 @@ const officeSchema = z.object({
   rank: orderNumber("Die Reihenfolge"),
 });
 
-export type OfficeInput = z.input<typeof officeSchema>;
+type OfficeInput = z.input<typeof officeSchema>;
 
 /** Create (`id` null) or update an Amt. */
 export async function saveOffice(id: number | null, raw: OfficeInput): Promise<ActionResult> {

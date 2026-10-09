@@ -23,7 +23,7 @@ const rankSchema = z.object({
   sortOrder: orderNumber("Die Reihenfolge"),
 });
 
-export type RankInput = z.input<typeof rankSchema>;
+type RankInput = z.input<typeof rankSchema>;
 
 /** Create (`id` null) or update a Stand. */
 export async function saveRank(id: number | null, raw: RankInput): Promise<ActionResult> {

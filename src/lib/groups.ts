@@ -10,7 +10,7 @@ export type GroupNode = {
   sortKey: number;
 };
 
-export type OrderedGroup<T extends GroupNode = GroupNode> = { group: T; depth: number };
+type OrderedGroup<T extends GroupNode = GroupNode> = { group: T; depth: number };
 
 /**
  * Flatten the Gliederungen into a stable, hierarchical, indented order:

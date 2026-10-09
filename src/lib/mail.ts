@@ -67,7 +67,7 @@ export function sanitizeMailError(err: unknown): string {
   return (parts.join(": ") || "Unbekannter Fehler").slice(0, 500);
 }
 
-export type SendListMailInput = {
+type SendListMailInput = {
   subject: string;
   body: string;
   /** Recipient addresses, already cleaned by `collectEmails` (src/lib/export.ts). */
@@ -78,7 +78,7 @@ export type SendListMailInput = {
   listId?: number | null;
 };
 
-export type SendListMailResult =
+type SendListMailResult =
   | {
       ok: true;
       chunks: number;

@@ -48,7 +48,7 @@ const composeSchema = z.object({
   personIds: z.array(rowId).nullish(),
 });
 
-export type SendMailInput = z.infer<typeof composeSchema>;
+type SendMailInput = z.infer<typeof composeSchema>;
 
 /**
  * Send a plaintext mailing to a whole distribution list or a table selection.

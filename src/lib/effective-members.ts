@@ -13,7 +13,7 @@
 import type { RuleKind } from "@/lib/rule-kinds";
 
 /** A manual membership row: person `personId` was added to list `listId` by hand. */
-export type ManualMembership = { listId: number; personId: number };
+type ManualMembership = { listId: number; personId: number };
 
 /** A rule: list `listId` automatically contains whoever matches Amt/Stand/Gliederung `targetId`. */
 export type MembershipRule = { listId: number; kind: RuleKind; targetId: number };

@@ -32,7 +32,7 @@ const groupSchema = z.object({
   sortKey: orderNumber("Die Reihenfolge"),
 });
 
-export type GroupInput = z.input<typeof groupSchema>;
+type GroupInput = z.input<typeof groupSchema>;
 
 /**
  * Create (`id` null) or update a Gliederung. The Bereich (section) is a property of the
