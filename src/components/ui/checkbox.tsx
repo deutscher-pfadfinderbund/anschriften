@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils"
 
 // Boundary in --control (≥ 3:1, like every form field); focus uses the global
 // :focus-visible outline. The ::after band widens the hit area for fingers.
+// Hover and invalid borders apply to the unchecked box only: their selectors
+// outrank data-checked's `:where()`, so unscoped they would ring the filled box.
 function Checkbox({
   className,
   ...props
@@ -16,7 +18,7 @@ function Checkbox({
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        "peer relative flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-control bg-field transition-colors after:absolute after:-inset-x-3 after:-inset-y-2 hover:border-ink-soft disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-crit data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground",
+        "peer relative flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-control bg-field transition-colors after:absolute after:-inset-x-3 after:-inset-y-2 hover:not-data-checked:border-ink-soft disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:not-data-checked:border-crit data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground",
         className
       )}
       {...props}
