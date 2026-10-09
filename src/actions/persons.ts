@@ -5,11 +5,12 @@ import { and, eq, isNull, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { assignments, distributionListMembers, persons } from "@/db/schema";
 import {
-  changedMeanwhile,
   dbFailure,
   deletedMeanwhile,
+  lockPerson,
   mutation,
   stamp,
+  StaleError,
   UserFacingError,
   type ActionResult,
 } from "@/lib/action-helpers";
@@ -20,9 +21,6 @@ export type SaveResult =
   | { ok: true; id: number }
   /** `reload`: the data changed underneath the form — only a reload can fix it. */
   | { ok: false; message: string; errors?: FieldErrors; reload?: boolean };
-
-/** Rolls the save back because the form is out of date (concurrent edit, row gone). */
-class StaleError extends UserFacingError {}
 
 const TENURE_CHANGED = "Ein Amt wurde inzwischen geändert. Bitte lade die Seite neu.";
 
@@ -51,43 +49,17 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
         errors: parsed.errors,
         message: Object.values(parsed.errors)[0] ?? "Bitte prüfe die markierten Felder.",
       };
-    const data = parsed.data;
-
+    const { id, updatedAt, assignments: tenures, endPrevious, distributionListIds, ...columns } = parsed.data;
+    const fields = { ...columns, ...stamp(by) };
     const today = todayIso();
-    const fields = {
-      salutation: data.salutation,
-      title: data.title,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      scoutName: data.scoutName,
-      birthDate: data.birthDate,
-      deathDate: data.deathDate,
-      rankId: data.rankId,
-      street: data.street,
-      addressExtra: data.addressExtra,
-      postalCode: data.postalCode,
-      city: data.city,
-      email: data.email,
-      phones: data.phones,
-      notes: data.notes,
-      doNotPrint: data.doNotPrint,
-      ...stamp(by),
-    };
 
     try {
-      const id = await db.transaction(async (tx) => {
+      const savedId = await db.transaction(async (tx) => {
         let personId: number;
-        if (data.id != null) {
-          personId = data.id;
-          const [current] = await tx
-            .select({ updatedAt: persons.updatedAt, updatedBy: persons.updatedBy })
-            .from(persons)
-            .where(eq(persons.id, personId))
-            .for("update");
-          if (!current) throw new StaleError(deletedMeanwhile("Diese Person"));
-          if (current.updatedAt.toISOString() !== data.updatedAt)
-            throw new StaleError(changedMeanwhile(current.updatedBy));
-          await tx.update(persons).set(fields).where(eq(persons.id, personId));
+        if (id != null) {
+          await lockPerson(tx, id, updatedAt);
+          await tx.update(persons).set(fields).where(eq(persons.id, id));
+          personId = id;
         } else {
           const [row] = await tx.insert(persons).values(fields).returning({ id: persons.id });
           personId = row.id;
@@ -98,7 +70,7 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
         // person's own rows, so cancelling the form writes nothing. Each update is guarded
         // (still active, foreign person); a vanished or already-ended target rolls the whole
         // save back with a reload hint.
-        for (const ep of data.endPrevious) {
+        for (const ep of endPrevious) {
           const [target] = await tx
             .select({ personId: assignments.personId, startDate: assignments.startDate, endDate: assignments.endDate })
             .from(assignments)
@@ -128,13 +100,13 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
         // Delete + recreate only the ACTIVE tenures. Ended tenures (end_date set) are the
         // office history and are managed separately (see actions/assignments.ts) — the
         // person form never carries them, so they must survive a normal save.
-        if (data.id != null)
+        if (id != null)
           await tx.delete(assignments).where(and(eq(assignments.personId, personId), isNull(assignments.endDate)));
         // Rows with a Bis-Datum or "Ende unbekannt" become finished tenures (history) right
         // away: past offices captured in the form, or an "Amt beenden" buffered until now.
-        if (data.assignments.length > 0)
+        if (tenures.length > 0)
           await tx.insert(assignments).values(
-            data.assignments.map((a) => ({
+            tenures.map((a) => ({
               personId,
               groupId: a.groupId,
               officeId: a.officeId,
@@ -146,13 +118,11 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
 
         // Manual list memberships: delete + recreate, same as the active tenures.
         await tx.delete(distributionListMembers).where(eq(distributionListMembers.personId, personId));
-        if (data.distributionListIds.length > 0)
-          await tx
-            .insert(distributionListMembers)
-            .values(data.distributionListIds.map((listId) => ({ listId, personId })));
+        if (distributionListIds.length > 0)
+          await tx.insert(distributionListMembers).values(distributionListIds.map((listId) => ({ listId, personId })));
         return personId;
       });
-      return { ok: true, id };
+      return { ok: true, id: savedId };
     } catch (err) {
       // Every failure rolled the whole transaction back, so nothing changed. Only an input
       // error can be fixed in the form; a stale form or a vanished reference needs a reload.

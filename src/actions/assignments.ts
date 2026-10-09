@@ -3,13 +3,13 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "@/db";
+import { db, type Tx } from "@/db";
 import { assignments, persons } from "@/db/schema";
 import {
-  changedMeanwhile,
   dbFailure,
   deletedMeanwhile,
   firstError,
+  lockPerson,
   mutation,
   stamp,
   UserFacingError,
@@ -30,21 +30,13 @@ export type HistoryResult =
     }
   | { ok: false; message: string };
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
 /**
  * Lock the person, refuse when it changed since the editor loaded it (the same token
  * `savePerson` checks) and bump its audit fields. Returns the new token: the editor keeps
  * it, so a history action never makes another editor's save look like the current state.
  */
 async function bumpPerson(tx: Tx, personId: number, expected: string, by: string): Promise<string> {
-  const [current] = await tx
-    .select({ updatedAt: persons.updatedAt, updatedBy: persons.updatedBy })
-    .from(persons)
-    .where(eq(persons.id, personId))
-    .for("update");
-  if (!current) throw new UserFacingError(deletedMeanwhile("Diese Person"));
-  if (current.updatedAt.toISOString() !== expected) throw new UserFacingError(changedMeanwhile(current.updatedBy));
+  await lockPerson(tx, personId, expected);
   const audit = stamp(by);
   await tx.update(persons).set(audit).where(eq(persons.id, personId));
   return audit.updatedAt.toISOString();

@@ -1,6 +1,9 @@
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import type { Tx } from "@/db";
+import { persons } from "@/db/schema";
 import { actorName, getSession } from "@/lib/auth-helpers";
 import { ORDER_MAX } from "@/lib/master-data";
 
@@ -112,9 +115,26 @@ export function deletedMeanwhile(what: string): string {
   return `${what} wurde inzwischen gelöscht. Bitte lade die Seite neu.`;
 }
 
-/** "Diese Person wurde inzwischen (von X) geändert" — the editor's concurrency token is stale. */
-export function changedMeanwhile(updatedBy: string | null): string {
-  return `Diese Person wurde inzwischen ${updatedBy ? `von ${updatedBy} ` : ""}geändert. Bitte lade die Seite neu.`;
+/** The form is out of date (concurrent edit, row gone): only a reload can fix it. */
+export class StaleError extends UserFacingError {}
+
+/**
+ * Lock a person (SELECT … FOR UPDATE) for the rest of the transaction and refuse when it
+ * was deleted or saved since the editor loaded it: `expected` is the `updatedAt` the
+ * editor holds, its concurrency token.
+ */
+export async function lockPerson(tx: Tx, personId: number, expected: string | null | undefined): Promise<void> {
+  const [current] = await tx
+    .select({ updatedAt: persons.updatedAt, updatedBy: persons.updatedBy })
+    .from(persons)
+    .where(eq(persons.id, personId))
+    .for("update");
+  if (!current) throw new StaleError(deletedMeanwhile("Diese Person"));
+  if (current.updatedAt.toISOString() !== expected)
+    throw new StaleError(
+      `Diese Person wurde inzwischen ${current.updatedBy ? `von ${current.updatedBy} ` : ""}geändert. ` +
+        "Bitte lade die Seite neu.",
+    );
 }
 
 /**
