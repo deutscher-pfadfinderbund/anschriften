@@ -84,14 +84,25 @@ describe("validatePersonDates", () => {
   });
 
   it("rejects a malformed birth or death date with a German message", () => {
-    expect(validatePersonDates("01.05.1950", null)).toBe("Ungültiges Geburtsdatum.");
-    expect(validatePersonDates(null, "2020-02-30")).toBe("Ungültiges Sterbedatum.");
+    expect(validatePersonDates("01.05.1950", null)).toEqual({ field: "birthDate", message: "Ungültiges Geburtsdatum." });
+    expect(validatePersonDates(null, "2020-02-30")).toEqual({ field: "deathDate", message: "Ungültiges Sterbedatum." });
   });
 
   it("rejects a death date before the birth date", () => {
-    expect(validatePersonDates("1950-05-01", "1940-05-01")).toBe(
-      "Das Sterbedatum darf nicht vor dem Geburtsdatum liegen.",
-    );
+    expect(validatePersonDates("1950-05-01", "1940-05-01")).toEqual({
+      field: "deathDate",
+      message: "Das Sterbedatum darf nicht vor dem Geburtsdatum liegen.",
+    });
+  });
+
+  it("rejects life dates in the future (today itself is fine)", () => {
+    const today = "2026-10-09";
+    expect(validatePersonDates("2026-10-10", null, today)?.field).toBe("birthDate");
+    expect(validatePersonDates(null, "2026-10-10", today)).toEqual({
+      field: "deathDate",
+      message: "Das Sterbedatum darf nicht in der Zukunft liegen.",
+    });
+    expect(validatePersonDates(today, today, today)).toBeNull();
   });
 });
 

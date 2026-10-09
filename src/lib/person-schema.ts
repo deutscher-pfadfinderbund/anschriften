@@ -89,18 +89,24 @@ export function validateTenure(
 }
 
 /**
- * Validate a person's own life dates (Geburts-/Sterbedatum). Both bounds are optional
- * (empty/null accepted); when both are set the death must not precede the birth. Pure so
- * savePerson can share it. Returns a German error message, or null when valid.
+ * Validate a person's own life dates (Geburts-/Sterbedatum). Both are optional (null
+ * accepted); neither may lie in the future, and the death must not precede the birth.
+ * Pure (given `today`, default: the Berlin date) so it can be unit-tested. Returns the
+ * offending field with a German message, or null when valid.
  */
 export function validatePersonDates(
   birthDate: string | null,
   deathDate: string | null,
-): string | null {
-  if (birthDate != null && !isValidDate(birthDate)) return "Ungültiges Geburtsdatum.";
-  if (deathDate != null && !isValidDate(deathDate)) return "Ungültiges Sterbedatum.";
+  today: string = todayIso(),
+): { field: "birthDate" | "deathDate"; message: string } | null {
+  if (birthDate != null && !isValidDate(birthDate)) return { field: "birthDate", message: "Ungültiges Geburtsdatum." };
+  if (birthDate != null && birthDate > today)
+    return { field: "birthDate", message: "Das Geburtsdatum darf nicht in der Zukunft liegen." };
+  if (deathDate != null && !isValidDate(deathDate)) return { field: "deathDate", message: "Ungültiges Sterbedatum." };
+  if (deathDate != null && deathDate > today)
+    return { field: "deathDate", message: "Das Sterbedatum darf nicht in der Zukunft liegen." };
   if (birthDate != null && deathDate != null && deathDate < birthDate)
-    return "Das Sterbedatum darf nicht vor dem Geburtsdatum liegen.";
+    return { field: "deathDate", message: "Das Sterbedatum darf nicht vor dem Geburtsdatum liegen." };
   return null;
 }
 
@@ -188,10 +194,7 @@ export const personInputSchema = z
       ctx.addIssue({ code: "custom", path: ["postalCode"], message: "Die PLZ muss aus 5 Ziffern bestehen." });
 
     const dateError = validatePersonDates(val.birthDate, val.deathDate);
-    if (dateError) {
-      const field = val.birthDate != null && !isValidDate(val.birthDate) ? "birthDate" : "deathDate";
-      ctx.addIssue({ code: "custom", path: [field], message: dateError });
-    }
+    if (dateError) ctx.addIssue({ code: "custom", path: [dateError.field], message: dateError.message });
 
     const seen = new Set<string>();
     val.assignments.forEach((a, i) => {
