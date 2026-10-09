@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 
 import {
   getPersonForEdit,
-  listDistributionListSummaries,
+  listDistributionListNames,
+  listActiveOfficeHolders,
   listGroups,
   listOffices,
   listRanks,
@@ -46,12 +47,13 @@ export default async function EditPersonPage({
   const personId = parseId(id);
   if (personId == null) notFound();
 
-  const [person, groups, offices, ranks, distributionLists] = await Promise.all([
+  const [person, groups, offices, ranks, distributionLists, activeHolders] = await Promise.all([
     loadPerson(personId),
     listGroups(),
     listOffices(),
     listRanks(),
-    listDistributionListSummaries(),
+    listDistributionListNames(),
+    listActiveOfficeHolders(),
   ]);
   if (!person) notFound();
 
@@ -63,6 +65,7 @@ export default async function EditPersonPage({
       offices={offices}
       ranks={ranks}
       distributionLists={distributionLists}
+      activeHolders={activeHolders}
     />
   );
 }

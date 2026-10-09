@@ -51,9 +51,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { DistributionListSummary, GroupRow, OfficeRow, PersonListRow } from "@/db/queries";
+import type { GroupRow, OfficeRow, PersonListRow } from "@/db/queries";
+import { downloadFile, toastDownloadError } from "@/lib/download";
 import { buildBcc } from "@/lib/export";
-import { SECTION_LABELS, birthYear, fold, formatName } from "@/lib/format";
+import { birthYear, fold, formatName, scoutAddition } from "@/lib/format";
+import { SECTION_LABELS, type Section } from "@/lib/sections";
 import { orderGroups } from "@/lib/groups";
 
 const ALL = "__all__";
@@ -62,31 +64,7 @@ function distinct(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-/** Parse a download filename out of a Content-Disposition header, if present. */
-function filenameFromDisposition(header: string | null): string | null {
-  if (!header) return null;
-  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header);
-  return match ? decodeURIComponent(match[1].replace(/"$/, "")) : null;
-}
-
-/** Trigger a browser download for an in-memory blob (keeps the user on the page). */
-function triggerBlobDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 type Indexed = PersonListRow & { _search: string };
-
-/** The Fahrtenname is an addition to a real name, never the label on its own. */
-function showScout(p: PersonListRow): boolean {
-  return !!p.scoutName && !!(p.lastName || p.firstName);
-}
 
 /** Second line under the name: „Stand · *Geburtsjahr“, whichever is present. */
 function nameSubline(p: PersonListRow): string {
@@ -135,7 +113,7 @@ export function PersonsTable({
   persons: PersonListRow[];
   groups: GroupRow[];
   offices: OfficeRow[];
-  distributionLists: DistributionListSummary[];
+  distributionLists: { id: number; name: string }[];
   /** True when the optional mail module is configured (see isMailEnabled). */
   mailEnabled?: boolean;
 }) {
@@ -174,7 +152,7 @@ export function PersonsTable({
       if (q && !p._search.includes(q)) return false;
       if (groupId != null && !p.assignments.some((a) => a.groupId === groupId)) return false;
       if (officeId != null && !p.assignments.some((a) => a.officeId === officeId)) return false;
-      // Effective membership (manual ∪ office rule), matching the Verteiler detail.
+      // Effective membership (manual ∪ rules), matching the Verteiler detail.
       if (listId != null && !p.effectiveListIds.includes(listId)) return false;
       return true;
     });
@@ -227,7 +205,7 @@ export function PersonsTable({
                 className="rounded-sm font-medium whitespace-nowrap text-ink outline-none transition-colors hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {formatName(p)}
-                {showScout(p) ? (
+                {scoutAddition(p) ? (
                   <span className="ml-1.5 font-normal text-ink-soft">„{p.scoutName}“</span>
                 ) : null}
               </Link>
@@ -354,7 +332,7 @@ export function PersonsTable({
     navigator.clipboard.writeText(text).then(
       () =>
         toast.success(
-          `${count} Adressen kopiert${skipped > 0 ? ` (${skipped} ohne E-Mail übersprungen)` : ""}.`,
+          `${count} Adressen kopiert${skipped > 0 ? ` (${skipped} ohne gültige E-Mail übersprungen)` : ""}.`,
         ),
       () => toast.error("Kopieren nicht möglich."),
     );
@@ -365,14 +343,9 @@ export function PersonsTable({
     const ids = selectedPersons.map((p) => p.id).join(",");
     setCsvPending(true);
     try {
-      const res = await fetch(`/api/export/csv?ids=${ids}`);
-      if (!res.ok) throw new Error(String(res.status));
-      const blob = await res.blob();
-      const filename =
-        filenameFromDisposition(res.headers.get("Content-Disposition")) ?? "anschriften.csv";
-      triggerBlobDownload(blob, filename);
-    } catch {
-      toast.error("CSV-Export fehlgeschlagen. Bitte erneut versuchen.");
+      await downloadFile(`/api/export/csv?ids=${ids}`, "anschriften.csv");
+    } catch (err) {
+      toastDownloadError(err, "CSV-Export fehlgeschlagen. Bitte erneut versuchen.");
     } finally {
       setCsvPending(false);
     }
@@ -386,10 +359,13 @@ export function PersonsTable({
       const res = await addMembers(listId, ids);
       if (!res.ok) return void toast.error(res.message);
       const listName = distributionLists.find((l) => l.id === listId)?.name ?? "Verteiler";
-      toast.success(`${ids.length} zu „${listName}“ hinzugefügt.`);
+      const skipped = res.skippedDeceased;
+      toast.success(
+        `${res.added} zu „${listName}“ hinzugefügt` +
+          (skipped > 0 ? ` (${skipped} ${skipped === 1 ? "verstorbene Person" : "verstorbene Personen"} übersprungen).` : "."),
+      );
       setAddToListOpen(false);
       setTargetListId(null);
-      router.refresh();
     });
   }
 
@@ -625,10 +601,7 @@ export function PersonsTable({
           </DialogHeader>
           <Combobox
             aria-label="Verteiler wählen"
-            options={distributionLists.map((l) => ({
-              value: String(l.id),
-              label: `${l.name} (${l.memberCount})`,
-            }))}
+            options={distributionLists.map((l) => ({ value: String(l.id), label: l.name }))}
             value={targetListId}
             onChange={setTargetListId}
             placeholder="Verteiler wählen"
@@ -739,7 +712,7 @@ function PersonCard({ row }: { row: Row<Indexed> }) {
             className="rounded-sm font-medium text-ink outline-none transition-colors before:absolute before:inset-0 hover:text-fir focus-visible:ring-2 focus-visible:ring-ring"
           >
             {formatName(p)}
-            {showScout(p) ? (
+            {scoutAddition(p) ? (
               <span className="ml-1.5 font-normal text-ink-soft">„{p.scoutName}“</span>
             ) : null}
           </Link>
@@ -788,7 +761,7 @@ function GroupOptions({
 }: {
   ordered: { group: GroupRow; depth: number }[];
 }) {
-  const bySection = new Map<string, { group: GroupRow; depth: number }[]>();
+  const bySection = new Map<Section, { group: GroupRow; depth: number }[]>();
   for (const item of ordered) {
     if (!bySection.has(item.group.section)) bySection.set(item.group.section, []);
     bySection.get(item.group.section)!.push(item);
@@ -797,7 +770,7 @@ function GroupOptions({
     <>
       {[...bySection.entries()].map(([section, items]) => (
         <SelectGroup key={section}>
-          <SelectLabel>{SECTION_LABELS[section] ?? section}</SelectLabel>
+          <SelectLabel>{SECTION_LABELS[section]}</SelectLabel>
           {items.map(({ group, depth }) => (
             <SelectItem key={group.id} value={String(group.id)}>
               {" ".repeat(depth * 2)}

@@ -1,11 +1,10 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createGroup, deleteGroup, updateGroup } from "@/actions/groups";
+import { deleteGroup, saveGroup } from "@/actions/groups";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { EmptyState } from "@/components/empty-state";
@@ -30,11 +29,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { GroupRow } from "@/db/queries";
-import { SECTION_LABELS, SECTION_ORDER } from "@/lib/format";
-import { orderGroups } from "@/lib/groups";
+import { SECTIONS, SECTION_LABELS, type Section } from "@/lib/sections";
+import { descendantIds, orderGroups } from "@/lib/groups";
 import { HOVER_REVEAL, cn } from "@/lib/utils";
-
-export type GroupUsage = Record<number, { assignments: number; children: number }>;
 
 const PARENT_NONE = "none";
 
@@ -51,32 +48,14 @@ function emptyForm(): FormState {
   return { id: null, name: "", section: "bund", kind: "", sortKey: "0", parentId: null };
 }
 
-/** Ids of a group's descendants (client-side, from the full list) — invalid parents. */
-function descendantIds(groups: GroupRow[], id: number): Set<number> {
-  const children = new Map<number, number[]>();
-  for (const g of groups) {
-    if (g.parentId == null) continue;
-    if (!children.has(g.parentId)) children.set(g.parentId, []);
-    children.get(g.parentId)!.push(g.id);
-  }
-  const out = new Set<number>();
-  const stack = [...(children.get(id) ?? [])];
-  while (stack.length) {
-    const cur = stack.pop()!;
-    out.add(cur);
-    for (const c of children.get(cur) ?? []) stack.push(c);
-  }
-  return out;
-}
-
 export function GliederungenManager({
   groups,
-  usage,
+  blockers,
 }: {
   groups: GroupRow[];
-  usage: GroupUsage;
+  /** Per group id: why it cannot be deleted (absent = deletable), same rule as the action. */
+  blockers: Record<number, string>;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const ordered = useMemo(() => orderGroups(groups), [groups]);
 
@@ -94,6 +73,18 @@ export function GliederungenManager({
         .map(({ group, depth }) => ({ value: String(group.id), label: group.name, depth })),
     ];
   }, [groups, form.id]);
+
+  // A child always takes its parent's Bereich (saveGroup enforces it), so the select shows
+  // the parent's and is locked. A top-level group's Bereich carries its whole subtree along.
+  const parent = form.parentId != null ? groups.find((g) => g.id === form.parentId) : undefined;
+  const shownSection = parent?.section ?? form.section;
+  const hasChildren = form.id != null && groups.some((g) => g.parentId === form.id);
+  const sectionHint =
+    parent != null
+      ? "Wird von der übergeordneten Gliederung übernommen."
+      : hasChildren
+        ? "Gilt auch für alle Untergliederungen."
+        : null;
 
   function openCreate() {
     setForm(emptyForm());
@@ -114,20 +105,19 @@ export function GliederungenManager({
   function submitForm() {
     const payload = {
       name: form.name,
-      section: form.section as (typeof SECTION_ORDER)[number],
+      section: shownSection as Section,
       kind: form.kind.trim() ? form.kind.trim() : null,
       sortKey: Number(form.sortKey) || 0,
       parentId: form.parentId,
     };
     startTransition(async () => {
-      const res = form.id != null ? await updateGroup(form.id, payload) : await createGroup(payload);
+      const res = await saveGroup(form.id, payload);
       if (!res.ok) {
         toast.error(res.message);
         return;
       }
       toast.success(form.id != null ? "Gliederung gespeichert." : "Gliederung angelegt.");
       setFormOpen(false);
-      router.refresh();
     });
   }
 
@@ -142,13 +132,8 @@ export function GliederungenManager({
       }
       toast.success("Gliederung gelöscht.");
       setDeleteTarget(null);
-      router.refresh();
     });
   }
-
-  const targetUsage = deleteTarget ? usage[deleteTarget.id] : undefined;
-  const targetBlocked =
-    !!targetUsage && (targetUsage.assignments > 0 || targetUsage.children > 0);
 
   return (
     <>
@@ -195,7 +180,7 @@ export function GliederungenManager({
                           </span>
                         </>
                       ) : null}
-                      <span>{SECTION_LABELS[group.section] ?? group.section}</span>
+                      <span>{SECTION_LABELS[group.section]}</span>
                     </span>
                     <span className={cn("flex shrink-0 items-center gap-0.5", HOVER_REVEAL)}>
                       <Button variant="ghost" size="icon-xs" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
@@ -234,18 +219,31 @@ export function GliederungenManager({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <FormLabel htmlFor="g-section">Bereich</FormLabel>
-                <Select value={form.section} onValueChange={(v) => setForm((f) => ({ ...f, section: v }))}>
-                  <SelectTrigger id="g-section" className="w-full">
+                <Select
+                  value={shownSection}
+                  onValueChange={(v) => setForm((f) => ({ ...f, section: v }))}
+                  disabled={parent != null}
+                >
+                  <SelectTrigger
+                    id="g-section"
+                    className="w-full"
+                    aria-describedby={sectionHint ? "g-section-hint" : undefined}
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SECTION_ORDER.map((s) => (
+                    {SECTIONS.map((s) => (
                       <SelectItem key={s} value={s}>
                         {SECTION_LABELS[s]}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {sectionHint ? (
+                  <p id="g-section-hint" className="mt-1 text-xs text-ink-faint">
+                    {sectionHint}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <FormLabel htmlFor="g-sort">Sortierschlüssel</FormLabel>
@@ -268,7 +266,14 @@ export function GliederungenManager({
               <Combobox
                 options={parentOptions}
                 value={form.parentId != null ? String(form.parentId) : PARENT_NONE}
-                onChange={(v) => setForm((f) => ({ ...f, parentId: v === PARENT_NONE ? null : Number(v) }))}
+                onChange={(v) =>
+                  setForm((f) => {
+                    const parentId = v === PARENT_NONE ? null : Number(v);
+                    // Keep the inherited Bereich when the parent is cleared again.
+                    const inherited = groups.find((g) => g.id === parentId)?.section;
+                    return { ...f, parentId, section: inherited ?? f.section };
+                  })
+                }
                 placeholder="— keine (oberste Ebene) —"
                 searchPlaceholder="Gliederung suchen …"
                 aria-label="Übergeordnete Gliederung"
@@ -292,11 +297,7 @@ export function GliederungenManager({
         onOpenChange={(o) => !o && setDeleteTarget(null)}
         title="Gliederung löschen?"
         description={`„${deleteTarget?.name}“ wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
-        blockedMessage={
-          targetBlocked
-            ? "Diese Gliederung kann nicht gelöscht werden, solange ihr Untergliederungen oder Personen zugeordnet sind."
-            : undefined
-        }
+        blockedMessage={deleteTarget ? blockers[deleteTarget.id] : undefined}
         pending={isPending}
         onConfirm={confirmDelete}
       />

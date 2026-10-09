@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Award, Briefcase, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createOffice, deleteOffice, updateOffice } from "@/actions/offices";
-import { createRank, deleteRank, updateRank } from "@/actions/ranks";
+import { deleteOffice, saveOffice } from "@/actions/offices";
+import { deleteRank, saveRank } from "@/actions/ranks";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { FormLabel } from "@/components/form-label";
@@ -23,7 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { OfficeListRule, OfficeRow, RankRow } from "@/db/queries";
+import type { ListRef, OfficeRow, RankRow } from "@/db/queries";
 import { RANK_UNRANKED } from "@/lib/rank";
 import { HOVER_REVEAL, cn } from "@/lib/utils";
 
@@ -44,7 +43,7 @@ type DeleteTarget = {
   type: "office" | "rank";
   id: number;
   name: string;
-  blocked: boolean;
+  /** Why the server would refuse the delete (same rule as the action), if it would. */
   blockedMessage?: string;
 };
 
@@ -83,18 +82,19 @@ function LabeledInput({
 
 export function StammdatenManager({
   offices,
-  officeUsage,
+  officeBlockers,
   officeListRules,
   ranks,
-  rankUsage,
+  rankBlockers,
 }: {
   offices: OfficeRow[];
-  officeUsage: Record<number, number>;
-  officeListRules: Record<number, OfficeListRule[]>;
+  /** Per office id: why it cannot be deleted (absent = deletable). */
+  officeBlockers: Record<number, string>;
+  officeListRules: Record<number, ListRef[]>;
   ranks: RankRow[];
-  rankUsage: Record<number, number>;
+  /** Per rank id: why it cannot be deleted (absent = deletable). */
+  rankBlockers: Record<number, string>;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   // Controlled so the header row can show the action for the visible tab.
@@ -107,11 +107,10 @@ export function StammdatenManager({
     if (!officeForm) return;
     const payload = { name: officeForm.name, rank: inputToRank(officeForm.rank) };
     startTransition(async () => {
-      const res = officeForm.id != null ? await updateOffice(officeForm.id, payload) : await createOffice(payload);
+      const res = await saveOffice(officeForm.id, payload);
       if (!res.ok) return void toast.error(res.message);
       toast.success(officeForm.id != null ? "Amt gespeichert." : "Amt angelegt.");
       setOfficeForm(null);
-      router.refresh();
     });
   }
 
@@ -119,11 +118,10 @@ export function StammdatenManager({
     if (!rankForm) return;
     const payload = { name: rankForm.name, sortOrder: Number(rankForm.sortOrder) || 0 };
     startTransition(async () => {
-      const res = rankForm.id != null ? await updateRank(rankForm.id, payload) : await createRank(payload);
+      const res = await saveRank(rankForm.id, payload);
       if (!res.ok) return void toast.error(res.message);
       toast.success(rankForm.id != null ? "Stand gespeichert." : "Stand angelegt.");
       setRankForm(null);
-      router.refresh();
     });
   }
 
@@ -141,7 +139,6 @@ export function StammdatenManager({
       }
       toast.success(deleteTarget.type === "office" ? "Amt gelöscht." : "Stand gelöscht.");
       setDeleteTarget(null);
-      router.refresh();
     });
   }
 
@@ -231,26 +228,14 @@ export function StammdatenManager({
                           size="icon-xs"
                           aria-label="Löschen"
                           className="text-ink-faint hover:text-crit"
-                          onClick={() => {
-                            const usedByPersons = (officeUsage[o.id] ?? 0) > 0;
-                            const rules = officeListRules[o.id] ?? [];
-                            const blocked = usedByPersons || rules.length > 0;
+                          onClick={() =>
                             setDeleteTarget({
                               type: "office",
                               id: o.id,
                               name: o.name,
-                              blocked,
-                              // A rule-only usage would otherwise show an enabled button
-                              // that the server then refuses — explain it up front.
-                              blockedMessage: !blocked
-                                ? undefined
-                                : usedByPersons
-                                  ? "Dieses Amt ist noch Personen zugeordnet und kann nicht gelöscht werden."
-                                  : `Dieses Amt wird noch als Verteiler-Regel verwendet (${rules
-                                      .map((r) => r.listName)
-                                      .join(", ")}) und kann nicht gelöscht werden. Bitte zuerst die Regel im Verteiler entfernen.`,
-                            });
-                          }}
+                              blockedMessage: officeBlockers[o.id],
+                            })
+                          }
                         >
                           <Trash2 className="size-3.5" />
                         </Button>
@@ -307,7 +292,7 @@ export function StammdatenManager({
                               type: "rank",
                               id: r.id,
                               name: r.name,
-                              blocked: (rankUsage[r.id] ?? 0) > 0,
+                              blockedMessage: rankBlockers[r.id],
                             })
                           }
                         >
@@ -389,12 +374,7 @@ export function StammdatenManager({
         onOpenChange={(o) => !o && setDeleteTarget(null)}
         title={deleteTarget?.type === "office" ? "Amt löschen?" : "Stand löschen?"}
         description={`„${deleteTarget?.name}“ wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
-        blockedMessage={
-          deleteTarget?.blocked
-            ? deleteTarget.blockedMessage ??
-              "Dieser Eintrag ist noch Personen zugeordnet und kann nicht gelöscht werden."
-            : undefined
-        }
+        blockedMessage={deleteTarget?.blockedMessage}
         pending={isPending}
         onConfirm={confirmDelete}
       />

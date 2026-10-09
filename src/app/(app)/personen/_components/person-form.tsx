@@ -28,7 +28,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { GroupRow, HistoricalAssignment, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
+import type {
+  ActiveOfficeHolder,
+  GroupRow,
+  HistoricalAssignment,
+  OfficeRow,
+  PersonEditData,
+  RankRow,
+} from "@/db/queries";
 import { findSimilarPersons, type PersonCandidate } from "@/lib/duplicate-persons";
 import {
   SALUTATIONS,
@@ -36,10 +43,13 @@ import {
   formatDate,
   formatDateTime,
   formatName,
+  formatNameWithScout,
   phoneLabelOptions,
+  todayIso,
 } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 import type { FieldErrors, PersonInput } from "@/lib/person-schema";
+import { RULE_KIND_LABELS } from "@/lib/rule-kinds";
 import { TOUCH_HIT, cn } from "@/lib/utils";
 
 import { EndTenureDialog, type EndTarget } from "./end-tenure-dialog";
@@ -48,7 +58,6 @@ import {
   NONE,
   OFFICE_NONE,
   Panel,
-  todayIso,
   type AssignmentRow,
   type PhoneRow,
 } from "./form-primitives";
@@ -71,6 +80,7 @@ export function PersonForm({
   offices,
   ranks,
   distributionLists,
+  activeHolders,
   existingPersons = [],
 }: {
   mode: "create" | "edit";
@@ -79,6 +89,8 @@ export function PersonForm({
   offices: OfficeRow[];
   ranks: RankRow[];
   distributionLists: { id: number; name: string }[];
+  /** Every active office tenure (preloaded) — drives the "Amtsinhaber-Warnung". */
+  activeHolders: ActiveOfficeHolder[];
   /** Existing persons' names — only used for the non-blocking duplicate hint in create mode. */
   existingPersons?: PersonCandidate[];
 }) {
@@ -142,7 +154,7 @@ export function PersonForm({
   const ruleReasonsByList = useMemo(() => {
     const map = new Map<number, string>();
     for (const r of person?.ruleMemberships ?? []) {
-      map.set(r.listId, r.reasons.join(", "));
+      map.set(r.listId, r.via.map((v) => `${RULE_KIND_LABELS[v.kind]}: ${v.name}`).join(", "));
     }
     return map;
   }, [person?.ruleMemberships]);
@@ -199,9 +211,9 @@ export function PersonForm({
     router.push("/");
   }
 
-  // Office history (issue #22). Ended tenures are read straight from the server props
-  // and refreshed via router.refresh() after each history mutation, so unsaved edits to
-  // the active rows above survive. `startHistory` runs the immediate history actions.
+  // Office history (issue #22). Ended tenures are read straight from the server props,
+  // which every history action refreshes (revalidateApp), so unsaved edits to the active
+  // rows above survive. `startHistory` runs the immediate history actions.
   const historical = person?.historicalAssignments ?? [];
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isHistoryPending, startHistory] = useTransition();
@@ -209,7 +221,7 @@ export function PersonForm({
   const [histForm, setHistForm] = useState<HistForm | null>(null);
 
   // --- Amtsinhaber-Warnung (issue #26) -------------------------------------------
-  const otherHolders = useActiveHolders(assignments, person?.id);
+  const otherHolders = useActiveHolders(activeHolders, person?.id);
   // Buffered "end this foreign tenure on save" orders, keyed by the target assignmentId.
   // Nothing is written until savePerson runs them in its transaction.
   const [endPrevious, setEndPrevious] = useState<Map<number, EndPreviousOrder>>(new Map());
@@ -262,7 +274,7 @@ export function PersonForm({
 
   const heading =
     mode === "edit" && person
-      ? formatName(person) + (person.scoutName && (person.lastName || person.firstName) ? ` „${person.scoutName}“` : "")
+      ? formatNameWithScout(person)
       : "Neue Person";
   const subtitle =
     mode === "edit"
@@ -294,39 +306,40 @@ export function PersonForm({
         }
       }
     }
+    // Raw form values: the server schema trims, turns blanks into null, drops blank
+    // phone numbers and empty rows, and rejects an Amt without a Gliederung.
     const payload: PersonInput = {
       id: person?.id,
+      // Concurrency token: the props refresh after every history action, so this is
+      // the record's current version unless someone else saved it meanwhile.
+      updatedAt: person?.updatedAt,
       salutation: salutation === NONE ? null : salutation,
-      title: title || null,
-      firstName: firstName || null,
-      lastName: lastName || null,
-      scoutName: scoutName || null,
-      birthDate: birthDate || null,
-      deathDate: deathDate || null,
+      title,
+      firstName,
+      lastName,
+      scoutName,
+      birthDate,
+      deathDate,
       rankId: rankId === NONE ? null : Number(rankId),
-      street: street || null,
-      addressExtra: addressExtra || null,
-      postalCode: postalCode || null,
-      city: city || null,
-      email: email || null,
-      notes: notes || null,
-      phones: phones
-        .filter((p) => p.number.trim().length > 0)
-        .map((p) => ({ label: p.label, number: p.number })),
+      street,
+      addressExtra,
+      postalCode,
+      city,
+      email,
+      notes,
+      phones: phones.map((p) => ({ label: p.label, number: p.number })),
       doNotPrint,
-      assignments: assignments
-        .filter((a) => a.groupId != null)
-        .map((a) => ({
-          groupId: a.groupId as number,
-          officeId: a.officeId,
-          startDate: a.startDate || null,
-          endDate: a.endDate || null,
-        })),
+      assignments: assignments.map((a) => ({
+        groupId: a.groupId,
+        officeId: a.officeId,
+        startDate: a.startDate,
+        endDate: a.endDate,
+      })),
       // Buffered holder-warning follow-ups: end these foreign tenures in the same save.
-      // "Ende unbekannt" carries no date — the server sets end_date = today.
+      // With "Ende unbekannt" the server ignores the date and records today.
       endPrevious: liveOrders.map((o) => ({
         assignmentId: o.assignmentId,
-        endDate: o.endUnknown ? null : o.endDate || null,
+        endDate: o.endDate,
         endUnknown: o.endUnknown,
       })),
       distributionListIds: [...listIds],
@@ -335,28 +348,27 @@ export function PersonForm({
     startTransition(async () => {
       const res = await savePerson(payload);
       if (!res.ok) {
-        setErrors(res.errors);
-        toast.error(res.message ?? "Bitte die markierten Felder prüfen.");
+        setErrors(res.errors ?? {});
+        toast.error(res.message);
         return;
       }
       setErrors({});
       toast.success(mode === "create" ? "Anschrift angelegt." : "Änderungen gespeichert.");
       router.push("/");
-      router.refresh();
     });
   }
 
   function handleDelete() {
     if (!person) return;
     startDelete(async () => {
-      await deletePerson(person.id);
+      const res = await deletePerson(person.id);
+      if (!res.ok) return void toast.error(res.message);
       toast.success("Anschrift gelöscht.");
       router.push("/");
-      router.refresh();
     });
   }
 
-  // --- office history: immediate server actions + router.refresh() ---------------
+  // --- office history: immediate server actions (they refresh the props) ----------
 
   /** Confirm the "Amt beenden…" dialog: end the active tenure and drop it from the buffer. */
   function confirmEnd() {
@@ -373,7 +385,6 @@ export function PersonForm({
       setAssignments((rows) => rows.filter((r) => r.key !== endTarget.key));
       setEndTarget(null);
       toast.success("Amt beendet und in die Historie verschoben.");
-      router.refresh();
     });
   }
 
@@ -398,7 +409,6 @@ export function PersonForm({
       if (!res.ok) return void toast.error(res.message);
       setHistForm(null);
       toast.success(histForm.id != null ? "Früheres Amt gespeichert." : "Früheres Amt hinzugefügt.");
-      router.refresh();
     });
   }
 
@@ -408,7 +418,6 @@ export function PersonForm({
       const res = await deleteAssignment({ assignmentId: id });
       if (!res.ok) return void toast.error(res.message);
       toast.success("Eintrag gelöscht.");
-      router.refresh();
     });
   }
 
@@ -525,8 +534,7 @@ export function PersonForm({
                           rel="noopener"
                           className="text-fir underline-offset-2 hover:underline"
                         >
-                          {formatName(p)}
-                          {p.scoutName && (p.lastName || p.firstName) ? ` „${p.scoutName}“` : ""}
+                          {formatNameWithScout(p)}
                         </Link>
                       </li>
                     ))}

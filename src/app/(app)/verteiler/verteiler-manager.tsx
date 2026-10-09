@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import {
   Award,
   Briefcase,
@@ -23,17 +22,12 @@ import {
 import { toast } from "sonner";
 
 import {
-  addGroupRule,
+  addListRule,
   addMembers,
-  addOfficeRule,
-  addRankRule,
-  createList,
   deleteList,
-  removeGroupRule,
+  removeListRule,
   removeMember,
-  removeOfficeRule,
-  removeRankRule,
-  updateList,
+  saveList,
 } from "@/actions/lists";
 import { Combobox } from "@/components/combobox";
 import { ComposeMailDialog } from "@/components/compose-mail-dialog";
@@ -64,28 +58,65 @@ import type {
   PersonOption,
   RankRow,
 } from "@/db/queries";
-import { buildBcc, type BccSeparator } from "@/lib/export";
-import { formatDateTime, formatName } from "@/lib/format";
+import { downloadFile, toastDownloadError } from "@/lib/download";
+import { buildBcc, isEmail, type BccSeparator } from "@/lib/export";
+import { formatDateTime, formatName, formatNameWithScout, scoutAddition } from "@/lib/format";
+import { RULE_KIND_LABELS, RULE_KINDS, type RuleKind } from "@/lib/rule-kinds";
 import { HOVER_REVEAL, TOUCH_HIT_Y, cn } from "@/lib/utils";
 
 type ListFormState = { id: number | null; name: string; description: string };
 
-/** "Nachname, Vorname" plus the scout name when both are present. */
-function memberLabel(m: {
-  firstName: string | null;
-  lastName: string | null;
-  scoutName: string | null;
-}): string {
-  const base = formatName(m);
-  const showScout = !!m.scoutName && !!(m.lastName || m.firstName);
-  return showScout ? `${base} „${m.scoutName}“` : base;
-}
-
+/** Same rule as the BCC copy and the mail send (collectEmails), so the lists agree. */
 function hasEmail(m: ListMemberRow): boolean {
-  return !!m.email && m.email.trim().length > 0;
+  return isEmail(m.email);
 }
 
 type RuleRow = { id: number; name: string };
+
+/** Texts per rule kind for the "Automatisch enthalten (nach …)" cards. */
+const RULE_UI: Record<
+  RuleKind,
+  {
+    icon: LucideIcon;
+    title: string;
+    description: string;
+    emptyRules: string;
+    addPlaceholder: string;
+    searchPlaceholder: string;
+    comboEmptyText: string;
+  }
+> = {
+  office: {
+    icon: Briefcase,
+    title: "Automatisch enthalten (nach Amt)",
+    description:
+      "Wer eines dieser Ämter innehat, ist automatisch Mitglied — bei einem Amtswechsel wandert die Mitgliedschaft mit.",
+    emptyRules: "Noch keine Amts-Regel.",
+    addPlaceholder: "+ Amt hinzufügen",
+    searchPlaceholder: "Amt suchen …",
+    comboEmptyText: "Kein Amt gefunden.",
+  },
+  rank: {
+    icon: Award,
+    title: "Automatisch enthalten (nach Stand)",
+    description:
+      "Wer einen dieser Stände trägt, ist automatisch Mitglied — z. B. alle Ordensritter und St.-Georgs-Ritter.",
+    emptyRules: "Noch keine Stand-Regel.",
+    addPlaceholder: "+ Stand hinzufügen",
+    searchPlaceholder: "Stand suchen …",
+    comboEmptyText: "Kein Stand gefunden.",
+  },
+  group: {
+    icon: Layers,
+    title: "Automatisch enthalten (nach Gliederung)",
+    description:
+      "Wer aktiv einer dieser Gliederungen zugeordnet ist, ist automatisch Mitglied — z. B. die ganze Bundesführung.",
+    emptyRules: "Noch keine Gliederungs-Regel.",
+    addPlaceholder: "+ Gliederung hinzufügen",
+    searchPlaceholder: "Gliederung suchen …",
+    comboEmptyText: "Keine Gliederung gefunden.",
+  },
+};
 
 /**
  * One "Automatisch enthalten (nach …)" card. Identical chrome for Amt, Stand and
@@ -191,7 +222,6 @@ export function VerteilerManager({
   /** List-scoped send history, newest first (empty when the module is off). */
   mailLog?: MailLogEntry[];
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [selectedListId, setSelectedListId] = useState<number | null>(
@@ -204,10 +234,11 @@ export function VerteilerManager({
   const [addOpen, setAddOpen] = useState(false);
   const [addSelection, setAddSelection] = useState<Set<number>>(new Set());
   const [composeOpen, setComposeOpen] = useState(false);
+  const [csvPending, setCsvPending] = useState(false);
   // Removing a rule can change many people's membership at once → confirm first.
-  const [ruleRemoval, setRuleRemoval] = useState<
-    { kind: "office" | "rank" | "group"; id: number; name: string } | null
-  >(null);
+  const [ruleRemoval, setRuleRemoval] = useState<{ kind: RuleKind; id: number; name: string } | null>(
+    null,
+  );
 
   // Reconcile the selection with the (possibly refreshed) server data: keep the
   // chosen list if it still exists, otherwise fall back to the first one.
@@ -233,14 +264,27 @@ export function VerteilerManager({
   const addOptions = useMemo(() => {
     if (!activeList) return [];
     const memberIds = new Set(activeList.members.map((m) => m.personId));
+    // Deceased persons never count as members, so they are not offered.
     return personOptions
-      .filter((p) => !memberIds.has(p.id))
+      .filter((p) => !memberIds.has(p.id) && p.deathDate == null)
       .map((p) => ({
         value: p.id,
-        label: memberLabel(p),
+        label: formatNameWithScout(p),
         hint: p.email && p.email.trim() ? p.email : "ohne E-Mail",
       }));
   }, [activeList, personOptions]);
+
+  async function downloadListCsv(listId: number) {
+    if (csvPending) return;
+    setCsvPending(true);
+    try {
+      await downloadFile(`/api/export/csv?listId=${listId}`, "anschriften.csv");
+    } catch (err) {
+      toastDownloadError(err, "CSV-Export fehlgeschlagen. Bitte erneut versuchen.");
+    } finally {
+      setCsvPending(false);
+    }
+  }
 
   function copyBcc() {
     if (bcc.text.length === 0) {
@@ -251,7 +295,7 @@ export function VerteilerManager({
       () =>
         toast.success(
           `${bcc.count} Adressen kopiert${
-            bcc.skipped > 0 ? ` (${bcc.skipped} ohne E-Mail übersprungen)` : ""
+            bcc.skipped > 0 ? ` (${bcc.skipped} ohne gültige E-Mail übersprungen)` : ""
           }.`,
         ),
       () => toast.error("Kopieren nicht möglich."),
@@ -263,18 +307,11 @@ export function VerteilerManager({
     const { id } = listForm;
     const payload = { name: listForm.name, description: listForm.description || null };
     startTransition(async () => {
-      if (id != null) {
-        const res = await updateList(id, payload);
-        if (!res.ok) return void toast.error(res.message);
-        toast.success("Verteiler gespeichert.");
-      } else {
-        const res = await createList(payload);
-        if (!res.ok) return void toast.error(res.message);
-        setSelectedListId(res.id);
-        toast.success("Verteiler angelegt.");
-      }
+      const res = await saveList(id, payload);
+      if (!res.ok) return void toast.error(res.message);
+      setSelectedListId(res.id);
+      toast.success(id != null ? "Verteiler gespeichert." : "Verteiler angelegt.");
       setListForm(null);
-      router.refresh();
     });
   }
 
@@ -286,7 +323,6 @@ export function VerteilerManager({
       toast.success("Verteiler gelöscht.");
       setDeleteOpen(false);
       setSelectedListId(null);
-      router.refresh();
     });
   }
 
@@ -296,10 +332,9 @@ export function VerteilerManager({
     startTransition(async () => {
       const res = await addMembers(activeList.id, ids);
       if (!res.ok) return void toast.error(res.message);
-      toast.success(`${ids.length} ${ids.length === 1 ? "Mitglied" : "Mitglieder"} hinzugefügt.`);
+      toast.success(`${res.added} ${res.added === 1 ? "Mitglied" : "Mitglieder"} hinzugefügt.`);
       setAddOpen(false);
       setAddSelection(new Set());
-      router.refresh();
     });
   }
 
@@ -309,81 +344,45 @@ export function VerteilerManager({
       const res = await removeMember(activeList.id, personId);
       if (!res.ok) return void toast.error(res.message);
       toast.success("Mitglied aus dem Verteiler entfernt.");
-      router.refresh();
     });
   }
 
-  /** Run the confirmed rule removal (office/rank/group) and toast the result. */
+  /** Run the confirmed rule removal and toast the result. */
   function confirmRuleRemoval() {
     if (!activeList || !ruleRemoval) return;
     const { kind, id, name } = ruleRemoval;
     startTransition(async () => {
-      const res =
-        kind === "office"
-          ? await removeOfficeRule(activeList.id, id)
-          : kind === "rank"
-            ? await removeRankRule(activeList.id, id)
-            : await removeGroupRule(activeList.id, id);
+      const res = await removeListRule(activeList.id, kind, id);
       if (!res.ok) return void toast.error(res.message);
       toast.success(`Regel „${name}“ entfernt.`);
       setRuleRemoval(null);
-      router.refresh();
     });
   }
 
-  // Offices not yet a rule on the active list — the "+ Amt hinzufügen" combobox.
-  const ruleOfficeOptions = useMemo(() => {
-    if (!activeList) return [];
-    const existing = new Set(activeList.officeRules.map((r) => r.officeId));
-    return offices
-      .filter((o) => !existing.has(o.id))
-      .map((o) => ({ value: String(o.id), label: o.name }));
-  }, [activeList, offices]);
+  // Per kind: the targets not yet a rule on the active list — the "+ … hinzufügen" comboboxes.
+  const ruleOptions = useMemo(() => {
+    const targets: Record<RuleKind, { id: number; name: string }[]> = {
+      office: offices,
+      rank: ranks,
+      group: groups,
+    };
+    const options = {} as Record<RuleKind, { value: string; label: string }[]>;
+    for (const kind of RULE_KINDS) {
+      const existing = new Set((activeList?.rules[kind] ?? []).map((r) => r.id));
+      options[kind] = targets[kind]
+        .filter((t) => !existing.has(t.id))
+        .map((t) => ({ value: String(t.id), label: t.name }));
+    }
+    return options;
+  }, [activeList, offices, ranks, groups]);
 
-  function handleAddRule(officeId: number) {
-    if (!activeList || !Number.isInteger(officeId)) return;
+  function handleAddRule(kind: RuleKind, targetId: number) {
+    if (!activeList || !Number.isInteger(targetId)) return;
+    const name = ruleOptions[kind].find((o) => o.value === String(targetId))?.label ?? RULE_KIND_LABELS[kind];
     startTransition(async () => {
-      const res = await addOfficeRule(activeList.id, officeId);
+      const res = await addListRule(activeList.id, kind, targetId);
       if (!res.ok) return void toast.error(res.message);
-      const name = offices.find((o) => o.id === officeId)?.name ?? "Amt";
       toast.success(`Regel „${name}“ hinzugefügt.`);
-      router.refresh();
-    });
-  }
-
-  // Stände not yet a rule on the active list — the "+ Stand hinzufügen" combobox.
-  const ruleRankOptions = useMemo(() => {
-    if (!activeList) return [];
-    const existing = new Set(activeList.rankRules.map((r) => r.rankId));
-    return ranks.filter((r) => !existing.has(r.id)).map((r) => ({ value: String(r.id), label: r.name }));
-  }, [activeList, ranks]);
-
-  function handleAddRankRule(rankId: number) {
-    if (!activeList || !Number.isInteger(rankId)) return;
-    startTransition(async () => {
-      const res = await addRankRule(activeList.id, rankId);
-      if (!res.ok) return void toast.error(res.message);
-      const name = ranks.find((r) => r.id === rankId)?.name ?? "Stand";
-      toast.success(`Regel „${name}“ hinzugefügt.`);
-      router.refresh();
-    });
-  }
-
-  // Gliederungen not yet a rule on the active list — the "+ Gliederung hinzufügen" combobox.
-  const ruleGroupOptions = useMemo(() => {
-    if (!activeList) return [];
-    const existing = new Set(activeList.groupRules.map((r) => r.groupId));
-    return groups.filter((g) => !existing.has(g.id)).map((g) => ({ value: String(g.id), label: g.name }));
-  }, [activeList, groups]);
-
-  function handleAddGroupRule(groupId: number) {
-    if (!activeList || !Number.isInteger(groupId)) return;
-    startTransition(async () => {
-      const res = await addGroupRule(activeList.id, groupId);
-      if (!res.ok) return void toast.error(res.message);
-      const name = groups.find((g) => g.id === groupId)?.name ?? "Gliederung";
-      toast.success(`Regel „${name}“ hinzugefügt.`);
-      router.refresh();
     });
   }
 
@@ -473,11 +472,13 @@ export function VerteilerManager({
                       <Copy className="size-4" />
                       Alle E-Mails kopieren
                     </Button>
-                    <Button variant="outline" asChild>
-                      <a href={`/api/export/csv?listId=${activeList.id}`}>
-                        <Download className="size-4" />
-                        CSV herunterladen
-                      </a>
+                    <Button
+                      variant="outline"
+                      onClick={() => downloadListCsv(activeList.id)}
+                      disabled={csvPending}
+                    >
+                      <Download className="size-4" />
+                      CSV herunterladen
                     </Button>
                     <Button
                       variant="outline"
@@ -508,9 +509,9 @@ export function VerteilerManager({
                     <p className="mb-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-[12.5px] text-ink-soft">
                       <span className="font-medium text-ink">
                         {withoutEmail.length}{" "}
-                        {withoutEmail.length === 1 ? "Mitglied" : "Mitglieder"} ohne E-Mail-Adresse:
+                        {withoutEmail.length === 1 ? "Mitglied" : "Mitglieder"} ohne gültige E-Mail-Adresse:
                       </span>{" "}
-                      {withoutEmail.map(memberLabel).join(", ")} — nur postalisch erreichbar.
+                      {withoutEmail.map(formatNameWithScout).join(", ")} — nur postalisch erreichbar.
                     </p>
                   ) : null}
 
@@ -593,7 +594,11 @@ export function VerteilerManager({
                           </div>
                         </div>
                         {e.status === "sent" ? (
-                          <span className="shrink-0 rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft">
+                          <span
+                            className="shrink-0 rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
+                            // A sent mailing can still note addresses the mail server refused.
+                            title={e.error ?? undefined}
+                          >
                             versendet
                           </span>
                         ) : (
@@ -611,53 +616,18 @@ export function VerteilerManager({
               ) : null}
 
               {/* Automatic membership rules — same shape for Amt, Stand and Gliederung. */}
-              <RuleSection
-                icon={Briefcase}
-                title="Automatisch enthalten (nach Amt)"
-                description="Wer eines dieser Ämter innehat, ist automatisch Mitglied — bei einem Amtswechsel wandert die Mitgliedschaft mit."
-                rows={activeList.officeRules.map((r) => ({ id: r.officeId, name: r.officeName }))}
-                options={ruleOfficeOptions}
-                onAdd={handleAddRule}
-                onRemove={(row) => setRuleRemoval({ kind: "office", id: row.id, name: row.name })}
-                emptyRules="Noch keine Amts-Regel."
-                addAriaLabel="Amt als Regel hinzufügen"
-                addPlaceholder="+ Amt hinzufügen"
-                searchPlaceholder="Amt suchen …"
-                comboEmptyText="Kein Amt gefunden."
-                disabled={isPending}
-              />
-
-              <RuleSection
-                icon={Award}
-                title="Automatisch enthalten (nach Stand)"
-                description="Wer einen dieser Stände trägt, ist automatisch Mitglied — z. B. alle Ordensritter und St.-Georgs-Ritter."
-                rows={activeList.rankRules.map((r) => ({ id: r.rankId, name: r.rankName }))}
-                options={ruleRankOptions}
-                onAdd={handleAddRankRule}
-                onRemove={(row) => setRuleRemoval({ kind: "rank", id: row.id, name: row.name })}
-                emptyRules="Noch keine Stand-Regel."
-                addAriaLabel="Stand als Regel hinzufügen"
-                addPlaceholder="+ Stand hinzufügen"
-                searchPlaceholder="Stand suchen …"
-                comboEmptyText="Kein Stand gefunden."
-                disabled={isPending}
-              />
-
-              <RuleSection
-                icon={Layers}
-                title="Automatisch enthalten (nach Gliederung)"
-                description="Wer aktiv einer dieser Gliederungen zugeordnet ist, ist automatisch Mitglied — z. B. die ganze Bundesführung."
-                rows={activeList.groupRules.map((r) => ({ id: r.groupId, name: r.groupName }))}
-                options={ruleGroupOptions}
-                onAdd={handleAddGroupRule}
-                onRemove={(row) => setRuleRemoval({ kind: "group", id: row.id, name: row.name })}
-                emptyRules="Noch keine Gliederungs-Regel."
-                addAriaLabel="Gliederung als Regel hinzufügen"
-                addPlaceholder="+ Gliederung hinzufügen"
-                searchPlaceholder="Gliederung suchen …"
-                comboEmptyText="Keine Gliederung gefunden."
-                disabled={isPending}
-              />
+              {RULE_KINDS.map((kind) => (
+                <RuleSection
+                  key={kind}
+                  {...RULE_UI[kind]}
+                  rows={activeList.rules[kind]}
+                  options={ruleOptions[kind]}
+                  onAdd={(id) => handleAddRule(kind, id)}
+                  onRemove={(row) => setRuleRemoval({ kind, ...row })}
+                  addAriaLabel={`${RULE_KIND_LABELS[kind]} als Regel hinzufügen`}
+                  disabled={isPending}
+                />
+              ))}
 
               {/* Members */}
               <section className="rounded-lg border border-line bg-surface shadow-sm">
@@ -686,7 +656,7 @@ export function VerteilerManager({
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-ink">
                             {formatName(m)}
-                            {m.scoutName && (m.lastName || m.firstName) ? (
+                            {scoutAddition(m) ? (
                               <span className="ml-1.5 font-normal text-ink-soft">„{m.scoutName}“</span>
                             ) : null}
                           </div>
@@ -696,40 +666,21 @@ export function VerteilerManager({
                                 manuell
                               </span>
                             ) : null}
-                            {m.viaOffices.map((o) => (
+                            {m.via.map((v) => (
                               <span
-                                key={`o${o.id}`}
+                                key={`${v.kind}${v.id}`}
                                 className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
                               >
-                                über Amt: {o.name}
+                                über {RULE_KIND_LABELS[v.kind]}: {v.name}
                               </span>
                             ))}
-                            {m.viaRanks.map((r) => (
-                              <span
-                                key={`r${r.id}`}
-                                className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
-                              >
-                                über Stand: {r.name}
-                              </span>
-                            ))}
-                            {m.viaGroups.map((g) => (
-                              <span
-                                key={`g${g.id}`}
-                                className="rounded-[4px] border border-line px-1.5 py-px text-[10.5px] text-ink-soft"
-                              >
-                                über Gliederung: {g.name}
-                              </span>
-                            ))}
-                            {m.mainOffice &&
-                            m.viaOffices.length === 0 &&
-                            m.viaRanks.length === 0 &&
-                            m.viaGroups.length === 0 ? (
+                            {m.mainOffice && m.via.length === 0 ? (
                               <span className="text-xs text-ink-faint">{m.mainOffice}</span>
                             ) : null}
                           </div>
                         </div>
                         <div className="hidden min-w-0 flex-1 sm:block">
-                          {hasEmail(m) ? (
+                          {m.email?.trim() ? (
                             <a
                               href={`mailto:${m.email}`}
                               className="truncate text-fir hover:underline"
@@ -754,7 +705,7 @@ export function VerteilerManager({
                         ) : (
                           <span
                             className="shrink-0 text-ink-faint"
-                            title="Über ein Amt enthalten — die Regel entfernen oder der Person das Amt entziehen."
+                            title="Automatisch über eine Regel enthalten — die Regel oben entfernen oder Amt, Stand bzw. Gliederung der Person ändern."
                           >
                             <Lock className="size-3.5 opacity-50" />
                           </span>
@@ -926,7 +877,6 @@ export function VerteilerManager({
           contextName={`den Verteiler „${activeList.name}“`}
           recipientCount={bcc.count}
           skippedCount={bcc.skipped}
-          onSent={() => router.refresh()}
         />
       ) : null}
     </>

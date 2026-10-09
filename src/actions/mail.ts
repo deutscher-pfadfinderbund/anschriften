@@ -1,16 +1,31 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { effectiveMemberIds, personEmailsByIds } from "@/db/queries";
-import { firstError } from "@/lib/action-helpers";
-import { actorName, requireSession } from "@/lib/auth-helpers";
-import { isMailEnabled, normalizeRecipients, sendListMail } from "@/lib/mail";
+import { SESSION_EXPIRED, firstError, getActionSession, revalidateApp } from "@/lib/action-helpers";
+import { actorName } from "@/lib/auth-helpers";
+import { collectEmails } from "@/lib/export";
+import { isMailEnabled, mailFailureMessage, sendListMail } from "@/lib/mail";
 
 export type SendMailResult =
-  | { ok: true; recipientCount: number; chunks: number }
-  | { ok: false; message: string };
+  | {
+      ok: true;
+      /** Recipients the mail server accepted (refused addresses are not included). */
+      recipientCount: number;
+      chunks: number;
+      /** Addresses the mail server refused while accepting the rest. */
+      refused: number;
+    }
+  | {
+      ok: false;
+      message: string;
+      /**
+       * Recipients who already got the mail before the failure. When > 0 the client must
+       * not offer the same send again, or those recipients get it twice.
+       */
+      sent?: number;
+    };
 
 const composeSchema = z.object({
   subject: z
@@ -39,7 +54,8 @@ export type SendMailInput = z.infer<typeof composeSchema>;
  * list, the selection as-is otherwise) — the client-supplied list is never trusted.
  */
 export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   // Defense in depth: the UI hides the buttons when the module is off, but the
   // action re-checks so a stale client or a direct call still cannot send.
   if (!isMailEnabled()) return { ok: false, message: "Das Mail-Modul ist nicht aktiv." };
@@ -50,7 +66,7 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
 
   let emails: (string | null)[];
   if (listId != null) {
-    // Effective members (manual ∪ rule, deceased excluded from the rule half).
+    // Effective members (manual ∪ rules, living persons only).
     const ids = await effectiveMemberIds(listId);
     emails = await personEmailsByIds(ids);
   } else if (personIds && personIds.length > 0) {
@@ -60,7 +76,9 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
     return { ok: false, message: "Kein Verteiler und keine Auswahl angegeben." };
   }
 
-  const { recipients } = normalizeRecipients(emails);
+  // Same rule as the compose preview and the clipboard copy (collectEmails), so the
+  // count the user confirmed is the count that goes out.
+  const { recipients } = collectEmails(emails);
   if (recipients.length === 0) return { ok: false, message: "Keine Empfänger mit E-Mail-Adresse." };
 
   const result = await sendListMail({
@@ -72,8 +90,13 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
   });
 
   // Refresh the "Zuletzt versendet" card regardless of outcome (failures are logged too).
-  revalidatePath("/verteiler");
+  revalidateApp();
 
-  if (!result.ok) return { ok: false, message: `E-Mail-Versand fehlgeschlagen: ${result.error}` };
-  return { ok: true, recipientCount: result.recipientCount, chunks: result.chunks };
+  if (!result.ok) return { ok: false, message: mailFailureMessage(result), sent: result.sent };
+  return {
+    ok: true,
+    recipientCount: result.recipientCount - result.refused,
+    chunks: result.chunks,
+    refused: result.refused,
+  };
 }

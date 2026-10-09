@@ -16,19 +16,13 @@
  */
 import { db } from "@/db";
 import { assignments, groups, offices, persons, ranks } from "@/db/schema";
+import { fold, formatDate, todayIso } from "@/lib/format";
 import { RANK_UNRANKED } from "@/lib/rank";
+import { SECTIONS, type Section } from "@/lib/sections";
 
 // ---------------------------------------------------------------------------------------
 //  Types
 // ---------------------------------------------------------------------------------------
-
-export type Section =
-  | "bund"
-  | "jungenbund"
-  | "maedchenbund"
-  | "orden_st_georg"
-  | "orden_st_christophorus"
-  | "bundesgilde";
 
 export type Profile =
   | "komplett"
@@ -93,7 +87,7 @@ export interface DataAssignment {
   personId: number;
   groupId: number;
   officeId: number | null;
-  /** Amtszeit end (issue #22): NULL = active, set = ended. Only active rows are printed. */
+  /** Amtszeit end: NULL = active, set = ended — the one rule app-wide. Only active rows are printed. */
   endDate: string | null;
 }
 export interface RawData {
@@ -150,15 +144,8 @@ export interface ProfileData {
 //  Profile configuration
 // ---------------------------------------------------------------------------------------
 
-const PROFILE_SECTIONS: Record<Profile, Section[]> = {
-  komplett: [
-    "bund",
-    "jungenbund",
-    "maedchenbund",
-    "orden_st_georg",
-    "orden_st_christophorus",
-    "bundesgilde",
-  ],
+const PROFILE_SECTIONS: Record<Profile, readonly Section[]> = {
+  komplett: SECTIONS,
   nurBundesaemter: ["bund", "jungenbund", "maedchenbund"],
   nurBundesgilde: ["bundesgilde"],
   nurOrdenStGeorg: ["orden_st_georg"],
@@ -177,27 +164,8 @@ const PROFILE_SUBTITLE: Record<Profile, string | null> = {
 //  Small pure helpers (exported for tests where useful)
 // ---------------------------------------------------------------------------------------
 
-/**
- * Canonical German collation key (DIN 5007-2, phone-book): compose first so decomposed
- * umlauts (combining diacritics) fold too, map ä→ae, ö→oe, ü→ue, ß→ss, strip any remaining
- * accents and lower-case. Identical rule to `fold` in src/lib/format.ts, so the on-screen
- * persons table and the printed register/memorial sort the same way.
- */
-export function normalizeSortKey(value: string): string {
-  return value
-    .normalize("NFC")
-    .replace(/ä/g, "ae")
-    .replace(/ö/g, "oe")
-    .replace(/ü/g, "ue")
-    .replace(/Ä/g, "Ae")
-    .replace(/Ö/g, "Oe")
-    .replace(/Ü/g, "Ue")
-    .replace(/ß/g, "ss")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim();
-}
+// Sort keys use `fold` from src/lib/format.ts (DIN 5007-2 phone-book: ä→ae, ß→ss, accents
+// stripped, lower-cased) — the same collation as the on-screen persons table.
 
 function joinNonEmpty(parts: (string | null | undefined)[], sep = " "): string {
   return parts.map((p) => (p ?? "").trim()).filter((p) => p.length > 0).join(sep);
@@ -221,33 +189,6 @@ function compareSortKeys(a: string[], b: string[]): number {
 function nullIfEmpty(value: string | null | undefined): string | null {
   const v = (value ?? "").trim();
   return v.length > 0 ? v : null;
-}
-
-/** "1990-02-01" -> "01.02.1990"; anything unparseable -> null. */
-export function formatDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return null;
-  return `${m[3]}.${m[2]}.${m[1]}`;
-}
-
-/**
- * The calendar date of `now` in Europe/Berlin (issue #16). The server runs in UTC, so a plain
- * `getDate()` stamps an export made at 23:30 CEST with the previous day. Returned as both the
- * printed `dd.MM.yyyy` "Stand" and an ISO `yyyy-MM-dd` used as the active-assignment cutoff (#6).
- */
-function berlinToday(now: Date): { display: string; iso: string } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Berlin",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now);
-  const get = (type: string) => parts.find((p) => p.type === type)!.value;
-  const yyyy = get("year");
-  const mm = get("month");
-  const dd = get("day");
-  return { display: `${dd}.${mm}.${yyyy}`, iso: `${yyyy}-${mm}-${dd}` };
 }
 
 /** Leadership offices whose label is implied by the (sub)group heading and thus suppressed. */
@@ -278,7 +219,8 @@ export function buildProfileData(
   today: Date = new Date(),
 ): ProfileData {
   const includedSections = new Set<Section>(PROFILE_SECTIONS[profile]);
-  const { display: dateDisplay, iso: todayIso } = berlinToday(today);
+  // The printed "Stand" is the calendar date in Europe/Berlin (the server runs in UTC).
+  const dateDisplay = formatDate(todayIso(today));
 
   const personById = new Map(raw.persons.map((p) => [p.id, p]));
   const groupById = new Map(raw.groups.map((g) => [g.id, g]));
@@ -292,14 +234,11 @@ export function buildProfileData(
     childrenByParent.get(key)!.push(g);
   }
 
-  // Amtszeiten (issue #22): the printed directory only ever shows currently held
-  // offices. Filter to active tenures once, here, and feed every downstream consumer
-  // (group tree, register, confidential cover) from this single array. A tenure counts as
-  // active while it has no end date OR ends today or later (issue #6): a future "Amtszeit
-  // bis" must not empty a group from the current booklet.
-  const activeAssignments = raw.assignments.filter(
-    (a) => a.endDate == null || a.endDate.slice(0, 10) >= todayIso,
-  );
+  // Amtszeiten: the printed directory only ever shows currently held offices. Active means
+  // `endDate == null` — the same rule as the table, editor, Verteiler rules and mail (future
+  // Bis dates are rejected on input, so an ended tenure is always in the past). Filter once,
+  // here, and feed every downstream consumer (group tree, register, cover) from this array.
+  const activeAssignments = raw.assignments.filter((a) => a.endDate == null);
 
   // assignments per group, filtered to printable + living persons
   const assignmentsByGroup = new Map<number, DataAssignment[]>();
@@ -315,7 +254,7 @@ export function buildProfileData(
   }
 
   const groupSort = (a: DataGroup, b: DataGroup) =>
-    a.sortKey - b.sortKey || normalizeSortKey(a.name).localeCompare(normalizeSortKey(b.name), "de");
+    a.sortKey - b.sortKey || fold(a.name).localeCompare(fold(b.name), "de");
 
   const detailFor = (p: DataPerson): string | null => {
     const parts: string[] = [];
@@ -354,7 +293,7 @@ export function buildProfileData(
       city: nullIfEmpty(joinNonEmpty([p.postalCode, p.city])),
       phones: entryPhones(p),
       email: nullIfEmpty(p.email),
-      birth: options.withBirthdays ? formatDate(p.birthDate) : null,
+      birth: options.withBirthdays ? formatDate(p.birthDate) || null : null,
     };
   };
 
@@ -373,14 +312,14 @@ export function buildProfileData(
       const p = personById.get(personId)!;
       const sortedOffs = [...offs].sort((x, y) => x.rank - y.rank || x.name.localeCompare(y.name, "de"));
       const minRank = sortedOffs.length > 0 ? sortedOffs[0].rank : RANK_UNRANKED;
-      const sortName = normalizeSortKey(joinNonEmpty([p.scoutName || p.lastName || p.firstName]));
+      const sortName = fold(joinNonEmpty([p.scoutName || p.lastName || p.firstName]));
       return { p, officeNames: sortedOffs.map((o) => o.name), minRank, sortName };
     });
     rows.sort(
       (a, b) =>
         a.minRank - b.minRank ||
         a.sortName.localeCompare(b.sortName, "de") ||
-        normalizeSortKey(a.p.lastName ?? "").localeCompare(normalizeSortKey(b.p.lastName ?? ""), "de"),
+        fold(a.p.lastName ?? "").localeCompare(fold(b.p.lastName ?? ""), "de"),
     );
     return rows.map((r) => makeEntry(r.p, r.officeNames, depth));
   };
@@ -416,7 +355,6 @@ export function buildProfileData(
 
   // ---- name register (only persons that were actually printed / anchored) ----
   const register = buildRegister(
-    raw,
     includedSections,
     personById,
     groupById,
@@ -448,7 +386,7 @@ export function buildProfileData(
     // normalized once per person (decorate–sort–undecorate) instead of inside the comparator.
     const decorated = inScope.map((p) => ({
       p,
-      key: [normalizeSortKey(p.lastName ?? ""), normalizeSortKey(p.firstName ?? "")],
+      key: [fold(p.lastName ?? ""), fold(p.firstName ?? "")],
     }));
     decorated.sort((a, b) => compareSortKeys(a.key, b.key));
     for (const { p } of decorated) {
@@ -479,7 +417,6 @@ export function buildProfileData(
 // ---------------------------------------------------------------------------------------
 
 function buildRegister(
-  raw: RawData,
   includedSections: Set<Section>,
   personById: Map<number, DataPerson>,
   groupById: Map<number, DataGroup>,
@@ -527,7 +464,7 @@ function buildRegister(
 
     // Primary field (Fahrtenname else Vorname else Nachname) first, then the tiebreakers —
     // compared separately, see `compareSortKeys`.
-    const key = [scout || first || last, first, last].map(normalizeSortKey);
+    const key = [scout || first || last, first, last].map((k) => fold(k));
     rows.push({ key, entry: { label: `p${pid}`, lead, rest } });
   }
 
@@ -679,7 +616,7 @@ export async function buildData(profile: Profile, options: BuildOptions): Promis
       id: g.id,
       name: g.name,
       parentId: g.parentId,
-      section: g.section as Section,
+      section: g.section,
       sortKey: g.sortKey,
     })),
     offices: officeRows.map((o) => ({ id: o.id, name: o.name, rank: o.rank })),

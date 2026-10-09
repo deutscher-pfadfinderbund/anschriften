@@ -5,8 +5,6 @@ import { Input } from "@/components/ui/input";
 export const NONE = "none";
 export const OFFICE_NONE = "none";
 
-export const todayIso = () => new Date().toISOString().slice(0, 10);
-
 export type PhoneRow = { key: string; label: string; number: string };
 
 // `id` is the persisted assignment id (null for a freshly added row). Only persisted

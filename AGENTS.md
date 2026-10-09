@@ -23,15 +23,17 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 - **Achtung Next 16:** `proxy.ts` statt `middleware.ts`; Docs in `node_modules/next/dist/docs/` lesen
 - better-auth **1.6.23 (gepinnt)** + `genericOAuth`-Plugin gegen Keycloak (OIDC discovery). Keine eigenen Accounts, kein Auth.js
 - Postgres 17 + Drizzle ORM. Schema: `src/db/schema.ts`, Migrationen eingecheckt in `drizzle/`
-- Tailwind 4 (Tokens via `@theme` in `globals.css`), shadcn/ui erst ab Issue #3
+- Tailwind 4 (Tokens via `@theme` in `globals.css`), shadcn/ui
 - PDF: Typst (Issue #5) — Fachlogik in TS (`src/pdf/build-data.ts`), Template dumm halten
-- Tests: vitest, nur für Parser-/Sortierlogik (Import, build-data). Keine Test-Pyramide
+- Tests: vitest, nur für reine Logik (`src/lib`, `src/pdf/build-data.ts`, `scripts/import-parse.ts`). Keine Test-Pyramide
 
 ## Architektur-Konventionen
 
-- Alle Mutationen als **Server Actions** in `src/actions/*.ts` (`"use server"`, danach `revalidatePath`)
+- Alle Mutationen als **Server Actions** in `src/actions/*.ts` (`"use server"`, nach jeder erfolgreichen Mutation `revalidateApp()` aus `src/lib/action-helpers.ts`; kein `router.refresh()` im Client)
 - Route Handler NUR für: Auth-Catch-all (`src/app/api/auth/[...all]/route.ts`), PDF-/CSV-Export (brauchen `Content-Disposition`)
-- Geschützter Bereich: Route-Group `src/app/(app)/` — deren `layout.tsx` prüft autoritativ `auth.api.getSession()`, sonst `redirect("/login")`. `proxy.ts` macht nur optimistisches Cookie-Redirect
+- Geschützter Bereich: Route-Group `src/app/(app)/`. **Jede Seite** ruft als Erstes `requirePageSession()` (`src/lib/auth-helpers.ts`) auf — das ist das Gate. `layout.tsx` ist KEINE Sicherheitsgrenze (Layouts werden bei RSC-Navigationen übersprungen). `proxy.ts` leitet nur Seitennavigationen ohne Cookie optimistisch nach `/login` um — keine Server Actions, kein `/api` (die Export-Routen antworten selbst mit 401)
+- Session in Server Actions: `const session = await getActionSession(); if (!session) return SESSION_EXPIRED;` (`src/lib/action-helpers.ts`). Nie werfen — ein Throw ersetzt die Seite durch die Fehlerseite und vernichtet Formulareingaben
+- Fachregeln an genau einer Stelle: „heute" = `todayIso()` aus `src/lib/format.ts` (Europe/Berlin, nie `toISOString()`); aktive Amtszeit = `end_date IS NULL` (Bis-Daten in der Zukunft werden abgelehnt); Bereiche = `SECTIONS` aus `src/lib/sections.ts`; E-Mail-Gültigkeit = `EMAIL_RE`/`collectEmails` aus `src/lib/export.ts`; Downloads = `downloadFile` aus `src/lib/download.ts`
 - DB-Zugriff: zentraler Client `src/db/index.ts`; niemals SQL-Strings in Komponenten. Zwei dokumentierte Ausnahmen greifen direkt auf `db` zu: `src/pdf/build-data.ts` (isolierte Full-Table-Reads fürs PDF) und `src/lib/mail.ts` (`mail_log`-Schreiben atomar zum SMTP-Versand)
 - Personentabelle: alle Datensätze serverseitig laden (~600), clientseitig filtern (TanStack Table). Keine Pagination
 - `updated_by` = Name/E-Mail aus der Session bei jeder Mutation setzen

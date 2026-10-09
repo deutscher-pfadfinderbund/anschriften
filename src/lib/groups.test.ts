@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { orderGroups, type GroupNode } from "./groups";
+import { descendantIds, orderGroups, type GroupNode } from "./groups";
 
 // All test data below is fictitious.
 
@@ -25,7 +25,7 @@ describe("orderGroups", () => {
     expect(orderGroups([])).toEqual([]);
   });
 
-  it("groups roots by section (SECTION_ORDER), then sortKey, then name", () => {
+  it("groups roots by section (SECTIONS order), then sortKey, then name", () => {
     const ordered = orderGroups([
       g({ id: 1, name: "Gau B", section: "jungenbund", sortKey: 20 }),
       g({ id: 2, name: "Bundesführung", section: "bund", sortKey: 10 }),
@@ -99,5 +99,33 @@ describe("orderGroups", () => {
     expect(names(ordered).sort()).toEqual(["Alpha", "Beta", "Wurzel"]);
     expect(ordered.length).toBe(3);
     expect(names(ordered)[0]).toBe("Wurzel");
+  });
+});
+
+describe("descendantIds", () => {
+  const tree = [
+    { id: 1, parentId: null },
+    { id: 2, parentId: 1 },
+    { id: 3, parentId: 2 },
+    { id: 4, parentId: 1 },
+    { id: 5, parentId: null },
+  ];
+
+  it("returns the whole subtree without the group itself", () => {
+    expect([...descendantIds(tree, 1)].sort()).toEqual([2, 3, 4]);
+    expect([...descendantIds(tree, 2)]).toEqual([3]);
+  });
+
+  it("returns an empty set for a leaf or an unknown id", () => {
+    expect(descendantIds(tree, 3).size).toBe(0);
+    expect(descendantIds(tree, 99).size).toBe(0);
+  });
+
+  it("terminates on a stored parent cycle", () => {
+    const cyclic = [
+      { id: 1, parentId: 2 },
+      { id: 2, parentId: 1 },
+    ];
+    expect([...descendantIds(cyclic, 1)]).toEqual([2]);
   });
 });

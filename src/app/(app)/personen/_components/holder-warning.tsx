@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { TriangleAlert, Undo2 } from "lucide-react";
 
-import { getActiveHolders } from "@/actions/assignments";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { ActiveHolder } from "@/db/queries";
+import type { ActiveHolder, ActiveOfficeHolder } from "@/db/queries";
 import { formatDate } from "@/lib/format";
 
 import { EndDateChoice, type AssignmentRow } from "./form-primitives";
@@ -40,53 +39,25 @@ export type HolderDialogState = {
 };
 
 /**
- * On-demand cache of active holders per "officeId:groupId" combination (no polling).
- * Returns `otherHolders(a)`: the active holders of a row's office+group that are NOT
- * the person being edited — the ones the warning is about.
+ * Lookup over the active office holders the page preloaded (listActiveOfficeHolders).
+ * Returns `otherHolders(a)`: the active holders of a row's office+group that are NOT the
+ * person being edited — the ones the warning is about. A row needs an office AND a group
+ * AND no "bis" date (an ended row is history, not a new assignment).
  */
-export function useActiveHolders(assignments: AssignmentRow[], personId: number | undefined) {
-  const [holdersCache, setHoldersCache] = useState<Map<string, ActiveHolder[]>>(new Map());
-
-  // The active office+group combinations to check for existing holders: a row needs an
-  // office AND a group AND no "bis" date (an ended row is history, not a new assignment).
-  const activeComboKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const a of assignments) {
-      if (a.groupId != null && a.officeId != null && !a.endDate) keys.add(`${a.officeId}:${a.groupId}`);
+export function useActiveHolders(holders: ActiveOfficeHolder[], personId: number | undefined) {
+  const byCombo = useMemo(() => {
+    const map = new Map<string, ActiveHolder[]>();
+    for (const h of holders) {
+      if (h.personId === personId) continue;
+      const key = `${h.officeId}:${h.groupId}`;
+      map.set(key, [...(map.get(key) ?? []), h]);
     }
-    return [...keys];
-  }, [assignments]);
-
-  // Fetch holders for any combination not cached yet. Re-runs when the set of active
-  // combinations changes (or the cache updates — guarded by the empty-missing early
-  // return, so no loop and no dependency lint warning).
-  useEffect(() => {
-    const missing = activeComboKeys.filter((k) => !holdersCache.has(k));
-    if (missing.length === 0) return;
-    let cancelled = false;
-    void (async () => {
-      const entries = await Promise.all(
-        missing.map(async (k) => {
-          const [officeId, groupId] = k.split(":").map(Number);
-          return [k, await getActiveHolders(officeId, groupId)] as const;
-        }),
-      );
-      if (cancelled) return;
-      setHoldersCache((prev) => {
-        const next = new Map(prev);
-        for (const [k, v] of entries) next.set(k, v);
-        return next;
-      });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeComboKeys, holdersCache]);
+    return map;
+  }, [holders, personId]);
 
   return function otherHolders(a: AssignmentRow): ActiveHolder[] {
     if (a.groupId == null || a.officeId == null || a.endDate) return [];
-    const holders = holdersCache.get(`${a.officeId}:${a.groupId}`) ?? [];
-    return holders.filter((h) => h.personId !== personId);
+    return byCombo.get(`${a.officeId}:${a.groupId}`) ?? [];
   };
 }
 
@@ -174,7 +145,7 @@ export function HolderDialog({
           <DialogDescription>
             Die Amtszeit wird erst beim <strong>Speichern</strong> beendet. Bis dahin lässt sich
             die Entscheidung rückgängig machen; brichst du das Formular ab, bleibt alles
-            unverändert. „Datum unbekannt“ wählen, wenn das Ende nicht mehr bekannt ist.
+            unverändert. Wähle „Ende unbekannt“, wenn das Ende nicht mehr bekannt ist.
           </DialogDescription>
         </DialogHeader>
         {dialog ? (
