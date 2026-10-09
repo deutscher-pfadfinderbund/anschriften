@@ -240,9 +240,9 @@ export function Directory({
                 {/* Fixed widths: columns do not jump while the search narrows the list. */}
                 <colgroup>
                   <col className="w-11" />
-                  <col className="w-[29%]" />
+                  <col className="w-[28%]" />
+                  <col className="w-[17%]" />
                   <col className="w-[18%]" />
-                  <col className="w-[19%]" />
                   <col />
                 </colgroup>
                 <thead>

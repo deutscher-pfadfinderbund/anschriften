@@ -79,22 +79,36 @@ function groupNames(person: PersonListRow): string[] {
   return [...new Set(person.assignments.map((a) => a.groupName))];
 }
 
-/** E-mail (ink; fir only on hover, so the list is no green stripe) and the first phone. */
+/**
+ * E-mail (ink; fir only on hover, so the list is no green stripe) and the first phone.
+ * A long address wraps, first before the "@", instead of being cut: touch screens have
+ * no tooltip to reveal the rest.
+ */
 function Contact({ person, raised = false }: { person: PersonListRow; raised?: boolean }) {
   const phone = person.phones[0];
+  const at = person.email?.lastIndexOf("@") ?? -1;
   return (
     <>
       {person.email ? (
-        <a
-          href={`mailto:${person.email}`}
-          title={person.email}
-          className={cn(
-            "inline-block max-w-full truncate rounded-sm align-top text-ink underline-offset-2 transition-colors hover:text-fir hover:underline",
-            raised && "relative z-10",
-          )}
-        >
-          {person.email}
-        </a>
+        <div>
+          <a
+            href={`mailto:${person.email}`}
+            className={cn(
+              "rounded-sm text-ink underline-offset-2 transition-colors wrap-anywhere hover:text-fir hover:underline",
+              raised && "relative z-10",
+            )}
+          >
+            {at > 0 ? (
+              <>
+                {person.email.slice(0, at)}
+                <wbr />
+                {person.email.slice(at)}
+              </>
+            ) : (
+              person.email
+            )}
+          </a>
+        </div>
       ) : null}
       {phone ? (
         <div className="text-caption tabular-nums text-ink-soft">
