@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { MembersPanel } from "./members-panel";
 import { RulesPanel } from "./rules-panel";
 
-/** Header with the list's actions, then members, rules, address list and send history. */
+/** Header with the list's actions, then members, rules, the e-mail addresses and send history. */
 export function ListDetail({
   list,
   personOptions,
@@ -37,7 +37,7 @@ export function ListDetail({
   groups,
   mailEnabled,
   mailLog,
-  onRename,
+  onEdit,
   onDeleted,
 }: {
   list: DistributionListWithMembers;
@@ -48,7 +48,7 @@ export function ListDetail({
   mailEnabled: boolean;
   /** Send history of all lists, newest first (empty when the mail module is off). */
   mailLog: MailLogEntry[];
-  onRename: () => void;
+  onEdit: () => void;
   onDeleted: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -82,7 +82,7 @@ export function ListDetail({
       // select it, so a plain Strg+C finishes the job.
       setAddressesOpen(true);
       requestAnimationFrame(() => addressesRef.current?.focus());
-      toast.error("Kopieren nicht möglich – die Adressliste ist markiert, kopiere sie mit Strg+C.");
+      toast.error("Kopieren nicht möglich – die E-Mail-Adressen sind markiert, kopiere sie mit Strg+C.");
     }
   }
 
@@ -90,6 +90,7 @@ export function ListDetail({
     setCsvPending(true);
     try {
       await downloadFile(`/api/export/csv?listId=${list.id}`, "anschriften.csv");
+      toast.success("CSV heruntergeladen.");
     } catch (err) {
       toastDownloadError(err, "CSV-Export fehlgeschlagen. Bitte versuche es noch einmal.");
     } finally {
@@ -110,7 +111,7 @@ export function ListDetail({
   return (
     <div className="flex min-w-0 flex-col gap-gutter">
       <header>
-        <h2 className="font-display text-title font-semibold text-balance text-ink">{list.name}</h2>
+        <h2 className="font-display text-section font-semibold text-balance text-ink">{list.name}</h2>
         <p className="mt-0.5 text-ui text-ink-soft tabular-nums">
           {members.length} {members.length === 1 ? "Mitglied" : "Mitglieder"}
           {members.length > 0 ? ` · ${withEmail} mit E-Mail` : null}
@@ -118,25 +119,26 @@ export function ListDetail({
         {list.description ? <p className="mt-1 text-ui text-ink-faint">{list.description}</p> : null}
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={copyAddresses} disabled={bcc.count === 0}>
-              <Copy />
-              E-Mail-Adressen kopieren
-            </Button>
+            {/* Same emphasis as the directory's selection bar: sending leads when it exists. */}
             {mailEnabled ? (
-              <Button variant="outline" onClick={() => setComposeOpen(true)} disabled={bcc.count === 0}>
+              <Button onClick={() => setComposeOpen(true)} disabled={bcc.count === 0}>
                 <Send />
                 E-Mail schreiben …
               </Button>
             ) : null}
+            <Button variant={mailEnabled ? "outline" : "default"} onClick={copyAddresses} disabled={bcc.count === 0}>
+              <Copy />
+              E-Mail-Adressen kopieren
+            </Button>
             <Button variant="outline" onClick={downloadCsv} disabled={csvPending || members.length === 0}>
               <Download />
               {csvPending ? "Wird erstellt …" : "CSV herunterladen"}
             </Button>
           </div>
           <div className="flex flex-wrap items-center gap-1">
-            <Button variant="ghost" className="text-ink-soft" onClick={onRename}>
+            <Button variant="ghost" className="text-ink-soft" onClick={onEdit}>
               <Pencil />
-              Umbenennen
+              Bearbeiten
             </Button>
             <Button
               variant="ghost"
@@ -167,7 +169,7 @@ export function ListDetail({
               aria-hidden
               className="size-4 shrink-0 text-ink-faint transition-transform group-open:rotate-90"
             />
-            {addressesOpen ? "Adressliste ausblenden" : "Adressliste anzeigen"}
+            {addressesOpen ? "E-Mail-Adressen ausblenden" : "E-Mail-Adressen anzeigen"}
             <span className="ml-auto text-caption font-normal text-ink-faint tabular-nums">
               {emailAddressCount(bcc.count)}
             </span>
@@ -206,7 +208,7 @@ export function ListDetail({
               ref={addressesRef}
               readOnly
               value={bcc.text}
-              aria-label="Adressliste für das BCC-Feld"
+              aria-label="E-Mail-Adressen für das BCC-Feld"
               placeholder="Keine gültigen E-Mail-Adressen in diesem Verteiler."
               className="h-28 resize-y text-caption md:text-caption"
               onFocus={(e) => e.currentTarget.select()}

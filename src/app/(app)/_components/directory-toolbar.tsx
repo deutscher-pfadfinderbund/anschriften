@@ -75,7 +75,7 @@ function GroupItems({ groups }: { groups: GroupRow[] }) {
     <SelectGroup key={section}>
       <SelectLabel>{SECTION_LABELS[section]}</SelectLabel>
       {items.map(({ group, depth }) => (
-        <SelectItem key={group.id} value={String(group.id)} style={{ paddingLeft: `${0.375 + depth * 0.75}rem` }}>
+        <SelectItem key={group.id} value={String(group.id)} style={{ paddingLeft: `${0.5 + depth * 0.75}rem` }}>
           {group.name}
         </SelectItem>
       ))}
@@ -96,7 +96,8 @@ function SearchField({
   onBlur: () => void;
 }) {
   return (
-    <div className="relative w-full sm:w-72">
+    // Below xl the search takes its own row and the three filters share the next one.
+    <div className="relative w-full xl:w-72">
       <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-faint" />
       <Input
         ref={inputRef}

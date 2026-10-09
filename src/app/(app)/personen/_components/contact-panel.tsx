@@ -25,56 +25,60 @@ export function ContactPanel({
 }) {
   return (
     <Panel title="Anschrift & Kontakt">
-      <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-3.5 sm:grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)]">
-        <TextField
-          className="col-span-2"
-          label="Straße"
-          id="f-str"
-          error={errors.street}
-          value={values.street}
-          onValueChange={(v) => set("street", v)}
-        />
-        <TextField
-          className="col-span-2 sm:col-span-1"
-          label="Anschriftenzusatz"
-          id="f-zusatz"
-          placeholder="z. B. c/o, Hinterhaus"
-          error={errors.addressExtra}
-          value={values.addressExtra}
-          onValueChange={(v) => set("addressExtra", v)}
-        />
-        <TextField
-          label="PLZ"
-          id="f-plz"
-          inputMode="numeric"
-          className="[&_input]:tabular-nums"
-          error={errors.postalCode}
-          value={values.postalCode}
-          onValueChange={(v) => set("postalCode", v)}
-        />
-        <TextField
-          className="sm:col-span-2"
-          label="Ort"
-          id="f-ort"
-          error={errors.city}
-          value={values.city}
-          onValueChange={(v) => set("city", v)}
-        />
-        <TextField
-          className="col-span-2 sm:col-span-3"
-          label="E-Mail"
-          id="f-mail"
-          type="email"
-          autoComplete="off"
-          error={errors.email}
-          value={values.email}
-          onValueChange={(v) => set("email", v)}
-        />
-        <PhoneList
-          className="col-span-2 sm:col-span-3"
-          phones={values.phones}
-          onChange={(phones) => set("phones", phones)}
-        />
+      {/* Laid out by the panel's width, not the viewport's: from lg up the Verteiler
+          column narrows it, and three columns would squeeze the Anschriftenzusatz. */}
+      <div className="@container">
+        <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-3 gap-y-3.5 @xl:grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)]">
+          <TextField
+            className="col-span-2"
+            label="Straße"
+            id="f-str"
+            error={errors.street}
+            value={values.street}
+            onValueChange={(v) => set("street", v)}
+          />
+          <TextField
+            className="col-span-2 @xl:col-span-1"
+            label="Anschriftenzusatz"
+            id="f-zusatz"
+            placeholder="z. B. c/o, Hinterhaus"
+            error={errors.addressExtra}
+            value={values.addressExtra}
+            onValueChange={(v) => set("addressExtra", v)}
+          />
+          <TextField
+            label="PLZ"
+            id="f-plz"
+            inputMode="numeric"
+            className="[&_input]:tabular-nums"
+            error={errors.postalCode}
+            value={values.postalCode}
+            onValueChange={(v) => set("postalCode", v)}
+          />
+          <TextField
+            className="@xl:col-span-2"
+            label="Ort"
+            id="f-ort"
+            error={errors.city}
+            value={values.city}
+            onValueChange={(v) => set("city", v)}
+          />
+          <TextField
+            className="col-span-2 @xl:col-span-3"
+            label="E-Mail"
+            id="f-mail"
+            type="email"
+            autoComplete="off"
+            error={errors.email}
+            value={values.email}
+            onValueChange={(v) => set("email", v)}
+          />
+          <PhoneList
+            className="col-span-2 @xl:col-span-3"
+            phones={values.phones}
+            onChange={(phones) => set("phones", phones)}
+          />
+        </div>
       </div>
     </Panel>
   );
@@ -103,10 +107,11 @@ function PhoneList({
       <legend className="eyebrow mb-1.5">Telefon</legend>
       {phones.length > 0 ? (
         <ul className="mb-2 flex flex-col gap-2">
-          {phones.map((p) => (
-            <li key={p.key} className="grid grid-cols-[7rem_minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[8.5rem_minmax(0,1fr)_auto]">
+          {/* Numbered names: several rows must not read as identical controls. */}
+          {phones.map((p, i) => (
+            <li key={p.key} className="grid grid-cols-[7rem_minmax(0,1fr)_auto] items-center gap-2 @xl:grid-cols-[8.5rem_minmax(0,1fr)_auto]">
               <Select value={p.label} onValueChange={(label) => update(p.key, { label })}>
-                <SelectTrigger className="w-full" aria-label="Art der Nummer">
+                <SelectTrigger className="w-full" aria-label={`Art der Nummer ${i + 1}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -120,7 +125,7 @@ function PhoneList({
               <Input
                 id={`tel-${p.key}`}
                 type="tel"
-                aria-label="Telefonnummer"
+                aria-label={`Telefonnummer ${i + 1}`}
                 placeholder="Nummer"
                 className="tabular-nums"
                 value={p.number}
@@ -130,7 +135,7 @@ function PhoneList({
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Telefonnummer entfernen"
+                aria-label={`Telefonnummer ${i + 1} entfernen`}
                 title="Telefonnummer entfernen"
                 className="text-ink-faint hover:text-crit"
                 onClick={() => {

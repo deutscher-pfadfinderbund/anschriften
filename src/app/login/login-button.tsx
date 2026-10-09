@@ -36,7 +36,7 @@ export function LoginButton() {
         {pending ? "Weiterleitung …" : "Anmelden mit DPB-Login"}
       </Button>
       {failed ? (
-        <p role="alert" className="mt-4 text-ui text-crit">
+        <p role="alert" className="mt-4 rounded-md border border-crit/40 bg-crit-tint p-4 text-ui text-ink">
           {LOGIN_FAILED}
         </p>
       ) : null}

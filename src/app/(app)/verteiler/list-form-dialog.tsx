@@ -22,7 +22,7 @@ import { callAction } from "@/lib/call-action";
 export type ListDraft = { id: number | null; name: string; description: string };
 
 /**
- * "Neuer Verteiler" / "Verteiler umbenennen". `draft` stays set while the dialog closes,
+ * "Neuer Verteiler" / "Verteiler bearbeiten". `draft` stays set while the dialog closes,
  * so the closing animation keeps its content; `open` drives visibility.
  */
 export function ListFormDialog({
@@ -76,7 +76,7 @@ function ListForm({
   return (
     <form onSubmit={submit} className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>{isNew ? "Neuer Verteiler" : "Verteiler umbenennen"}</DialogTitle>
+        <DialogTitle>{isNew ? "Neuer Verteiler" : "Verteiler bearbeiten"}</DialogTitle>
         <DialogDescription>
           Ein Verteiler bündelt Personen für Rundmails, BCC-Listen und Serienbriefe.
         </DialogDescription>

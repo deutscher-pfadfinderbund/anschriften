@@ -22,7 +22,7 @@ import type { PersonListRow } from "@/db/queries";
 import { callAction } from "@/lib/call-action";
 import { downloadFile, toastDownloadError } from "@/lib/download";
 import { personCount } from "@/lib/format";
-import { TOUCH_HIT, cn } from "@/lib/utils";
+import { LINK, TOUCH_HIT, cn } from "@/lib/utils";
 
 import { mailSelection, skippedNote } from "./directory-filter";
 
@@ -76,6 +76,7 @@ export function SelectionBar({
     setCsvPending(true);
     try {
       await downloadFile(`/api/export/csv?ids=${selected.map((p) => p.id).join(",")}`, "anschriften.csv");
+      toast.success("CSV heruntergeladen.");
     } catch (err) {
       toastDownloadError(err, "CSV-Export fehlgeschlagen. Bitte versuche es noch einmal.");
     } finally {
@@ -107,7 +108,8 @@ export function SelectionBar({
                 onClick={onKeepVisible}
                 className={cn(
                   TOUCH_HIT,
-                  "rounded-sm text-fir underline-offset-2 hover:underline max-sm:mt-1 max-sm:block",
+                  LINK,
+                  "rounded-sm max-sm:mt-1 max-sm:block",
                 )}
               >
                 Nur sichtbare behalten

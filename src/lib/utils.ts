@@ -9,7 +9,7 @@ import { fold } from "@/lib/format"
 const twMerge = extendTailwindMerge({
   extend: {
     theme: {
-      text: ["micro", "caption", "ui", "body", "panel", "title"],
+      text: ["micro", "caption", "ui", "body", "panel", "section", "title"],
       spacing: ["gutter"],
     },
   },
@@ -53,3 +53,10 @@ export const FIELD =
  */
 export const TOUCH_HIT =
   "pointer-coarse:relative pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2"
+
+/**
+ * Inline text link (and link-styled button) in running text: fir and underlined at
+ * rest, so it is not told apart by colour alone.
+ */
+export const LINK =
+  "text-fir underline decoration-fir/40 underline-offset-2 transition-colors hover:decoration-fir"

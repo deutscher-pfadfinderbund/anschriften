@@ -6,11 +6,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { LoaderCircle } from "lucide-react";
+import { toast } from "sonner";
 
 import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { downloadFile, toastDownloadError } from "@/lib/download";
+import { LINK } from "@/lib/utils";
 
 const PROFILES = [
   { id: "komplett", label: "Komplett", hint: "Alle Gliederungen mit Orden und Bundesgilde" },
@@ -38,9 +40,9 @@ const ROW = "flex cursor-pointer gap-3 px-4 py-2.5 transition-colors hover:bg-ho
 const RADIO =
   "mt-0.5 grid size-4 shrink-0 cursor-pointer appearance-none place-content-center rounded-full border border-control bg-field transition-colors " +
   "before:size-2 before:rounded-full before:bg-fir before:opacity-0 before:transition-opacity " +
-  "checked:border-fir checked:before:opacity-100 hover:not-checked:border-ink-soft";
-
-const LINK = "text-fir underline decoration-fir/40 underline-offset-2 transition-colors hover:decoration-fir";
+  "checked:border-fir checked:before:opacity-100 hover:not-checked:border-ink-soft " +
+  // Forced colours (Windows high contrast) repaint backgrounds: draw the dot in text colour.
+  "forced-colors:before:bg-[CanvasText]";
 
 export function ExportManager() {
   const [profile, setProfile] = useState<string>(PROFILES[0].id);
@@ -60,6 +62,7 @@ export function ExportManager() {
     setPending(true);
     try {
       await downloadFile(`/api/export/pdf?${params}`, "anschriftenverzeichnis.pdf");
+      toast.success("PDF heruntergeladen.");
     } catch (err) {
       toastDownloadError(err, "PDF konnte nicht erzeugt werden. Bitte versuche es noch einmal.");
     } finally {

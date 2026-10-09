@@ -10,6 +10,7 @@ import type { RankRow } from "@/db/queries";
 import { findSimilarPersons, type PersonCandidate } from "@/lib/duplicate-persons";
 import { SALUTATIONS, formatNameWithScout, todayIso } from "@/lib/format";
 import type { FieldErrors } from "@/lib/person-schema";
+import { LINK } from "@/lib/utils";
 
 import { Field, TextField, fieldAria } from "./field";
 import { NONE, type FormValues, type SetValue } from "./form-values";
@@ -135,7 +136,7 @@ export function PersonPanel({
                     href={`/personen/${p.id}`}
                     target="_blank"
                     rel="noopener"
-                    className="text-fir underline-offset-2 hover:underline"
+                    className={LINK}
                   >
                     {formatNameWithScout(p)}
                   </Link>

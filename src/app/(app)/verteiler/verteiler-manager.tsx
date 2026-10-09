@@ -88,7 +88,7 @@ export function VerteilerManager({
               groups={groups}
               mailEnabled={mailEnabled}
               mailLog={mailLog}
-              onRename={() =>
+              onEdit={() =>
                 openForm({
                   id: activeList.id,
                   name: activeList.name,

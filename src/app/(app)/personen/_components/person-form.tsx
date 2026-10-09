@@ -245,7 +245,7 @@ export function PersonForm({
               <Button
                 type="button"
                 variant="ghost"
-                className="order-2 ml-auto text-ink-faint hover:text-crit"
+                className="order-2 ml-auto text-ink-soft hover:text-crit"
                 onClick={() => setDeleteOpen(true)}
               >
                 <Trash2 aria-hidden />

@@ -9,7 +9,7 @@ import type { PersonEditData } from "@/db/queries";
 import { todayIso } from "@/lib/format";
 import type { FieldErrors } from "@/lib/person-schema";
 import { RULE_KIND_LABELS } from "@/lib/rule-kinds";
-import { TOUCH_HIT, cn } from "@/lib/utils";
+import { LINK, TOUCH_HIT, cn } from "@/lib/utils";
 
 import { TextField } from "./field";
 import type { FormValues, SetValue } from "./form-values";
@@ -49,7 +49,7 @@ export function ListsPanel({
       {lists.length === 0 ? (
         <p className="text-ui text-ink-faint">
           Noch keine Verteiler angelegt. Das geht unter{" "}
-          <Link href="/verteiler" className="text-fir underline-offset-2 hover:underline">
+          <Link href="/verteiler" className={LINK}>
             Verteiler
           </Link>
           .
