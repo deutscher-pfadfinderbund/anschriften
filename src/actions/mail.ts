@@ -1,10 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { effectiveMemberIds, personEmailsByIds } from "@/db/queries";
-import { SESSION_EXPIRED, firstError, getActionSession } from "@/lib/action-helpers";
+import { SESSION_EXPIRED, firstError, getActionSession, revalidateApp } from "@/lib/action-helpers";
 import { actorName } from "@/lib/auth-helpers";
 import { collectEmails } from "@/lib/export";
 import { isMailEnabled, mailFailureMessage, sendListMail } from "@/lib/mail";
@@ -76,7 +75,7 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
   });
 
   // Refresh the "Zuletzt versendet" card regardless of outcome (failures are logged too).
-  revalidatePath("/verteiler");
+  revalidateApp();
 
   if (!result.ok) return { ok: false, message: mailFailureMessage(result) };
   return { ok: true, recipientCount: result.recipientCount, chunks: result.chunks };

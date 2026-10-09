@@ -1,18 +1,20 @@
 "use server";
 
 import { count, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
 import { distributionListRankRules, persons, ranks } from "@/db/schema";
 import {
   firstError,
+  getActionSession,
   isForeignKeyViolation,
   isUniqueViolation,
+  revalidateApp,
+  SESSION_EXPIRED,
   type ActionResult,
 } from "@/lib/action-helpers";
-import { actorName, requireSession } from "@/lib/auth-helpers";
+import { actorName } from "@/lib/auth-helpers";
 
 const rankSchema = z.object({
   name: z.string().trim().min(1, "Name ist erforderlich."),
@@ -22,7 +24,8 @@ const rankSchema = z.object({
 export type RankInput = z.infer<typeof rankSchema>;
 
 export async function createRank(raw: RankInput): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   const by = actorName(session);
   const parsed = rankSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
@@ -32,13 +35,13 @@ export async function createRank(raw: RankInput): Promise<ActionResult> {
     if (isUniqueViolation(err)) return { ok: false, message: "Ein Stand mit diesem Namen existiert bereits." };
     throw err;
   }
-  revalidatePath("/stammdaten");
-  revalidatePath("/");
+  revalidateApp();
   return { ok: true };
 }
 
 export async function updateRank(id: number, raw: RankInput): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   const by = actorName(session);
   const parsed = rankSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
@@ -48,13 +51,12 @@ export async function updateRank(id: number, raw: RankInput): Promise<ActionResu
     if (isUniqueViolation(err)) return { ok: false, message: "Ein Stand mit diesem Namen existiert bereits." };
     throw err;
   }
-  revalidatePath("/stammdaten");
-  revalidatePath("/");
+  revalidateApp();
   return { ok: true };
 }
 
 export async function deleteRank(id: number): Promise<ActionResult> {
-  await requireSession();
+  if (!(await getActionSession())) return SESSION_EXPIRED;
   const [{ n }] = await db
     .select({ n: count() })
     .from(persons)
@@ -77,7 +79,6 @@ export async function deleteRank(id: number): Promise<ActionResult> {
       return { ok: false, message: "Stand wird inzwischen verwendet und kann nicht gelöscht werden." };
     throw err;
   }
-  revalidatePath("/stammdaten");
-  revalidatePath("/");
+  revalidateApp();
   return { ok: true };
 }

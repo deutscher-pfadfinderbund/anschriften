@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import {
   Award,
   Briefcase,
@@ -182,7 +181,6 @@ export function VerteilerManager({
   /** List-scoped send history, newest first (empty when the module is off). */
   mailLog?: MailLogEntry[];
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [selectedListId, setSelectedListId] = useState<number | null>(
@@ -278,7 +276,6 @@ export function VerteilerManager({
         toast.success("Verteiler angelegt.");
       }
       setListForm(null);
-      router.refresh();
     });
   }
 
@@ -290,7 +287,6 @@ export function VerteilerManager({
       toast.success("Verteiler gelöscht.");
       setDeleteOpen(false);
       setSelectedListId(null);
-      router.refresh();
     });
   }
 
@@ -303,7 +299,6 @@ export function VerteilerManager({
       toast.success(`${ids.length} ${ids.length === 1 ? "Mitglied" : "Mitglieder"} hinzugefügt.`);
       setAddOpen(false);
       setAddSelection(new Set());
-      router.refresh();
     });
   }
 
@@ -313,7 +308,6 @@ export function VerteilerManager({
       const res = await removeMember(activeList.id, personId);
       if (!res.ok) return void toast.error(res.message);
       toast.success("Mitglied aus dem Verteiler entfernt.");
-      router.refresh();
     });
   }
 
@@ -331,7 +325,6 @@ export function VerteilerManager({
       if (!res.ok) return void toast.error(res.message);
       toast.success(`Regel „${name}“ entfernt.`);
       setRuleRemoval(null);
-      router.refresh();
     });
   }
 
@@ -351,7 +344,6 @@ export function VerteilerManager({
       if (!res.ok) return void toast.error(res.message);
       const name = offices.find((o) => o.id === officeId)?.name ?? "Amt";
       toast.success(`Regel „${name}“ hinzugefügt.`);
-      router.refresh();
     });
   }
 
@@ -369,7 +361,6 @@ export function VerteilerManager({
       if (!res.ok) return void toast.error(res.message);
       const name = ranks.find((r) => r.id === rankId)?.name ?? "Stand";
       toast.success(`Regel „${name}“ hinzugefügt.`);
-      router.refresh();
     });
   }
 
@@ -387,7 +378,6 @@ export function VerteilerManager({
       if (!res.ok) return void toast.error(res.message);
       const name = groups.find((g) => g.id === groupId)?.name ?? "Gliederung";
       toast.success(`Regel „${name}“ hinzugefügt.`);
-      router.refresh();
     });
   }
 
@@ -932,7 +922,6 @@ export function VerteilerManager({
           contextName={`den Verteiler „${activeList.name}“`}
           recipientCount={bcc.count}
           skippedCount={bcc.skipped}
-          onSent={() => router.refresh()}
         />
       ) : null}
     </>

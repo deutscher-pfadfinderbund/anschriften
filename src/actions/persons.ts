@@ -5,12 +5,15 @@ import { and, eq, isNull, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { assignments, distributionListMembers, persons } from "@/db/schema";
 import {
+  getActionSession,
   isForeignKeyViolation,
   isUniqueViolation,
-  revalidatePersonPaths,
-  todayIso,
+  revalidateApp,
+  SESSION_EXPIRED,
+  type ActionResult,
 } from "@/lib/action-helpers";
-import { actorName, requireSession } from "@/lib/auth-helpers";
+import { actorName } from "@/lib/auth-helpers";
+import { todayIso } from "@/lib/format";
 import {
   cleanPersonInput,
   parsePersonInput,
@@ -29,19 +32,21 @@ class SaveAbort extends Error {}
 
 export type SaveResult =
   | { ok: true; id: number }
-  | { ok: false; errors: FieldErrors; message?: string };
+  | { ok: false; message: string; errors?: FieldErrors };
 
 /** Create or update a person plus its assignments (delete + recreate) in one transaction. */
 export async function savePerson(raw: PersonInput): Promise<SaveResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
 
   const parsed = parsePersonInput(raw);
-  if (!parsed.ok) return { ok: false, errors: parsed.errors };
+  if (!parsed.ok) return { ok: false, errors: parsed.errors, message: "Bitte die markierten Felder prüfen." };
   const data = cleanPersonInput(parsed.data);
 
   // Re-validate the cleaned payload (empty PLZ/e-mail become null → no false errors).
   const revalidated = parsePersonInput(data);
-  if (!revalidated.ok) return { ok: false, errors: revalidated.errors };
+  if (!revalidated.ok)
+    return { ok: false, errors: revalidated.errors, message: "Bitte die markierten Felder prüfen." };
 
   // Validate the person's own life dates (Geburts-/Sterbedatum) — the schema only bounds
   // their length, so a malformed or out-of-order date would otherwise reach the DB.
@@ -193,14 +198,14 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
     throw err;
   }
 
-  revalidatePersonPaths();
+  revalidateApp();
   return { ok: true, id };
 }
 
-export async function deletePerson(id: number): Promise<{ ok: true }> {
-  await requireSession();
+export async function deletePerson(id: number): Promise<ActionResult> {
+  if (!(await getActionSession())) return SESSION_EXPIRED;
   // Memberships cascade with the person, so the list counts change too.
   await db.delete(persons).where(eq(persons.id, id));
-  revalidatePersonPaths();
+  revalidateApp();
   return { ok: true };
 }

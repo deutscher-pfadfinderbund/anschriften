@@ -1,18 +1,20 @@
 "use server";
 
 import { count, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
 import { assignments, distributionListGroupRules, groups } from "@/db/schema";
 import {
   firstError,
+  getActionSession,
   isForeignKeyViolation,
   isUniqueViolation,
+  revalidateApp,
+  SESSION_EXPIRED,
   type ActionResult,
 } from "@/lib/action-helpers";
-import { actorName, requireSession } from "@/lib/auth-helpers";
+import { actorName } from "@/lib/auth-helpers";
 import { SECTIONS } from "@/lib/sections";
 
 const groupSchema = z.object({
@@ -30,7 +32,8 @@ const groupSchema = z.object({
 export type GroupInput = z.infer<typeof groupSchema>;
 
 export async function createGroup(raw: GroupInput): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   const by = actorName(session);
   const parsed = groupSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
@@ -40,13 +43,13 @@ export async function createGroup(raw: GroupInput): Promise<ActionResult> {
     if (isUniqueViolation(err)) return { ok: false, message: "Eine Gliederung mit diesem Namen existiert bereits." };
     throw err;
   }
-  revalidatePath("/gliederungen");
-  revalidatePath("/");
+  revalidateApp();
   return { ok: true };
 }
 
 export async function updateGroup(id: number, raw: GroupInput): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   const by = actorName(session);
   const parsed = groupSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
@@ -76,13 +79,12 @@ export async function updateGroup(id: number, raw: GroupInput): Promise<ActionRe
     if (isUniqueViolation(err)) return { ok: false, message: "Eine Gliederung mit diesem Namen existiert bereits." };
     throw err;
   }
-  revalidatePath("/gliederungen");
-  revalidatePath("/");
+  revalidateApp();
   return { ok: true };
 }
 
 export async function deleteGroup(id: number): Promise<ActionResult> {
-  await requireSession();
+  if (!(await getActionSession())) return SESSION_EXPIRED;
   const [{ n: childCount }] = await db
     .select({ n: count() })
     .from(groups)
@@ -118,7 +120,6 @@ export async function deleteGroup(id: number): Promise<ActionResult> {
       return { ok: false, message: "Gliederung wird inzwischen verwendet und kann nicht gelöscht werden." };
     throw err;
   }
-  revalidatePath("/gliederungen");
-  revalidatePath("/");
+  revalidateApp();
   return { ok: true };
 }

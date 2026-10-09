@@ -1,18 +1,20 @@
 "use server";
 
 import { count, eq } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { db } from "@/db";
 import { assignments, distributionListOfficeRules, offices } from "@/db/schema";
 import {
   firstError,
+  getActionSession,
   isForeignKeyViolation,
   isUniqueViolation,
+  revalidateApp,
+  SESSION_EXPIRED,
   type ActionResult,
 } from "@/lib/action-helpers";
-import { actorName, requireSession } from "@/lib/auth-helpers";
+import { actorName } from "@/lib/auth-helpers";
 
 const officeSchema = z.object({
   name: z.string().trim().min(1, "Name ist erforderlich."),
@@ -22,7 +24,8 @@ const officeSchema = z.object({
 export type OfficeInput = z.infer<typeof officeSchema>;
 
 export async function createOffice(raw: OfficeInput): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   const by = actorName(session);
   const parsed = officeSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
@@ -32,13 +35,13 @@ export async function createOffice(raw: OfficeInput): Promise<ActionResult> {
     if (isUniqueViolation(err)) return { ok: false, message: "Ein Amt mit diesem Namen existiert bereits." };
     throw err;
   }
-  revalidatePath("/stammdaten");
-  revalidatePath("/");
+  revalidateApp();
   return { ok: true };
 }
 
 export async function updateOffice(id: number, raw: OfficeInput): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   const by = actorName(session);
   const parsed = officeSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
@@ -48,13 +51,12 @@ export async function updateOffice(id: number, raw: OfficeInput): Promise<Action
     if (isUniqueViolation(err)) return { ok: false, message: "Ein Amt mit diesem Namen existiert bereits." };
     throw err;
   }
-  revalidatePath("/stammdaten");
-  revalidatePath("/");
+  revalidateApp();
   return { ok: true };
 }
 
 export async function deleteOffice(id: number): Promise<ActionResult> {
-  await requireSession();
+  if (!(await getActionSession())) return SESSION_EXPIRED;
   const [{ n }] = await db
     .select({ n: count() })
     .from(assignments)
@@ -81,7 +83,6 @@ export async function deleteOffice(id: number): Promise<ActionResult> {
       return { ok: false, message: "Amt wird inzwischen verwendet und kann nicht gelöscht werden." };
     throw err;
   }
-  revalidatePath("/stammdaten");
-  revalidatePath("/");
+  revalidateApp();
   return { ok: true };
 }

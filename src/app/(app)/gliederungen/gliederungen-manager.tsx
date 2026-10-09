@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -76,7 +75,6 @@ export function GliederungenManager({
   groups: GroupRow[];
   usage: GroupUsage;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const ordered = useMemo(() => orderGroups(groups), [groups]);
 
@@ -127,7 +125,6 @@ export function GliederungenManager({
       }
       toast.success(form.id != null ? "Gliederung gespeichert." : "Gliederung angelegt.");
       setFormOpen(false);
-      router.refresh();
     });
   }
 
@@ -142,7 +139,6 @@ export function GliederungenManager({
       }
       toast.success("Gliederung gelöscht.");
       setDeleteTarget(null);
-      router.refresh();
     });
   }
 

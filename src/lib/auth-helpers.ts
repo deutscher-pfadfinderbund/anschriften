@@ -5,17 +5,6 @@ import { cache } from "react";
 import { auth } from "@/lib/auth";
 
 /**
- * Resolve the session inside a Server Action. Throws if there is no session.
- * Prefer `getActionSession()` + `SESSION_EXPIRED` from src/lib/action-helpers.ts: a thrown
- * error replaces the page with the error boundary and loses unsaved form input.
- */
-export async function requireSession() {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) throw new Error("Nicht angemeldet.");
-  return session;
-}
-
-/**
  * Authoritative session gate for page components under (app). The layout check is
  * NOT a security boundary: Next.js skips re-rendering layouts on RSC navigations,
  * so pages can render without it. Each protected page must call this first, before

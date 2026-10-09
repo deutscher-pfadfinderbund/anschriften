@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Award, Briefcase, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -94,7 +93,6 @@ export function StammdatenManager({
   ranks: RankRow[];
   rankUsage: Record<number, number>;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   // Controlled so the header row can show the action for the visible tab.
@@ -111,7 +109,6 @@ export function StammdatenManager({
       if (!res.ok) return void toast.error(res.message);
       toast.success(officeForm.id != null ? "Amt gespeichert." : "Amt angelegt.");
       setOfficeForm(null);
-      router.refresh();
     });
   }
 
@@ -123,7 +120,6 @@ export function StammdatenManager({
       if (!res.ok) return void toast.error(res.message);
       toast.success(rankForm.id != null ? "Stand gespeichert." : "Stand angelegt.");
       setRankForm(null);
-      router.refresh();
     });
   }
 
@@ -141,7 +137,6 @@ export function StammdatenManager({
       }
       toast.success(deleteTarget.type === "office" ? "Amt gelöscht." : "Stand gelöscht.");
       setDeleteTarget(null);
-      router.refresh();
     });
   }
 

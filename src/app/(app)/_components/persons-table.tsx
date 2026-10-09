@@ -367,7 +367,6 @@ export function PersonsTable({
       toast.success(`${ids.length} zu „${listName}“ hinzugefügt.`);
       setAddToListOpen(false);
       setTargetListId(null);
-      router.refresh();
     });
   }
 

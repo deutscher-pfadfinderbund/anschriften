@@ -8,13 +8,14 @@ import type { ActiveHolder } from "@/db/queries";
 import { assignments, persons } from "@/db/schema";
 import {
   firstError,
+  getActionSession,
   isForeignKeyViolation,
-  revalidatePersonPaths,
-  todayIso,
+  revalidateApp,
+  SESSION_EXPIRED,
   type ActionResult,
 } from "@/lib/action-helpers";
-import { actorName, requireSession } from "@/lib/auth-helpers";
-import { formatName } from "@/lib/format";
+import { actorName } from "@/lib/auth-helpers";
+import { formatName, todayIso } from "@/lib/format";
 import { resolveTenureEnd } from "@/lib/person-schema";
 
 // Office-history mutations (issue #22). Active tenures are owned by `savePerson`
@@ -48,7 +49,8 @@ const endSchema = z.object({
  * With `endUnknown` the end is recorded as unknown (end_date = today upper bound).
  */
 export async function endAssignment(raw: z.infer<typeof endSchema>): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   const parsed = endSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
   const { assignmentId, endDate, endUnknown } = parsed.data;
@@ -74,7 +76,7 @@ export async function endAssignment(raw: z.infer<typeof endSchema>): Promise<Act
   if (updated.length === 0)
     return { ok: false, message: "Zuordnung wurde zwischenzeitlich geändert. Bitte Seite neu laden." };
   await touchPerson(row.personId, actorName(session));
-  revalidatePersonPaths();
+  revalidateApp();
   return { ok: true };
 }
 
@@ -87,7 +89,8 @@ export async function endAssignment(raw: z.infer<typeof endSchema>): Promise<Act
  * being edited so it never warns about themselves.
  */
 export async function getActiveHolders(officeId: number, groupId: number): Promise<ActiveHolder[]> {
-  await requireSession();
+  // Read-only: without a session there is simply no warning to show.
+  if (!(await getActionSession())) return [];
   if (!Number.isInteger(officeId) || !Number.isInteger(groupId)) return [];
   const rows = await db
     .select({
@@ -129,7 +132,8 @@ const addHistoricalSchema = z.object({
 export async function addHistoricalAssignment(
   raw: z.infer<typeof addHistoricalSchema>,
 ): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   const parsed = addHistoricalSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
   const { personId, groupId, officeId, startDate, endDate, endUnknown } = parsed.data;
@@ -153,7 +157,7 @@ export async function addHistoricalAssignment(
     throw err;
   }
   await touchPerson(personId, actorName(session));
-  revalidatePersonPaths();
+  revalidateApp();
   return { ok: true };
 }
 
@@ -172,7 +176,8 @@ const updateHistoricalSchema = z.object({
 export async function updateHistoricalAssignment(
   raw: z.infer<typeof updateHistoricalSchema>,
 ): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   const parsed = updateHistoricalSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
   const { assignmentId, groupId, officeId, startDate, endDate, endUnknown } = parsed.data;
@@ -226,7 +231,7 @@ export async function updateHistoricalAssignment(
     throw err;
   }
   await touchPerson(row.personId, actorName(session));
-  revalidatePersonPaths();
+  revalidateApp();
   return { ok: true };
 }
 
@@ -240,7 +245,8 @@ const deleteSchema = z.object({ assignmentId: z.number().int().positive() });
  * request from deleting a current office through the history action.
  */
 export async function deleteAssignment(raw: z.infer<typeof deleteSchema>): Promise<ActionResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   const parsed = deleteSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
 
@@ -255,6 +261,6 @@ export async function deleteAssignment(raw: z.infer<typeof deleteSchema>): Promi
 
   await db.delete(assignments).where(eq(assignments.id, parsed.data.assignmentId));
   await touchPerson(row.personId, actorName(session));
-  revalidatePersonPaths();
+  revalidateApp();
   return { ok: true };
 }

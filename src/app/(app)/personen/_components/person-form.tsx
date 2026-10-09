@@ -200,9 +200,9 @@ export function PersonForm({
     router.push("/");
   }
 
-  // Office history (issue #22). Ended tenures are read straight from the server props
-  // and refreshed via router.refresh() after each history mutation, so unsaved edits to
-  // the active rows above survive. `startHistory` runs the immediate history actions.
+  // Office history (issue #22). Ended tenures are read straight from the server props,
+  // which every history action refreshes (revalidateApp), so unsaved edits to the active
+  // rows above survive. `startHistory` runs the immediate history actions.
   const historical = person?.historicalAssignments ?? [];
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isHistoryPending, startHistory] = useTransition();
@@ -336,28 +336,27 @@ export function PersonForm({
     startTransition(async () => {
       const res = await savePerson(payload);
       if (!res.ok) {
-        setErrors(res.errors);
-        toast.error(res.message ?? "Bitte die markierten Felder prüfen.");
+        setErrors(res.errors ?? {});
+        toast.error(res.message);
         return;
       }
       setErrors({});
       toast.success(mode === "create" ? "Anschrift angelegt." : "Änderungen gespeichert.");
       router.push("/");
-      router.refresh();
     });
   }
 
   function handleDelete() {
     if (!person) return;
     startDelete(async () => {
-      await deletePerson(person.id);
+      const res = await deletePerson(person.id);
+      if (!res.ok) return void toast.error(res.message);
       toast.success("Anschrift gelöscht.");
       router.push("/");
-      router.refresh();
     });
   }
 
-  // --- office history: immediate server actions + router.refresh() ---------------
+  // --- office history: immediate server actions (they refresh the props) ----------
 
   /** Confirm the "Amt beenden…" dialog: end the active tenure and drop it from the buffer. */
   function confirmEnd() {
@@ -374,7 +373,6 @@ export function PersonForm({
       setAssignments((rows) => rows.filter((r) => r.key !== endTarget.key));
       setEndTarget(null);
       toast.success("Amt beendet und in die Historie verschoben.");
-      router.refresh();
     });
   }
 
@@ -399,7 +397,6 @@ export function PersonForm({
       if (!res.ok) return void toast.error(res.message);
       setHistForm(null);
       toast.success(histForm.id != null ? "Früheres Amt gespeichert." : "Früheres Amt hinzugefügt.");
-      router.refresh();
     });
   }
 
@@ -409,7 +406,6 @@ export function PersonForm({
       const res = await deleteAssignment({ assignmentId: id });
       if (!res.ok) return void toast.error(res.message);
       toast.success("Eintrag gelöscht.");
-      router.refresh();
     });
   }
 
