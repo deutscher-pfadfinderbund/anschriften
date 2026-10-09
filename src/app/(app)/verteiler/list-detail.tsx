@@ -19,6 +19,7 @@ import type {
   PersonOption,
   RankRow,
 } from "@/db/queries";
+import { callAction } from "@/lib/call-action";
 import { downloadFile, toastDownloadError } from "@/lib/download";
 import { buildBcc, isEmail, type BccSeparator } from "@/lib/export";
 import { formatDateTime, formatNameWithScout } from "@/lib/format";
@@ -98,7 +99,7 @@ export function ListDetail({
 
   function confirmDelete() {
     startTransition(async () => {
-      const res = await deleteList(list.id);
+      const res = await callAction(() => deleteList(list.id));
       if (!res.ok) return void setDeleteError(res.message);
       toast.success("Verteiler gelöscht.");
       setDeleteOpen(false);

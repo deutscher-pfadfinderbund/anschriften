@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { DistributionListWithMembers, ListMemberRow, PersonOption } from "@/db/queries";
+import { callAction } from "@/lib/call-action";
 import { isEmail } from "@/lib/export";
 import { formatName, formatNameWithScout, personCount, scoutAddition } from "@/lib/format";
 import { RULE_KIND_LABELS } from "@/lib/rule-kinds";
@@ -31,7 +32,7 @@ const removeButtonId = (personId: number) => `mitglied-entfernen-${personId}`;
 
 /** Put a removed member back (the "Rückgängig" of the removal toast). */
 async function restoreMember(listId: number, m: ListMemberRow) {
-  const res = await addMembers(listId, [m.personId]);
+  const res = await callAction(() => addMembers(listId, [m.personId]));
   if (!res.ok) return void toast.error(res.message);
   toast.success(`„${formatName(m)}“ wieder hinzugefügt.`);
 }
@@ -63,7 +64,7 @@ export function MembersPanel({
       (o) => o.manual,
     );
     setRemovingId(m.personId);
-    const res = await removeMember(list.id, m.personId);
+    const res = await callAction(() => removeMember(list.id, m.personId));
     setRemovingId(null);
     if (!res.ok) return void toast.error(res.message);
     toast.success(
@@ -238,7 +239,7 @@ function AddMembersForm({
     e.preventDefault();
     if (selected.size === 0) return;
     startTransition(async () => {
-      const res = await addMembers(list.id, [...selected]);
+      const res = await callAction(() => addMembers(list.id, [...selected]));
       if (!res.ok) return void toast.error(res.message);
       toast.success(
         `${personCount(res.added)} hinzugefügt.` +

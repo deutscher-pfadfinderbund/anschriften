@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { ActionResult } from "@/lib/action-helpers";
+import { callAction } from "@/lib/call-action";
 import { ORDER_MAX } from "@/lib/master-data";
 import { cn } from "@/lib/utils";
 
@@ -160,7 +161,7 @@ export function useEntryDialog<D extends object>(initial: D) {
     run(action: () => Promise<ActionResult>, success: string) {
       setError(null);
       startTransition(async () => {
-        const res = await action();
+        const res = await callAction(action);
         if (!res.ok) return setError(res.message);
         toast.success(success);
         setOpen(false);

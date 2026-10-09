@@ -10,6 +10,7 @@ import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { PageBody, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import type { ActiveOfficeHolder, GroupRow, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
+import { callAction } from "@/lib/call-action";
 import { directoryUrl } from "@/lib/directory-url";
 import type { PersonCandidate } from "@/lib/duplicate-persons";
 import { formatDateTime, formatFullName, formatNameWithScout } from "@/lib/format";
@@ -97,7 +98,8 @@ export function PersonForm({
     );
     const rows = values.assignments;
     startSave(async () => {
-      const res = await savePerson(toPayload(values, person && { id: person.id, updatedAt: version }, orders));
+      const payload = toPayload(values, person && { id: person.id, updatedAt: version }, orders);
+      const res = await callAction(() => savePerson(payload));
       if (!res.ok) {
         const fieldErrors = keyRowErrors(res.errors ?? {}, rows);
         setErrors(fieldErrors);
@@ -132,7 +134,7 @@ export function PersonForm({
   function remove() {
     if (!person) return;
     startDelete(async () => {
-      const res = await deletePerson(person.id);
+      const res = await callAction(() => deletePerson(person.id));
       if (!res.ok) return void toast.error(res.message);
       toast.success("Person gelöscht.");
       router.push(directoryUrl());

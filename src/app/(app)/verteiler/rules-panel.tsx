@@ -10,6 +10,7 @@ import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
 import type { DistributionListWithMembers, GroupRow, OfficeRow, RankRow } from "@/db/queries";
+import { callAction } from "@/lib/call-action";
 import { RULE_KIND_LABELS, RULE_KINDS, type RuleKind } from "@/lib/rule-kinds";
 
 import { RULE_ICONS } from "./rule-icons";
@@ -66,7 +67,7 @@ export function RulesPanel({
   function add(kind: RuleKind, value: string) {
     const name = options[kind].find((o) => o.value === value)?.label ?? RULE_KIND_LABELS[kind];
     startTransition(async () => {
-      const res = await addListRule(list.id, kind, Number(value));
+      const res = await callAction(() => addListRule(list.id, kind, Number(value)));
       if (!res.ok) return void toast.error(res.message);
       toast.success(`Regel „${name}“ hinzugefügt.`);
     });
@@ -76,7 +77,7 @@ export function RulesPanel({
     if (!removal) return;
     const { kind, id, name } = removal;
     startTransition(async () => {
-      const res = await removeListRule(list.id, kind, id);
+      const res = await callAction(() => removeListRule(list.id, kind, id));
       if (!res.ok) return void toast.error(res.message);
       toast.success(`Regel „${name}“ entfernt.`);
       setRemoval(null);

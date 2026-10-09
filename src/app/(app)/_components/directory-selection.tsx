@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { addMembers } from "@/actions/lists";
 import { Combobox } from "@/components/combobox";
-import { ComposeMailDialog } from "@/components/compose-mail-dialog";
+import { ComposeMailDialog, emailAddressCount } from "@/components/compose-mail-dialog";
 import { FormLabel } from "@/components/form-label";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { PersonListRow } from "@/db/queries";
+import { callAction } from "@/lib/call-action";
 import { downloadFile, toastDownloadError } from "@/lib/download";
 import { personCount } from "@/lib/format";
 import { TOUCH_HIT, cn } from "@/lib/utils";
@@ -56,20 +57,19 @@ export function SelectionBar({
 
   const mail = mailSelection(selected);
 
-  function copyEmails() {
+  async function copyEmails() {
     const note = skippedNote(mail.deceased, mail.bcc.skipped);
     if (mail.bcc.count === 0) {
       toast.error(`Keine E-Mail-Adresse in der Auswahl${note ? ` (${note})` : ""}.`);
       return;
     }
-    navigator.clipboard.writeText(mail.bcc.text).then(
-      () =>
-        toast.success(
-          `${mail.bcc.count} ${mail.bcc.count === 1 ? "E-Mail-Adresse" : "E-Mail-Adressen"} kopiert` +
-            (note ? ` (${note}).` : "."),
-        ),
-      () => toast.error("Kopieren nicht möglich. Bitte erneut versuchen."),
-    );
+    try {
+      // Throws, not rejects, where the Clipboard API is missing (insecure origin).
+      await navigator.clipboard.writeText(mail.bcc.text);
+      toast.success(`${emailAddressCount(mail.bcc.count)} kopiert${note ? ` (${note}).` : "."}`);
+    } catch {
+      toast.error("Kopieren nicht möglich. Bitte versuche es noch einmal.");
+    }
   }
 
   async function downloadCsv() {
@@ -77,7 +77,7 @@ export function SelectionBar({
     try {
       await downloadFile(`/api/export/csv?ids=${selected.map((p) => p.id).join(",")}`, "anschriften.csv");
     } catch (err) {
-      toastDownloadError(err, "CSV-Export fehlgeschlagen. Bitte erneut versuchen.");
+      toastDownloadError(err, "CSV-Export fehlgeschlagen. Bitte versuche es noch einmal.");
     } finally {
       setCsvPending(false);
     }
@@ -202,7 +202,7 @@ function AddToListDialog({
     if (listId == null) return;
     const id = Number(listId);
     startTransition(async () => {
-      const res = await addMembers(id, personIds);
+      const res = await callAction(() => addMembers(id, personIds));
       if (!res.ok) return void toast.error(res.message);
       const listName = distributionLists.find((l) => l.id === id)?.name ?? "Verteiler";
       const note = skippedNote(res.skippedDeceased, 0);

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { callAction } from "@/lib/call-action";
 
 /** What the dialog edits: a new list (`id` null) or an existing one. */
 export type ListDraft = { id: number | null; name: string; description: string };
@@ -65,7 +66,7 @@ function ListForm({
     e.preventDefault();
     if (!name.trim()) return;
     startTransition(async () => {
-      const res = await saveList(draft.id, { name, description: description || null });
+      const res = await callAction(() => saveList(draft.id, { name, description: description || null }));
       if (!res.ok) return void setError(res.message);
       toast.success(isNew ? "Verteiler angelegt." : "Verteiler gespeichert.");
       onSaved(res.id);

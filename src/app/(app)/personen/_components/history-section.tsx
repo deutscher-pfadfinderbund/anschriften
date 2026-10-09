@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { HistoricalAssignment } from "@/db/queries";
+import { callAction } from "@/lib/call-action";
 import { formatDate, todayIso } from "@/lib/format";
 import { TOUCH_HIT, cn } from "@/lib/utils";
 
@@ -83,7 +84,7 @@ export function HistorySection({
   function remove() {
     if (!removing) return;
     startRemove(async () => {
-      const res = await deleteAssignment({ assignmentId: removing.id, updatedAt: version });
+      const res = await callAction(() => deleteAssignment({ assignmentId: removing.id, updatedAt: version }));
       if (!res.ok) return void toast.error(res.message);
       onVersion(res.updatedAt);
       setRemoving(null);
@@ -243,10 +244,12 @@ function HistoryForm({
       endUnknown: draft.end.endUnknown,
     };
     startTransition(async () => {
-      const res =
-        draft.id != null
-          ? await updateHistoricalAssignment({ assignmentId: draft.id, ...values })
-          : await addHistoricalAssignment({ personId, ...values });
+      const id = draft.id;
+      const res = await callAction(() =>
+        id != null
+          ? updateHistoricalAssignment({ assignmentId: id, ...values })
+          : addHistoricalAssignment({ personId, ...values }),
+      );
       if (!res.ok) return void setServerError(res.message);
       onVersion(res.updatedAt);
       toast.success(isNew ? "Früheres Amt hinzugefügt." : "Früheres Amt gespeichert.");
