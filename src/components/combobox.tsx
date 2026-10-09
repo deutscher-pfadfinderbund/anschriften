@@ -31,6 +31,8 @@ export function Combobox({
   searchPlaceholder = "Suchen …",
   emptyText = "Nichts gefunden.",
   "aria-label": ariaLabel,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: {
   /** Forwarded to the trigger, so a <label htmlFor> can name it. */
   id?: string;
@@ -42,6 +44,10 @@ export function Combobox({
   searchPlaceholder?: string;
   emptyText?: string;
   "aria-label"?: string;
+  /** Marks the trigger invalid (red ring, like the other fields). */
+  "aria-invalid"?: React.AriaAttributes["aria-invalid"];
+  /** id of the error or hint line under the field. */
+  "aria-describedby"?: string;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value) ?? null;
@@ -57,6 +63,8 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           aria-label={ariaLabel}
+          aria-invalid={ariaInvalid}
+          aria-describedby={ariaDescribedBy}
           className={cn(
             FIELD,
             "flex items-center justify-between gap-1.5 pr-2 text-left",

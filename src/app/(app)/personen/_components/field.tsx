@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
-
 import { Combobox } from "@/components/combobox";
 import { FormLabel } from "@/components/form-label";
 import { Input } from "@/components/ui/input";
@@ -77,23 +75,10 @@ export function ComboField({
   hint,
   className,
   ...combo
-}: FieldBase & Omit<React.ComponentProps<typeof Combobox>, "id">) {
-  // Combobox takes no aria-invalid/aria-describedby (yet), so set them on its trigger
-  // (found by id) to get the same invalid ring and announcement as the other fields.
-  useEffect(() => {
-    const trigger = document.getElementById(id);
-    if (!trigger) return;
-    const aria = fieldAria(id, error, hint);
-    for (const name of ["aria-invalid", "aria-describedby"] as const) {
-      const value = aria[name];
-      if (value) trigger.setAttribute(name, String(value));
-      else trigger.removeAttribute(name);
-    }
-  }, [id, error, hint]);
-
+}: FieldBase & Omit<React.ComponentProps<typeof Combobox>, "id" | "aria-invalid" | "aria-describedby">) {
   return (
     <Field label={label} id={id} error={error} hint={hint} className={className}>
-      <Combobox id={id} {...combo} />
+      <Combobox {...fieldAria(id, error, hint)} {...combo} />
     </Field>
   );
 }
