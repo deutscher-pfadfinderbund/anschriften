@@ -42,6 +42,7 @@ import {
 } from "@/lib/format";
 import { orderGroups } from "@/lib/groups";
 import type { FieldErrors, PersonInput } from "@/lib/person-schema";
+import { RULE_KIND_LABELS } from "@/lib/rule-kinds";
 import { TOUCH_HIT, cn } from "@/lib/utils";
 
 import { EndTenureDialog, type EndTarget } from "./end-tenure-dialog";
@@ -143,7 +144,7 @@ export function PersonForm({
   const ruleReasonsByList = useMemo(() => {
     const map = new Map<number, string>();
     for (const r of person?.ruleMemberships ?? []) {
-      map.set(r.listId, r.reasons.join(", "));
+      map.set(r.listId, r.via.map((v) => `${RULE_KIND_LABELS[v.kind]}: ${v.name}`).join(", "));
     }
     return map;
   }, [person?.ruleMemberships]);

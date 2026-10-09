@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import type { z } from "zod";
+import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 
@@ -53,6 +53,39 @@ export function revalidateApp(): void {
 /** First Zod issue as a message, with a German fallback. */
 export function firstError(e: z.ZodError): string {
   return e.issues[0]?.message ?? "Ungültige Eingabe.";
+}
+
+/** Required display name of a master-data row (Amt, Stand, Gliederung). */
+export const nameField = z
+  .string()
+  .trim()
+  .min(1, "Name ist erforderlich.")
+  .max(200, "Eingabe ist zu lang (max. 200 Zeichen).");
+
+const WHOLE_NUMBER = "Bitte eine ganze Zahl eingeben.";
+
+/**
+ * A non-negative whole number for the ordering fields (Rang, Sortierung,
+ * Sortierschlüssel) with German messages, capped well inside Postgres' `integer` — an
+ * out-of-range value would otherwise reach the database and crash the action.
+ */
+export function orderNumber(label: string) {
+  return z
+    .number({ error: WHOLE_NUMBER })
+    .int(WHOLE_NUMBER)
+    .min(0, `${label} darf nicht negativ sein.`)
+    .max(99_999, `${label} ist zu groß (höchstens 99999).`);
+}
+
+/**
+ * Thrown inside a transaction to roll everything back with a user-facing German message.
+ * The action catches it and returns `{ ok: false, message }`.
+ */
+export class UserFacingError extends Error {}
+
+/** "… wurde inzwischen gelöscht" — an update or reference hit a row someone else removed. */
+export function deletedMeanwhile(what: string): string {
+  return `${what} wurde inzwischen gelöscht. Bitte lade die Seite neu.`;
 }
 
 /**

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import {
-  listDistributionListSummaries,
+  listDistributionListNames,
   listGroups,
   listOffices,
   listPersonOptions,
@@ -20,7 +20,7 @@ export default async function NewPersonPage() {
     listGroups(),
     listOffices(),
     listRanks(),
-    listDistributionListSummaries(),
+    listDistributionListNames(),
     // Lightweight name list for the non-blocking duplicate-person hint.
     listPersonOptions(),
   ]);

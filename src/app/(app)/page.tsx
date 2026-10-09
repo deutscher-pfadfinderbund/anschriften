@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import {
-  listDistributionListSummaries,
+  listDistributionListNames,
   listGroups,
   listOffices,
   listPersons,
@@ -22,7 +22,7 @@ export default async function DirectoryPage() {
     listPersons(),
     listGroups(),
     listOffices(),
-    listDistributionListSummaries(),
+    listDistributionListNames(),
   ]);
 
   return (

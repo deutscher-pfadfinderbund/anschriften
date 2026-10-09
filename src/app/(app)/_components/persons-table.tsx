@@ -51,7 +51,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { DistributionListSummary, GroupRow, OfficeRow, PersonListRow } from "@/db/queries";
+import type { GroupRow, OfficeRow, PersonListRow } from "@/db/queries";
 import { downloadFile, toastDownloadError } from "@/lib/download";
 import { buildBcc } from "@/lib/export";
 import { birthYear, fold, formatName, scoutAddition } from "@/lib/format";
@@ -113,7 +113,7 @@ export function PersonsTable({
   persons: PersonListRow[];
   groups: GroupRow[];
   offices: OfficeRow[];
-  distributionLists: DistributionListSummary[];
+  distributionLists: { id: number; name: string }[];
   /** True when the optional mail module is configured (see isMailEnabled). */
   mailEnabled?: boolean;
 }) {
@@ -602,10 +602,7 @@ export function PersonsTable({
           </DialogHeader>
           <Combobox
             aria-label="Verteiler wählen"
-            options={distributionLists.map((l) => ({
-              value: String(l.id),
-              label: `${l.name} (${l.memberCount})`,
-            }))}
+            options={distributionLists.map((l) => ({ value: String(l.id), label: l.name }))}
             value={targetListId}
             onChange={setTargetListId}
             placeholder="Verteiler wählen"

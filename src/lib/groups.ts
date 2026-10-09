@@ -57,3 +57,30 @@ export function orderGroups<T extends GroupNode>(groups: T[]): OrderedGroup<T>[]
   }
   return out;
 }
+
+/**
+ * Ids of a group's descendants (children, grandchildren, …), without the group itself.
+ * Used to forbid parent cycles (a group may not move below its own subtree) and to carry
+ * a group's Bereich down to its subtree. Terminates on cyclic stored data.
+ */
+export function descendantIds(
+  groups: readonly { id: number; parentId: number | null }[],
+  id: number,
+): Set<number> {
+  const children = new Map<number, number[]>();
+  for (const g of groups) {
+    if (g.parentId == null) continue;
+    const list = children.get(g.parentId);
+    if (list) list.push(g.id);
+    else children.set(g.parentId, [g.id]);
+  }
+  const out = new Set<number>();
+  const stack = [...(children.get(id) ?? [])];
+  while (stack.length > 0) {
+    const cur = stack.pop()!;
+    if (cur === id || out.has(cur)) continue;
+    out.add(cur);
+    stack.push(...(children.get(cur) ?? []));
+  }
+  return out;
+}

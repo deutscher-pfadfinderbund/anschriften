@@ -1,82 +1,101 @@
 "use server";
 
-import { count, eq } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { assignments, distributionListGroupRules, groups } from "@/db/schema";
+import { groupDeleteBlockers } from "@/db/queries";
+import { groups } from "@/db/schema";
 import {
+  deletedMeanwhile,
   firstError,
   getActionSession,
   isForeignKeyViolation,
   isUniqueViolation,
+  nameField,
+  orderNumber,
   revalidateApp,
   SESSION_EXPIRED,
+  UserFacingError,
   type ActionResult,
 } from "@/lib/action-helpers";
 import { actorName } from "@/lib/auth-helpers";
+import { descendantIds } from "@/lib/groups";
 import { SECTIONS } from "@/lib/sections";
 
 const groupSchema = z.object({
-  name: z.string().trim().min(1, "Name ist erforderlich."),
-  parentId: z.number().int().nullable(),
-  section: z.enum(SECTIONS),
+  name: nameField,
+  parentId: z.number().int().positive().nullable(),
+  // Only decisive for a top-level group: a child always takes its parent's Bereich.
+  section: z.enum(SECTIONS, { error: "Bitte einen Bereich wählen." }),
   kind: z
     .string()
     .trim()
-    .nullable()
-    .transform((v) => (v && v.length > 0 ? v : null)),
-  sortKey: z.number().int().min(0, "Sortierschlüssel muss ≥ 0 sein."),
+    .max(200, "Eingabe ist zu lang (max. 200 Zeichen).")
+    .nullish()
+    .transform((v) => v || null),
+  sortKey: orderNumber("Der Sortierschlüssel"),
 });
 
-export type GroupInput = z.infer<typeof groupSchema>;
+export type GroupInput = z.input<typeof groupSchema>;
 
-export async function createGroup(raw: GroupInput): Promise<ActionResult> {
+/**
+ * Create (`id` null) or update a Gliederung. The Bereich (section) is a property of the
+ * whole branch: the PDF profiles walk the tree and drop every child outside the profile's
+ * sections, so a child with a different Bereich than its parent would silently vanish
+ * from "nur Orden St. Georg". Hence a child always inherits its parent's section, and
+ * changing a group's section (or moving it) carries its whole subtree along — in one
+ * transaction.
+ */
+export async function saveGroup(id: number | null, raw: GroupInput): Promise<ActionResult> {
   const session = await getActionSession();
   if (!session) return SESSION_EXPIRED;
-  const by = actorName(session);
   const parsed = groupSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  try {
-    await db.insert(groups).values({ ...parsed.data, updatedBy: by });
-  } catch (err) {
-    if (isUniqueViolation(err)) return { ok: false, message: "Eine Gliederung mit diesem Namen existiert bereits." };
-    throw err;
-  }
-  revalidateApp();
-  return { ok: true };
-}
+  const data = parsed.data;
+  const by = actorName(session);
 
-export async function updateGroup(id: number, raw: GroupInput): Promise<ActionResult> {
-  const session = await getActionSession();
-  if (!session) return SESSION_EXPIRED;
-  const by = actorName(session);
-  const parsed = groupSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  // Reject a parent that is the group itself or one of its descendants: such a cycle
-  // would drop the whole branch from every view (list, comboboxes, filters) and could
-  // not be repaired through the UI. Walk up from the proposed parent — cheap, a handful
-  // of rows — and refuse if we reach this group.
-  if (parsed.data.parentId != null) {
-    const rows = await db.select({ id: groups.id, parentId: groups.parentId }).from(groups);
-    const parentById = new Map(rows.map((r) => [r.id, r.parentId]));
-    const seen = new Set<number>();
-    let cursor: number | null = parsed.data.parentId;
-    while (cursor != null) {
-      if (cursor === id)
-        return {
-          ok: false,
-          message: "Eine Gliederung kann nicht sich selbst oder einer ihrer Untergliederungen untergeordnet werden.",
-        };
-      if (seen.has(cursor)) break; // pre-existing cycle elsewhere — stop instead of looping
-      seen.add(cursor);
-      cursor = parentById.get(cursor) ?? null;
-    }
-  }
   try {
-    await db.update(groups).set({ ...parsed.data, updatedBy: by, updatedAt: new Date() }).where(eq(groups.id, id));
+    await db.transaction(async (tx) => {
+      // A handful of rows: load the tree once for the parent, cycle and subtree checks.
+      const all = await tx
+        .select({ id: groups.id, parentId: groups.parentId, section: groups.section })
+        .from(groups);
+      const subtree = id != null ? descendantIds(all, id) : new Set<number>();
+
+      let section = data.section;
+      if (data.parentId != null) {
+        const parent = all.find((g) => g.id === data.parentId);
+        if (!parent) throw new UserFacingError(deletedMeanwhile("Die übergeordnete Gliederung"));
+        // A cycle would drop the whole branch from every view and could not be repaired
+        // through the UI.
+        if (data.parentId === id || subtree.has(data.parentId))
+          throw new UserFacingError(
+            "Eine Gliederung kann nicht sich selbst oder einer ihrer Untergliederungen untergeordnet werden.",
+          );
+        section = parent.section;
+      }
+
+      const values = { ...data, section, updatedBy: by, updatedAt: new Date() };
+      if (id == null) {
+        await tx.insert(groups).values(values);
+        return;
+      }
+      const saved = await tx.update(groups).set(values).where(eq(groups.id, id)).returning({ id: groups.id });
+      if (saved.length === 0) throw new UserFacingError(deletedMeanwhile("Diese Gliederung"));
+      if (subtree.size > 0)
+        await tx
+          .update(groups)
+          .set({ section, updatedBy: by, updatedAt: new Date() })
+          .where(and(inArray(groups.id, [...subtree]), ne(groups.section, section)));
+    });
   } catch (err) {
-    if (isUniqueViolation(err)) return { ok: false, message: "Eine Gliederung mit diesem Namen existiert bereits." };
+    if (err instanceof UserFacingError) return { ok: false, message: err.message };
+    if (isUniqueViolation(err))
+      return { ok: false, message: "Eine Gliederung mit diesem Namen existiert bereits." };
+    // Race: the parent was deleted between the check above and the write.
+    if (isForeignKeyViolation(err))
+      return { ok: false, message: deletedMeanwhile("Die übergeordnete Gliederung") };
     throw err;
   }
   revalidateApp();
@@ -85,39 +104,15 @@ export async function updateGroup(id: number, raw: GroupInput): Promise<ActionRe
 
 export async function deleteGroup(id: number): Promise<ActionResult> {
   if (!(await getActionSession())) return SESSION_EXPIRED;
-  const [{ n: childCount }] = await db
-    .select({ n: count() })
-    .from(groups)
-    .where(eq(groups.parentId, id));
-  if (Number(childCount) > 0)
-    return { ok: false, message: "Gliederung hat Untergliederungen und kann nicht gelöscht werden." };
-
-  const [{ n: assignmentCount }] = await db
-    .select({ n: count() })
-    .from(assignments)
-    .where(eq(assignments.groupId, id));
-  if (Number(assignmentCount) > 0)
-    return {
-      ok: false,
-      message:
-        "Gliederung ist noch Personen zugeordnet (auch frühere Ämter in der Historie zählen) und kann nicht gelöscht werden.",
-    };
-
-  // Distribution-list group rules reference the group with onDelete: cascade — deleting
-  // it would silently drop the rules and change who gets future mailings, so block it here.
-  const [{ n: ruleCount }] = await db
-    .select({ n: count() })
-    .from(distributionListGroupRules)
-    .where(eq(distributionListGroupRules.groupId, id));
-  if (Number(ruleCount) > 0)
-    return { ok: false, message: "Gliederung wird von Verteiler-Regeln verwendet und kann nicht gelöscht werden." };
-
+  // Same guard as the page's up-front check (children, assignments incl. history, rules).
+  const blocker = (await groupDeleteBlockers()).get(id);
+  if (blocker) return { ok: false, message: blocker };
   try {
     await db.delete(groups).where(eq(groups.id, id));
   } catch (err) {
-    // Race: something referenced the group between the checks above and the delete.
+    // Race: something referenced the group between the check above and the delete.
     if (isForeignKeyViolation(err))
-      return { ok: false, message: "Gliederung wird inzwischen verwendet und kann nicht gelöscht werden." };
+      return { ok: false, message: "Diese Gliederung wird inzwischen verwendet und kann nicht gelöscht werden." };
     throw err;
   }
   revalidateApp();

@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createGroup, deleteGroup, updateGroup } from "@/actions/groups";
+import { deleteGroup, saveGroup } from "@/actions/groups";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { EmptyState } from "@/components/empty-state";
@@ -30,10 +30,8 @@ import {
 } from "@/components/ui/select";
 import type { GroupRow } from "@/db/queries";
 import { SECTIONS, SECTION_LABELS, type Section } from "@/lib/sections";
-import { orderGroups } from "@/lib/groups";
+import { descendantIds, orderGroups } from "@/lib/groups";
 import { HOVER_REVEAL, cn } from "@/lib/utils";
-
-export type GroupUsage = Record<number, { assignments: number; children: number }>;
 
 const PARENT_NONE = "none";
 
@@ -50,30 +48,13 @@ function emptyForm(): FormState {
   return { id: null, name: "", section: "bund", kind: "", sortKey: "0", parentId: null };
 }
 
-/** Ids of a group's descendants (client-side, from the full list) — invalid parents. */
-function descendantIds(groups: GroupRow[], id: number): Set<number> {
-  const children = new Map<number, number[]>();
-  for (const g of groups) {
-    if (g.parentId == null) continue;
-    if (!children.has(g.parentId)) children.set(g.parentId, []);
-    children.get(g.parentId)!.push(g.id);
-  }
-  const out = new Set<number>();
-  const stack = [...(children.get(id) ?? [])];
-  while (stack.length) {
-    const cur = stack.pop()!;
-    out.add(cur);
-    for (const c of children.get(cur) ?? []) stack.push(c);
-  }
-  return out;
-}
-
 export function GliederungenManager({
   groups,
-  usage,
+  blockers,
 }: {
   groups: GroupRow[];
-  usage: GroupUsage;
+  /** Per group id: why it cannot be deleted (absent = deletable), same rule as the action. */
+  blockers: Record<number, string>;
 }) {
   const [isPending, startTransition] = useTransition();
   const ordered = useMemo(() => orderGroups(groups), [groups]);
@@ -118,7 +99,7 @@ export function GliederungenManager({
       parentId: form.parentId,
     };
     startTransition(async () => {
-      const res = form.id != null ? await updateGroup(form.id, payload) : await createGroup(payload);
+      const res = await saveGroup(form.id, payload);
       if (!res.ok) {
         toast.error(res.message);
         return;
@@ -141,10 +122,6 @@ export function GliederungenManager({
       setDeleteTarget(null);
     });
   }
-
-  const targetUsage = deleteTarget ? usage[deleteTarget.id] : undefined;
-  const targetBlocked =
-    !!targetUsage && (targetUsage.assignments > 0 || targetUsage.children > 0);
 
   return (
     <>
@@ -288,11 +265,7 @@ export function GliederungenManager({
         onOpenChange={(o) => !o && setDeleteTarget(null)}
         title="Gliederung löschen?"
         description={`„${deleteTarget?.name}“ wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
-        blockedMessage={
-          targetBlocked
-            ? "Diese Gliederung kann nicht gelöscht werden, solange ihr Untergliederungen oder Personen zugeordnet sind."
-            : undefined
-        }
+        blockedMessage={deleteTarget ? blockers[deleteTarget.id] : undefined}
         pending={isPending}
         onConfirm={confirmDelete}
       />

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import {
   getPersonForEdit,
-  listDistributionListSummaries,
+  listDistributionListNames,
   listGroups,
   listOffices,
   listRanks,
@@ -51,7 +51,7 @@ export default async function EditPersonPage({
     listGroups(),
     listOffices(),
     listRanks(),
-    listDistributionListSummaries(),
+    listDistributionListNames(),
   ]);
   if (!person) notFound();
 
