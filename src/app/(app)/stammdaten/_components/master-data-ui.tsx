@@ -55,41 +55,52 @@ export function EntryList({
 /**
  * One entry, the whole row a button that opens the edit dialog. The order number sits
  * in a fixed first column; `depth` indents only the name, like a table of contents.
+ * Screen readers get the name as the button's label, the number and details as its
+ * description.
  */
 export function EntryRow({
   order,
-  orderTitle,
+  orderLabel,
   name,
   depth = 0,
   meta,
   onOpen,
 }: {
-  /** The Reihenfolge (or a placeholder like „—“). */
-  order: React.ReactNode;
-  /** Tooltip on the number: what it means. */
-  orderTitle: string;
+  /** The Reihenfolge; null shows „—“ (an Amt without one goes to the end). */
+  order: number | null;
+  /** What the number means, e.g. „Reihenfolge im PDF“. */
+  orderLabel: string;
   name: string;
   depth?: number;
   /** Quiet details after the name (right-aligned; a second line on phones). */
   meta?: React.ReactNode;
   onOpen: () => void;
 }) {
+  const id = useId();
+  const orderText = order == null ? "Ohne Reihenfolge – steht am Ende" : `${orderLabel}: ${order}`;
   return (
     <li>
       <button
         type="button"
         onClick={onOpen}
         aria-label={`${name} bearbeiten`}
+        aria-describedby={meta ? `${id}-order ${id}-meta` : `${id}-order`}
         className="group/row flex w-full cursor-pointer items-start gap-3 px-4 py-2 text-left transition-colors hover:bg-hover focus-visible:-outline-offset-2 active:bg-active sm:px-gutter"
       >
-        <NumberBadge title={orderTitle}>{order}</NumberBadge>
+        <NumberBadge title={order == null ? orderText : orderLabel}>{order ?? "—"}</NumberBadge>
+        <span id={`${id}-order`} className="sr-only">
+          {orderText}.
+        </span>
         <span
           className="flex min-w-0 flex-1 flex-col gap-x-3 gap-y-1 sm:flex-row sm:items-start"
           style={depth > 0 ? { paddingLeft: depth * 16 } : undefined}
         >
           <span className="min-w-0 text-ui text-ink">{name}</span>
           {meta ? (
-            <span className="flex min-w-0 flex-wrap items-center gap-1 text-caption text-ink-faint sm:ml-auto sm:justify-end">
+            <span
+              id={`${id}-meta`}
+              className="flex min-w-0 flex-wrap items-center gap-1 text-caption text-ink-faint sm:ml-auto sm:justify-end"
+            >
               {meta}
             </span>
           ) : null}

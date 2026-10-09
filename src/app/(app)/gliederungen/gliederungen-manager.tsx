@@ -145,7 +145,7 @@ export function GliederungenManager({
             <EntryRow
               key={group.id}
               order={group.sortKey}
-              orderTitle="Reihenfolge im PDF"
+              orderLabel="Reihenfolge im PDF"
               name={group.name}
               depth={depth}
               // The Bereich belongs to the whole branch, so only its top row names it.

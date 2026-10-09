@@ -150,26 +150,34 @@ export function StammdatenManager({
                 ) : null
               }
             >
-              {offices.map((o) => (
-                <EntryRow
-                  key={o.id}
-                  order={o.rank === RANK_UNRANKED ? "—" : o.rank}
-                  orderTitle={
-                    o.rank === RANK_UNRANKED ? "Ohne Reihenfolge – steht am Ende" : "Reihenfolge im PDF"
-                  }
-                  name={o.name}
-                  meta={(officeListRules[o.id] ?? []).map((l) => (
-                    <Tag
-                      key={l.listId}
-                      tone="brass"
-                      title={`Wer dieses Amt hat, ist automatisch im Verteiler „${l.listName}“.`}
-                    >
-                      {l.listName}
-                    </Tag>
-                  ))}
-                  onOpen={() => openDialog("office", officeEntry(o))}
-                />
-              ))}
+              {offices.map((o) => {
+                const lists = officeListRules[o.id] ?? [];
+                return (
+                  <EntryRow
+                    key={o.id}
+                    order={o.rank === RANK_UNRANKED ? null : o.rank}
+                    orderLabel={COPY.office.orderLabel}
+                    name={o.name}
+                    meta={
+                      lists.length > 0 ? (
+                        <>
+                          <span className="sr-only">Verteiler: </span>
+                          {lists.map((l) => (
+                            <Tag
+                              key={l.listId}
+                              tone="brass"
+                              title={`Wer dieses Amt hat, ist automatisch im Verteiler „${l.listName}“.`}
+                            >
+                              {l.listName}
+                            </Tag>
+                          ))}
+                        </>
+                      ) : null
+                    }
+                    onOpen={() => openDialog("office", officeEntry(o))}
+                  />
+                );
+              })}
             </EntryList>
           </TabsContent>
 
@@ -191,7 +199,7 @@ export function StammdatenManager({
                 <EntryRow
                   key={r.id}
                   order={r.sortOrder}
-                  orderTitle="Reihenfolge in Auswahllisten"
+                  orderLabel={COPY.rank.orderLabel}
                   name={r.name}
                   onOpen={() => openDialog("rank", rankEntry(r))}
                 />
