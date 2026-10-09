@@ -14,17 +14,20 @@ export function LoginButton() {
   async function signIn() {
     setPending(true);
     setFailed(false);
-    const { error } = await authClient.signIn.oauth2({
-      providerId: "keycloak",
-      callbackURL: "/",
-      errorCallbackURL: "/login",
-    });
-    // On success the client redirects the browser to Keycloak, so we only reach
-    // here if kicking off the flow itself failed (e.g. Keycloak unreachable).
-    if (error) {
-      setPending(false);
-      setFailed(true);
+    try {
+      const { error } = await authClient.signIn.oauth2({
+        providerId: "keycloak",
+        callbackURL: "/",
+        errorCallbackURL: "/login",
+      });
+      // On success the client redirects the browser to Keycloak, so we only get
+      // here if kicking off the flow failed (e.g. Keycloak unreachable).
+      if (!error) return;
+    } catch {
+      // The request itself was rejected: offline, or the server is restarting.
     }
+    setPending(false);
+    setFailed(true);
   }
 
   return (
