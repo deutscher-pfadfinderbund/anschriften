@@ -12,6 +12,7 @@ import {
   getActionSession,
   isForeignKeyViolation,
   isUniqueViolation,
+  nameField,
   revalidateApp,
   SESSION_EXPIRED,
   type ActionResult,
@@ -55,11 +56,7 @@ async function touchPersons(ids: number[], by: string): Promise<void> {
 }
 
 const listSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, "Name ist erforderlich.")
-    .max(200, "Eingabe ist zu lang (max. 200 Zeichen)."),
+  name: nameField,
   description: z
     .string()
     .trim()
@@ -90,7 +87,7 @@ export async function saveList(id: number | null, raw: ListInput): Promise<SaveL
     savedId = row?.id;
   } catch (err) {
     if (isUniqueViolation(err))
-      return { ok: false, message: "Ein Verteiler mit diesem Namen existiert bereits." };
+      return { ok: false, message: "Einen Verteiler mit diesem Namen gibt es schon." };
     throw err;
   }
   if (savedId == null) return { ok: false, message: deletedMeanwhile("Dieser Verteiler") };

@@ -25,18 +25,6 @@ export type { ListRef } from "@/db/list-rules";
 // src/actions/*. Sorting by name happens in TS with German collation: the DB cluster's
 // C collation would put umlauts after Z.
 
-/** German collation on last name → first name → scout name (nulls sort last). */
-function byGermanName(
-  a: { lastName: string | null; firstName: string | null; scoutName: string | null },
-  b: { lastName: string | null; firstName: string | null; scoutName: string | null },
-): number {
-  return (
-    (a.lastName ?? "").localeCompare(b.lastName ?? "", "de") ||
-    (a.firstName ?? "").localeCompare(b.firstName ?? "", "de") ||
-    (a.scoutName ?? "").localeCompare(b.scoutName ?? "", "de")
-  );
-}
-
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, "de");
 
 // --- effective Verteiler membership (manual ∪ rules) ---------------------------------
@@ -602,7 +590,7 @@ export async function listPersonOptions(): Promise<PersonOption[]> {
       deathDate: persons.deathDate,
     })
     .from(persons);
-  return rows.sort(byGermanName);
+  return rows.sort(byDirectoryName);
 }
 
 // --- CSV export -----------------------------------------------------------------------
@@ -633,7 +621,7 @@ export async function personsForCsvByList(listId: number): Promise<CsvPerson[]> 
 export async function personsForCsvByIds(ids: number[]): Promise<CsvPerson[]> {
   if (ids.length === 0) return [];
   const rows = await db.select(csvColumns).from(persons).where(inArray(persons.id, ids));
-  return rows.sort(byGermanName);
+  return rows.sort(byDirectoryName);
 }
 
 // --- mail module (issue #19) ----------------------------------------------------------
