@@ -161,6 +161,9 @@ export async function sendListMail(input: SendListMailInput): Promise<SendListMa
   } finally {
     transport.close();
   }
+  // Every RCPT refused (e.g. "Relay access denied"): nodemailer resolves because `To:`
+  // (our own address) was accepted, but nobody got the mail.
+  if (failure == null && sent === 0) failure = "Der Mailserver hat alle Empfänger abgelehnt.";
 
   // Counts only, never the refused addresses themselves (PII).
   const refusedNote = refused > 0 ? `${refused} von ${recipientCount} Empfängern vom Mailserver abgelehnt` : null;

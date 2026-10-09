@@ -180,6 +180,20 @@ describe("sendListMail partial failure (chunked BCC)", () => {
     expect(logged.error).toBe("1 von 5 Empfängern vom Mailserver abgelehnt");
   });
 
+  it("reports a failure when the server refused every recipient", async () => {
+    sendMailMock.mockImplementation(async ({ bcc }: { bcc: string[] }) => ({ rejected: bcc }));
+    const result = await sendListMail({ subject: "S", body: "B", recipients, sentBy: "K" });
+    expect(result).toEqual({
+      ok: false,
+      error: "Der Mailserver hat alle Empfänger abgelehnt.",
+      sent: 0,
+      recipientCount: 5,
+    });
+    const logged = insertValuesMock.mock.calls[0][0] as { status: string; error: string };
+    expect(logged.status).toBe("failed");
+    expect(logged.error).toBe("Der Mailserver hat alle Empfänger abgelehnt.");
+  });
+
   it("reports sent = 0 when the very first chunk fails", async () => {
     sendMailMock.mockRejectedValue(new Error("ECONNREFUSED"));
     const result = await sendListMail({ subject: "S", body: "B", recipients, sentBy: "K" });

@@ -51,7 +51,8 @@ export type SendMailInput = z.infer<typeof composeSchema>;
 /**
  * Send a plaintext mailing to a whole distribution list or a table selection.
  * The recipient set is ALWAYS recomputed server-side (effective membership for a
- * list, the selection as-is otherwise) — the client-supplied list is never trusted.
+ * list, the living persons of the selection otherwise) — the client-supplied list is never
+ * trusted.
  */
 export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
   const session = await getActionSession();
@@ -70,7 +71,7 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
     const ids = await effectiveMemberIds(listId);
     emails = await personEmailsByIds(ids);
   } else if (personIds && personIds.length > 0) {
-    // Explicit selection: send to exactly the chosen persons (deceased kept).
+    // Explicit selection: the chosen persons (the query drops deceased ones).
     emails = await personEmailsByIds([...new Set(personIds)]);
   } else {
     return { ok: false, message: "Kein Verteiler und keine Auswahl angegeben." };

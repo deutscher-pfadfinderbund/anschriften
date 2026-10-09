@@ -625,7 +625,11 @@ export async function personsForCsvByList(listId: number): Promise<CsvPerson[]> 
   return personsForCsvByIds(await effectiveMemberIds(listId));
 }
 
-/** CSV export rows for an explicit selection of person ids, ordered like the directory. */
+/**
+ * CSV export rows for an explicit selection of person ids, ordered like the directory.
+ * Exactly the chosen persons, deceased included: unlike a mailing, a CSV is also a plain
+ * data export of what was picked.
+ */
 export async function personsForCsvByIds(ids: number[]): Promise<CsvPerson[]> {
   if (ids.length === 0) return [];
   const rows = await db.select(csvColumns).from(persons).where(inArray(persons.id, ids));
@@ -635,13 +639,16 @@ export async function personsForCsvByIds(ids: number[]): Promise<CsvPerson[]> {
 // --- mail module (issue #19) ----------------------------------------------------------
 
 /**
- * Raw (nullable, unfiltered) e-mails for a set of person ids — the input to
- * `collectEmails` (src/lib/export.ts). Deceased/do-not-print are NOT filtered here: for a
- * hand-picked selection the caller sends to exactly whom they chose.
+ * Raw (nullable, unvalidated) e-mails of the LIVING persons among `ids` — the input to
+ * `collectEmails` (src/lib/export.ts). Deceased persons never get mail, even when a stale
+ * selection still holds them.
  */
 export async function personEmailsByIds(ids: number[]): Promise<(string | null)[]> {
   if (ids.length === 0) return [];
-  const rows = await db.select({ email: persons.email }).from(persons).where(inArray(persons.id, ids));
+  const rows = await db
+    .select({ email: persons.email })
+    .from(persons)
+    .where(and(inArray(persons.id, ids), isNull(persons.deathDate)));
   return rows.map((r) => r.email);
 }
 
