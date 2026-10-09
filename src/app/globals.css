@@ -4,19 +4,9 @@
 /*
  * Dark mode follows the OS preference, with an optional explicit override on
  * <html data-theme="light|dark">. Colors flip through `light-dark()` + the
- * `color-scheme` below; the `dark:` variant is wired to the same two signals so
- * the few per-component dark tweaks track the tokens.
+ * `color-scheme` below, so components need no `dark:` variants (Tailwind's
+ * built-in one would ignore data-theme anyway).
  */
-@custom-variant dark {
-  &:where([data-theme="dark"], [data-theme="dark"] *) {
-    @slot;
-  }
-  @media (prefers-color-scheme: dark) {
-    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
-      @slot;
-    }
-  }
-}
 
 /*
  * State variants used by the shadcn/Radix primitives (inlined from the shadcn

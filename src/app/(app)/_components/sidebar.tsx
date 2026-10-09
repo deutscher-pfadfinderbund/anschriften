@@ -35,17 +35,9 @@ function initials(name: string): string {
 }
 
 /** Fir lozenge + app name. Shared by the sidebar header and the mobile top bar. */
-export function Wordmark({ className }: { className?: string }) {
+export function Wordmark() {
   return (
-    <div
-      className={cn(
-        "flex min-w-0 items-center font-display text-[18px] font-semibold text-ink",
-        className,
-        // Must stay AFTER `className`: tailwind-merge treats a font-size utility
-        // as overriding `leading-*`, so a caller's size would drop it.
-        "leading-tight",
-      )}
-    >
+    <div className="flex min-w-0 items-center font-display text-[18px] leading-tight font-semibold text-ink">
       {/* shrink-0: the lozenge is the brand mark and must never be squeezed
           to 0px by a long name. */}
       <span aria-hidden className="mr-[7px] inline-block size-[9px] shrink-0 -translate-y-px rotate-45 bg-fir" />
