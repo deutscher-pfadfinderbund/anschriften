@@ -51,7 +51,7 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
 
   let emails: (string | null)[];
   if (listId != null) {
-    // Effective members (manual ∪ rule, deceased excluded from the rule half).
+    // Effective members (manual ∪ rules, living persons only).
     const ids = await effectiveMemberIds(listId);
     emails = await personEmailsByIds(ids);
   } else if (personIds && personIds.length > 0) {

@@ -152,7 +152,7 @@ export function PersonsTable({
       if (q && !p._search.includes(q)) return false;
       if (groupId != null && !p.assignments.some((a) => a.groupId === groupId)) return false;
       if (officeId != null && !p.assignments.some((a) => a.officeId === officeId)) return false;
-      // Effective membership (manual ∪ office rule), matching the Verteiler detail.
+      // Effective membership (manual ∪ rules), matching the Verteiler detail.
       if (listId != null && !p.effectiveListIds.includes(listId)) return false;
       return true;
     });

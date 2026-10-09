@@ -52,13 +52,14 @@ function byRuleOrder(a: Omit<LoadedRule, "listId">, b: Omit<LoadedRule, "listId"
   );
 }
 
-/** Resolve a member's `via` (kind + id) to named refs, in display order. */
-function viaRefs(via: MemberOrigin["via"], rules: LoadedRule[]): RuleRef[] {
+/** Resolver from a member's `via` (kind + id) to named refs, in display order. */
+function viaResolver(rules: LoadedRule[]): (via: MemberOrigin["via"]) => RuleRef[] {
   const byKey = new Map(rules.map((r) => [`${r.kind}:${r.targetId}`, r]));
-  return via
-    .map((v) => byKey.get(`${v.kind}:${v.id}`)!)
-    .sort(byRuleOrder)
-    .map((r) => ({ kind: r.kind, id: r.targetId, name: r.name }));
+  return (via) =>
+    via
+      .map((v) => byKey.get(`${v.kind}:${v.id}`)!)
+      .sort(byRuleOrder)
+      .map((r) => ({ kind: r.kind, id: r.targetId, name: r.name }));
 }
 
 /**
@@ -269,9 +270,10 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
       endUnknown: a.endUnknown,
     }));
 
+  const viaRefs = viaResolver(rules);
   const ruleMemberships = [...membership].flatMap(([listId, members]) => {
     const origin = members.get(p.id);
-    return origin && origin.via.length > 0 ? [{ listId, via: viaRefs(origin.via, rules) }] : [];
+    return origin && origin.via.length > 0 ? [{ listId, via: viaRefs(origin.via) }] : [];
   });
 
   return {
@@ -532,6 +534,7 @@ export async function listDistributionLists(): Promise<DistributionListWithMembe
     perKind[r.kind].push({ id: r.targetId, name: r.name });
   }
 
+  const viaRefs = viaResolver(rules);
   return lists.sort(byName).map((dl) => {
     const members: ListMemberRow[] = [...(membership.get(dl.id) ?? [])].map(([personId, origin]) => {
       const p = personById.get(personId)!;
@@ -543,7 +546,7 @@ export async function listDistributionLists(): Promise<DistributionListWithMembe
         email: p.email,
         mainOffice: mainOffice.get(personId)?.name ?? null,
         manual: origin.manual,
-        via: viaRefs(origin.via, rules),
+        via: viaRefs(origin.via),
       };
     });
     members.sort((a, b) => memberSortKey(a).localeCompare(memberSortKey(b), "de"));

@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -81,10 +81,10 @@ export async function listsUsingRuleTarget(kind: RuleKind): Promise<Map<number, 
   const rows = await db
     .select({ targetId: t.ruleTarget, listId: distributionLists.id, listName: distributionLists.name })
     .from(t.rules)
-    .innerJoin(distributionLists, eq(distributionLists.id, t.rules.listId))
-    .orderBy(asc(distributionLists.name));
+    .innerJoin(distributionLists, eq(distributionLists.id, t.rules.listId));
   const map = new Map<number, ListRef[]>();
-  for (const r of rows) {
+  // German collation in TS: the DB's C collation would put umlauts after Z.
+  for (const r of rows.sort((a, b) => a.listName.localeCompare(b.listName, "de"))) {
     const arr = map.get(r.targetId) ?? [];
     arr.push({ listId: r.listId, listName: r.listName });
     map.set(r.targetId, arr);
