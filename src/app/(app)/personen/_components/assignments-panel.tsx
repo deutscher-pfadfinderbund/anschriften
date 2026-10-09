@@ -13,7 +13,15 @@ import type { FieldErrors } from "@/lib/person-schema";
 
 import { EndDateDialog, EndingNote, endingText, type EndRequest } from "./end-date";
 import { ComboField, TextField, focusSoon } from "./field";
-import { NONE, newKey, type AssignmentRow, type FormValues, type SetValue } from "./form-values";
+import {
+  GROUP_PICKER,
+  NONE,
+  OFFICE_PICKER,
+  newKey,
+  type AssignmentRow,
+  type FormValues,
+  type SetValue,
+} from "./form-values";
 import { HistorySection } from "./history-section";
 import { HolderNotes } from "./holder-warning";
 
@@ -135,9 +143,7 @@ export function AssignmentsPanel({
                     options={groupOptions}
                     value={row.groupId != null ? String(row.groupId) : null}
                     onChange={(v) => updateRow(row.key, { groupId: Number(v) }, "groupId")}
-                    placeholder="Gliederung wählen"
-                    searchPlaceholder="Gliederung suchen …"
-                    emptyText="Keine Gliederung gefunden."
+                    {...GROUP_PICKER}
                   />
                   <ComboField
                     className="col-span-2 sm:col-span-1"
@@ -146,9 +152,7 @@ export function AssignmentsPanel({
                     options={officeOptions}
                     value={row.officeId != null ? String(row.officeId) : null}
                     onChange={(v) => updateRow(row.key, { officeId: v === NONE ? null : Number(v) })}
-                    placeholder="Kein Amt"
-                    searchPlaceholder="Amt suchen …"
-                    emptyText="Kein Amt gefunden."
+                    {...OFFICE_PICKER}
                   />
                   <TextField
                     label="Seit"

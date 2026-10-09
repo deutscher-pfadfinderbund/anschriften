@@ -27,7 +27,7 @@ import { HOVER_REVEAL, TOUCH_HIT, cn } from "@/lib/utils";
 
 import { EndDateChoice } from "./end-date";
 import { ComboField, TextField } from "./field";
-import { NONE, isEndChoiceReady, type EndChoice } from "./form-values";
+import { GROUP_PICKER, NONE, OFFICE_PICKER, isEndChoiceReady, type EndChoice } from "./form-values";
 
 // "Frühere Ämter": ended tenures. Unlike the rows above they are written immediately —
 // they are already history, so there is nothing to buffer until Speichern. Each action
@@ -262,9 +262,7 @@ function HistoryForm({
           options={groupOptions}
           value={draft.groupId != null ? String(draft.groupId) : null}
           onChange={(v) => setDraft({ ...draft, groupId: Number(v) })}
-          placeholder="Gliederung wählen"
-          searchPlaceholder="Gliederung suchen …"
-          emptyText="Keine Gliederung gefunden."
+          {...GROUP_PICKER}
         />
         <ComboField
           label="Amt"
@@ -272,9 +270,7 @@ function HistoryForm({
           options={officeOptions}
           value={draft.officeId != null ? String(draft.officeId) : null}
           onChange={(v) => setDraft({ ...draft, officeId: v === NONE ? null : Number(v) })}
-          placeholder="Kein Amt"
-          searchPlaceholder="Amt suchen …"
-          emptyText="Kein Amt gefunden."
+          {...OFFICE_PICKER}
         />
         <TextField
           label="Von"

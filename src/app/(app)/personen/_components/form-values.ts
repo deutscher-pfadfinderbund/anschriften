@@ -9,6 +9,18 @@ import type { FieldErrors, PersonInput } from "@/lib/person-schema";
 /** Select value for "nothing chosen" (Anrede, Stand): a Radix Select item cannot be "". */
 export const NONE = "none";
 
+/** Texts of the Gliederung and Amt pickers (rows and history dialog). */
+export const GROUP_PICKER = {
+  placeholder: "Gliederung wählen",
+  searchPlaceholder: "Gliederung suchen …",
+  emptyText: "Keine Gliederung gefunden.",
+};
+export const OFFICE_PICKER = {
+  placeholder: "Kein Amt",
+  searchPlaceholder: "Amt suchen …",
+  emptyText: "Kein Amt gefunden.",
+};
+
 /** How a tenure ends: a date, or „Ende unbekannt“ (the server then records today). */
 export type EndChoice = { endDate: string; endUnknown: boolean };
 
