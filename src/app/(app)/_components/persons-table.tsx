@@ -337,7 +337,7 @@ export function PersonsTable({
     navigator.clipboard.writeText(text).then(
       () =>
         toast.success(
-          `${count} Adressen kopiert${skipped > 0 ? ` (${skipped} ohne E-Mail übersprungen)` : ""}.`,
+          `${count} Adressen kopiert${skipped > 0 ? ` (${skipped} ohne gültige E-Mail übersprungen)` : ""}.`,
         ),
       () => toast.error("Kopieren nicht möglich."),
     );

@@ -25,7 +25,7 @@ describe("orderGroups", () => {
     expect(orderGroups([])).toEqual([]);
   });
 
-  it("groups roots by section (SECTION_ORDER), then sortKey, then name", () => {
+  it("groups roots by section (SECTIONS order), then sortKey, then name", () => {
     const ordered = orderGroups([
       g({ id: 1, name: "Gau B", section: "jungenbund", sortKey: 20 }),
       g({ id: 2, name: "Bundesführung", section: "bund", sortKey: 10 }),

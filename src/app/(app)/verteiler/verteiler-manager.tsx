@@ -255,7 +255,7 @@ export function VerteilerManager({
       () =>
         toast.success(
           `${bcc.count} Adressen kopiert${
-            bcc.skipped > 0 ? ` (${bcc.skipped} ohne E-Mail übersprungen)` : ""
+            bcc.skipped > 0 ? ` (${bcc.skipped} ohne gültige E-Mail übersprungen)` : ""
           }.`,
         ),
       () => toast.error("Kopieren nicht möglich."),
@@ -514,7 +514,7 @@ export function VerteilerManager({
                     <p className="mb-3 rounded-md border border-line bg-surface-2 px-3 py-2 text-[12.5px] text-ink-soft">
                       <span className="font-medium text-ink">
                         {withoutEmail.length}{" "}
-                        {withoutEmail.length === 1 ? "Mitglied" : "Mitglieder"} ohne E-Mail-Adresse:
+                        {withoutEmail.length === 1 ? "Mitglied" : "Mitglieder"} ohne gültige E-Mail-Adresse:
                       </span>{" "}
                       {withoutEmail.map(formatNameWithScout).join(", ")} — nur postalisch erreichbar.
                     </p>
