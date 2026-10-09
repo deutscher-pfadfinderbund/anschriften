@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useDeferredValue, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, SearchX, Users, X } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
@@ -14,16 +14,8 @@ import { cn } from "@/lib/utils";
 import { filterPersons, hasActiveFilters, searchIndex } from "./directory-filter";
 import { PersonCard, PersonTableRow } from "./directory-rows";
 import { SelectionBar } from "./directory-selection";
-import { DirectoryToolbar } from "./directory-toolbar";
+import { DirectoryToolbar, SEARCH_ID } from "./directory-toolbar";
 import { useDirectoryParams } from "./use-directory-params";
-
-// Tailwind's `md`: the table from here up, the card list below.
-const DESKTOP = "(min-width: 48rem)";
-function subscribeDesktop(onChange: () => void) {
-  const query = window.matchMedia(DESKTOP);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
 
 /**
  * Header cells stick below the mobile top bar (--top-bar, 0 from lg up).
@@ -33,36 +25,11 @@ const STICKY_HEAD = "sticky top-(--top-bar) z-10 bg-surface-2 shadow-[inset_0_-1
 
 /**
  * The focused control is about to unmount (a reset or clear button): move keyboard focus
- * to `target`, so keyboard users keep their place instead of starting over at the page
- * top. Pointer focus is left alone: a tap must not open the phone keyboard.
+ * to the search field, so keyboard users keep their place instead of starting over at the
+ * page top. Pointer focus is left alone: a tap must not open the phone keyboard.
  */
-function keepKeyboardFocus(target: HTMLElement | null) {
-  if (document.activeElement?.matches(":focus-visible")) target?.focus();
-}
-
-/**
- * Tri-state "select all" over the persons currently shown: selected persons the
- * filters hide neither count nor change (the selection bar reports them).
- */
-function SelectAllCheckbox({
-  ref,
-  checked,
-  onCheckedChange,
-  filtered,
-}: {
-  ref?: React.Ref<HTMLButtonElement>;
-  checked: boolean | "indeterminate";
-  onCheckedChange: (checked: boolean) => void;
-  filtered: boolean;
-}) {
-  return (
-    <Checkbox
-      ref={ref}
-      aria-label={filtered ? "Alle angezeigten auswählen" : "Alle auswählen"}
-      checked={checked}
-      onCheckedChange={(v) => onCheckedChange(v === true)}
-    />
-  );
+function keepKeyboardFocus() {
+  if (document.activeElement?.matches(":focus-visible")) document.getElementById(SEARCH_ID)?.focus();
 }
 
 export function Directory({
@@ -129,24 +96,23 @@ export function Directory({
   const selected = useMemo(() => persons.filter((p) => selection.has(p.id)), [persons, selection]);
   const hiddenCount = selected.length - shownSelected.length;
 
-  const searchRef = useRef<HTMLInputElement>(null);
-  const selectAllRef = useRef<HTMLButtonElement>(null);
   const resetFilters = () => {
-    keepKeyboardFocus(searchRef.current);
+    keepKeyboardFocus();
     params.resetFilters();
   };
   const clearSelection = () => {
-    // With every selected person hidden there is no list (and no select-all) to return to.
-    keepKeyboardFocus(selectAllRef.current ?? searchRef.current);
+    keepKeyboardFocus();
     setSelection(new Set());
   };
 
-  // Render only the layout that is on screen; null (server, hydration) renders both
-  // and lets CSS decide, so the first paint is right on every device.
-  const isDesktop = useSyncExternalStore(
-    subscribeDesktop,
-    () => window.matchMedia(DESKTOP).matches,
-    () => null,
+  // Tri-state over the persons shown: selected persons the filters hide neither count
+  // nor change (the selection bar reports them).
+  const selectAll = (
+    <Checkbox
+      aria-label={filtering ? "Alle angezeigten auswählen" : "Alle auswählen"}
+      checked={allShownChecked}
+      onCheckedChange={(v) => setAllShown(v === true)}
+    />
   );
 
   return (
@@ -154,16 +120,11 @@ export function Directory({
     // it without tabbing through every row) and is shown last, sticking to the bottom.
     <div className="flex flex-col">
       <DirectoryToolbar
-        searchRef={searchRef}
         query={params.query}
         onQueryChange={params.setQuery}
         onQueryCommit={params.flushQuery}
-        groupId={groupId}
-        onGroupChange={params.setGroupId}
-        officeId={officeId}
-        onOfficeChange={params.setOfficeId}
-        listId={listId}
-        onListChange={params.setListId}
+        filters={{ groupId, officeId, listId }}
+        onFilterChange={params.setFilter}
         groups={groups}
         offices={offices}
         distributionLists={distributionLists}
@@ -227,97 +188,78 @@ export function Directory({
             }
           />
         ) : (
+          // Both layouts, CSS picks one: the table from `md` up, the cards below.
           <>
-            {isDesktop !== false ? (
-              <table
-                className={cn(
-                  "w-full table-fixed text-ui",
-                  // The page's scroll padding keeps a row that gets keyboard focus clear
-                  // of the sticky head (and the top bar above it, below lg).
-                  "md:[html:has(&)]:scroll-pt-[calc(var(--top-bar)+3rem)]",
-                  isDesktop == null && "hidden md:table",
-                )}
-              >
-                {/* Fixed widths: columns do not jump while the search narrows the list. */}
-                <colgroup>
-                  <col className="w-11" />
-                  <col className="w-[28%]" />
-                  <col className="w-[17%]" />
-                  <col className="w-[18%]" />
-                  <col />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <TableHead className={cn(STICKY_HEAD, "p-0")}>
-                      <label className="flex cursor-pointer py-3 pr-1 pl-3">
-                        <SelectAllCheckbox
-                          ref={selectAllRef}
-                          checked={allShownChecked}
-                          onCheckedChange={setAllShown}
-                          filtered={filtering}
-                        />
-                      </label>
-                    </TableHead>
-                    <TableHead
-                      aria-sort={params.sortDesc ? "descending" : "ascending"}
-                      className={cn(STICKY_HEAD, "px-3")}
+            <table
+              className={cn(
+                "hidden w-full table-fixed text-ui md:table",
+                // The page's scroll padding keeps a row that gets keyboard focus clear
+                // of the sticky head (and the top bar above it, below lg).
+                "md:[html:has(&)]:scroll-pt-[calc(var(--top-bar)+3rem)]",
+              )}
+            >
+              {/* Fixed widths: columns do not jump while the search narrows the list. */}
+              <colgroup>
+                <col className="w-11" />
+                <col className="w-[28%]" />
+                <col className="w-[17%]" />
+                <col className="w-[18%]" />
+                <col />
+              </colgroup>
+              <thead>
+                <tr>
+                  <TableHead className={cn(STICKY_HEAD, "p-0")}>
+                    <label className="flex cursor-pointer py-3 pr-1 pl-3">{selectAll}</label>
+                  </TableHead>
+                  <TableHead
+                    aria-sort={params.sortDesc ? "descending" : "ascending"}
+                    className={cn(STICKY_HEAD, "px-3")}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => params.setSortDesc(!params.sortDesc)}
+                      title={params.sortDesc ? "Aufsteigend sortieren" : "Absteigend sortieren"}
+                      className="-mx-1 inline-flex items-center gap-1 rounded-sm px-1 uppercase transition-colors hover:text-ink"
                     >
-                      <button
-                        type="button"
-                        onClick={() => params.setSortDesc(!params.sortDesc)}
-                        title={params.sortDesc ? "Aufsteigend sortieren" : "Absteigend sortieren"}
-                        className="-mx-1 inline-flex items-center gap-1 rounded-sm px-1 uppercase transition-colors hover:text-ink"
-                      >
-                        Name
-                        {params.sortDesc ? (
-                          <ArrowDown aria-hidden className="size-3" />
-                        ) : (
-                          <ArrowUp aria-hidden className="size-3" />
-                        )}
-                      </button>
-                    </TableHead>
-                    <TableHead className={cn(STICKY_HEAD, "px-3")}>Ämter</TableHead>
-                    <TableHead className={cn(STICKY_HEAD, "px-3")}>Gliederung</TableHead>
-                    <TableHead className={cn(STICKY_HEAD, "px-3")}>Kontakt</TableHead>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((p) => (
-                    <PersonTableRow
-                      key={p.id}
-                      person={p}
-                      selected={selection.has(p.id)}
-                      onSelectedChange={setSelected}
-                      onOpen={openPerson}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            ) : null}
-            {isDesktop !== true ? (
-              <div className={cn(isDesktop == null && "md:hidden")}>
-                <label className="flex cursor-pointer items-center gap-3 border-b border-line-strong bg-surface-2 px-3 py-2.5">
-                  <SelectAllCheckbox
-                    // One ref for both layouts: the table's unmounting after hydration
-                    // would otherwise null it while this one stays.
-                    ref={isDesktop === false ? selectAllRef : undefined}
-                    checked={allShownChecked}
-                    onCheckedChange={setAllShown}
-                    filtered={filtering}
+                      Name
+                      {params.sortDesc ? (
+                        <ArrowDown aria-hidden className="size-3" />
+                      ) : (
+                        <ArrowUp aria-hidden className="size-3" />
+                      )}
+                    </button>
+                  </TableHead>
+                  <TableHead className={cn(STICKY_HEAD, "px-3")}>Ämter</TableHead>
+                  <TableHead className={cn(STICKY_HEAD, "px-3")}>Gliederung</TableHead>
+                  <TableHead className={cn(STICKY_HEAD, "px-3")}>Kontakt</TableHead>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((p) => (
+                  <PersonTableRow
+                    key={p.id}
+                    person={p}
+                    selected={selection.has(p.id)}
+                    onSelectedChange={setSelected}
+                    onOpen={openPerson}
                   />
-                  <span className="eyebrow">{filtering ? "Alle angezeigten auswählen" : "Alle auswählen"}</span>
-                </label>
-                <ul>
-                  {rows.map((p) => (
-                    <PersonCard key={p.id} person={p} selected={selection.has(p.id)} onSelectedChange={setSelected} />
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+                ))}
+              </tbody>
+            </table>
+            <div className="md:hidden">
+              <label className="flex cursor-pointer items-center gap-3 border-b border-line-strong bg-surface-2 px-3 py-2.5">
+                {selectAll}
+                <span className="eyebrow">{filtering ? "Alle angezeigten auswählen" : "Alle auswählen"}</span>
+              </label>
+              <ul>
+                {rows.map((p) => (
+                  <PersonCard key={p.id} person={p} selected={selection.has(p.id)} onSelectedChange={setSelected} />
+                ))}
+              </ul>
+            </div>
           </>
         )}
       </div>
-
     </div>
   );
 }

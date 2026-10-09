@@ -6,7 +6,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { rememberDirectoryUrl } from "@/lib/directory-url";
 import { replaceQuery, urlWith } from "@/lib/utils";
 
-import { PARAM, SORT_DESC, parseDirectoryParams } from "./directory-filter";
+import { PARAM, SORT_DESC, parseDirectoryParams, type FilterName } from "./directory-filter";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -71,9 +71,7 @@ export function useDirectoryParams() {
       const q = query.trim();
       if (q !== params.q) writeQuery(q);
     },
-    setGroupId: (id: number | null) => replaceQuery({ [PARAM.groupId]: id?.toString() ?? null }),
-    setOfficeId: (id: number | null) => replaceQuery({ [PARAM.officeId]: id?.toString() ?? null }),
-    setListId: (id: number | null) => replaceQuery({ [PARAM.listId]: id?.toString() ?? null }),
+    setFilter: (name: FilterName, id: number | null) => replaceQuery({ [PARAM[name]]: id?.toString() ?? null }),
     setSortDesc: (desc: boolean) => replaceQuery({ [PARAM.sort]: desc ? SORT_DESC : null }),
     /** Clear search and filters (the sort order stays). */
     resetFilters: () => {

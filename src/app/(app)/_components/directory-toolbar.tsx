@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Search, X } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,11 @@ import type { GroupRow } from "@/db/queries";
 import { orderGroups } from "@/lib/groups";
 import { SECTION_LABELS, type Section } from "@/lib/sections";
 import { cn } from "@/lib/utils";
+
+import type { DirectoryFilters, FilterName } from "./directory-filter";
+
+/** id of the search field, where keyboard focus returns after a reset. */
+export const SEARCH_ID = "personen-suche";
 
 /** Radix Select needs a non-empty value for the "no filter" option. */
 const ALL = "alle";
@@ -85,22 +91,22 @@ function GroupItems({ groups }: { groups: GroupRow[] }) {
 
 /** Search field with a quiet clear button (Escape clears too). */
 function SearchField({
-  inputRef,
   value,
   onChange,
   onBlur,
 }: {
-  inputRef: React.RefObject<HTMLInputElement | null>;
   value: string;
   onChange: (value: string) => void;
   onBlur: () => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   return (
     // Below xl the search takes its own row and the three filters share the next one.
     <div className="relative w-full xl:w-72">
       <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-faint" />
       <Input
         ref={inputRef}
+        id={SEARCH_ID}
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -138,33 +144,22 @@ function SearchField({
 }
 
 export function DirectoryToolbar({
-  searchRef,
   query,
   onQueryChange,
   onQueryCommit,
-  groupId,
-  onGroupChange,
-  officeId,
-  onOfficeChange,
-  listId,
-  onListChange,
+  filters,
+  onFilterChange,
   groups,
   offices,
   distributionLists,
   status,
 }: {
-  /** The search field, for returning focus to it. */
-  searchRef: React.RefObject<HTMLInputElement | null>;
   query: string;
   onQueryChange: (q: string) => void;
   /** The field lost focus: write a pending search to the URL now. */
   onQueryCommit: () => void;
-  groupId: number | null;
-  onGroupChange: (id: number | null) => void;
-  officeId: number | null;
-  onOfficeChange: (id: number | null) => void;
-  listId: number | null;
-  onListChange: (id: number | null) => void;
+  filters: Omit<DirectoryFilters, "q">;
+  onFilterChange: (name: FilterName, id: number | null) => void;
   groups: GroupRow[];
   offices: Option[];
   distributionLists: Option[];
@@ -173,12 +168,12 @@ export function DirectoryToolbar({
 }) {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-      <SearchField inputRef={searchRef} value={query} onChange={onQueryChange} onBlur={onQueryCommit} />
+      <SearchField value={query} onChange={onQueryChange} onBlur={onQueryCommit} />
       <FilterSelect
         label="Nach Gliederung filtern"
         allLabel="Alle Gliederungen"
-        value={groupId}
-        onChange={onGroupChange}
+        value={filters.groupId}
+        onChange={(id) => onFilterChange("groupId", id)}
         className="sm:w-52"
       >
         <GroupItems groups={groups} />
@@ -188,8 +183,8 @@ export function DirectoryToolbar({
         <FilterSelect
           label="Nach Amt filtern"
           allLabel="Alle Ämter"
-          value={officeId}
-          onChange={onOfficeChange}
+          value={filters.officeId}
+          onChange={(id) => onFilterChange("officeId", id)}
           className="sm:w-44"
         >
           <OptionItems options={offices} />
@@ -198,8 +193,8 @@ export function DirectoryToolbar({
           <FilterSelect
             label="Nach Verteiler filtern"
             allLabel="Alle Verteiler"
-            value={listId}
-            onChange={onListChange}
+            value={filters.listId}
+            onChange={(id) => onFilterChange("listId", id)}
             className="sm:w-44"
           >
             <OptionItems options={distributionLists} />

@@ -30,6 +30,9 @@ export type DirectoryFilters = {
   listId: number | null;
 };
 
+/** The three select filters. */
+export type FilterName = Exclude<keyof DirectoryFilters, "q">;
+
 type DirectoryParams = DirectoryFilters & { sortDesc: boolean };
 
 /** Read the directory state from the URL; anything malformed counts as "not set". */

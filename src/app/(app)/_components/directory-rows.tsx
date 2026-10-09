@@ -27,6 +27,8 @@ function NameLink({ person, stretched = false }: { person: PersonListRow; stretc
   return (
     <Link
       href={`/personen/${person.id}`}
+      // ~600 links, twice (table and cards): no prefetching, a click loads the editor.
+      prefetch={false}
       className={cn(
         "rounded-sm font-medium text-ink transition-colors hover:text-fir",
         stretched && "before:absolute before:inset-0",
