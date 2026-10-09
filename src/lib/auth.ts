@@ -25,7 +25,10 @@ const REQUIRED_ROLE = "anschriften";
  * Rejection happens here, inside `getUserInfo`, i.e. *before* better-auth creates
  * any user/session/account row, so a denied login leaves no orphan data. We throw
  * a `FOUND` (302) redirect to the login page instead of a `FORBIDDEN` error, so the
- * browser lands on our German "Kein Zugriff" page rather than a raw JSON 403.
+ * browser lands on our German "Kein Zugriff" page rather than a raw JSON 403. The login
+ * page keys on `error=access_denied`. The denial is logged with the roles found: if every
+ * user is turned away, the usual cause is a Keycloak mapper that does not put the client
+ * roles into the ID token, and this line is the only place that shows it.
  */
 function assertRole(claims: Record<string, unknown>): void {
   const resourceAccess = claims.resource_access as
@@ -33,6 +36,10 @@ function assertRole(claims: Record<string, unknown>): void {
     | undefined;
   const roles = resourceAccess?.[KEYCLOAK_CLIENT_ID]?.roles ?? [];
   if (!roles.includes(REQUIRED_ROLE)) {
+    console.warn(
+      `Login denied: sub=${String(claims.sub)} lacks client role "${REQUIRED_ROLE}" ` +
+        `(roles for client "${KEYCLOAK_CLIENT_ID}": ${roles.length > 0 ? roles.join(", ") : "none"})`,
+    );
     const location = new URL("/login?error=access_denied", APP_URL).toString();
     throw new APIError("FOUND", undefined, { Location: location });
   }
@@ -43,6 +50,24 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "pg", schema: authSchema }),
   // No local accounts — the only way in is Keycloak SSO.
   emailAndPassword: { enabled: false },
+  // OAuth failures better-auth detects itself (expired/mismatched state after the back
+  // button or a second tab, `?error=` from Keycloak, token exchange failures) land on our
+  // German login page with `?error=<code>` instead of better-auth's English error page.
+  onAPIError: { errorURL: "/login" },
+  // Endpoints the app never uses but a signed-in user could call directly. Most important:
+  // /update-user would let anyone rename themselves, and that name is what every
+  // `updated_by` and `mail_log.sent_by` records. Name and e-mail come from Keycloak only.
+  disabledPaths: [
+    "/update-user",
+    "/change-email",
+    "/delete-user",
+    "/update-session",
+    "/link-social",
+    "/oauth2/link",
+    "/unlink-account",
+    "/get-access-token",
+    "/refresh-token",
+  ],
   session: {
     // Roles are only checked at login (deliberate simplification per roadmap:
     // "role removal takes effect at session expiry"). To keep that blast radius
@@ -60,6 +85,9 @@ export const auth = betterAuth({
           clientId: KEYCLOAK_CLIENT_ID,
           clientSecret: KEYCLOAK_CLIENT_SECRET,
           scopes: ["openid", "profile", "email"],
+          // Re-sync name/e-mail from the ID token on every login, so a change in Keycloak
+          // reaches the app (and `updated_by`) at the next sign-in.
+          overrideUserInfo: true,
           // We build the user straight from the ID token claims (Keycloak returns
           // sub/email/name for the requested scopes) and gate on the client role.
           getUserInfo: async (tokens) => {
