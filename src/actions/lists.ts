@@ -7,17 +7,14 @@ import { db } from "@/db";
 import { RULE_TABLES } from "@/db/list-rules";
 import { distributionListMembers, distributionLists, persons } from "@/db/schema";
 import {
+  dbFailure,
   deletedMeanwhile,
   firstError,
-  getActionSession,
-  isForeignKeyViolation,
-  isUniqueViolation,
+  mutation,
   nameField,
-  revalidateApp,
-  SESSION_EXPIRED,
+  stamp,
   type ActionResult,
 } from "@/lib/action-helpers";
-import { actorName } from "@/lib/auth-helpers";
 import { RULE_KIND_LABELS, RULE_KINDS, type RuleKind } from "@/lib/rule-kinds";
 
 export type SaveListResult = { ok: true; id: number } | { ok: false; message: string };
@@ -39,10 +36,7 @@ const RELOAD = "Bitte lade die Seite neu.";
  * every mutation carries who/when.
  */
 async function touchList(listId: number, by: string): Promise<void> {
-  await db
-    .update(distributionLists)
-    .set({ updatedBy: by, updatedAt: new Date() })
-    .where(eq(distributionLists.id, listId));
+  await db.update(distributionLists).set(stamp(by)).where(eq(distributionLists.id, listId));
 }
 
 /**
@@ -52,7 +46,7 @@ async function touchList(listId: number, by: string): Promise<void> {
  */
 async function touchPersons(ids: number[], by: string): Promise<void> {
   if (ids.length === 0) return;
-  await db.update(persons).set({ updatedBy: by, updatedAt: new Date() }).where(inArray(persons.id, ids));
+  await db.update(persons).set(stamp(by)).where(inArray(persons.id, ids));
 }
 
 const listSchema = z.object({
@@ -69,38 +63,32 @@ export type ListInput = z.input<typeof listSchema>;
 
 /** Create (`id` null) or rename/describe a list. Returns the id so the UI can select it. */
 export async function saveList(id: number | null, raw: ListInput): Promise<SaveListResult> {
-  const session = await getActionSession();
-  if (!session) return SESSION_EXPIRED;
-  const parsed = listSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  const values = { ...parsed.data, updatedBy: actorName(session), updatedAt: new Date() };
-  let savedId: number | undefined;
-  try {
-    const [row] =
-      id == null
-        ? await db.insert(distributionLists).values(values).returning({ id: distributionLists.id })
-        : await db
-            .update(distributionLists)
-            .set(values)
-            .where(eq(distributionLists.id, id))
-            .returning({ id: distributionLists.id });
-    savedId = row?.id;
-  } catch (err) {
-    if (isUniqueViolation(err))
-      return { ok: false, message: "Einen Verteiler mit diesem Namen gibt es schon." };
-    throw err;
-  }
-  if (savedId == null) return { ok: false, message: deletedMeanwhile("Dieser Verteiler") };
-  revalidateApp();
-  return { ok: true, id: savedId };
+  return mutation(async (by) => {
+    const parsed = listSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
+    const values = { ...parsed.data, ...stamp(by) };
+    try {
+      const [row] =
+        id == null
+          ? await db.insert(distributionLists).values(values).returning({ id: distributionLists.id })
+          : await db
+              .update(distributionLists)
+              .set(values)
+              .where(eq(distributionLists.id, id))
+              .returning({ id: distributionLists.id });
+      return row ? { ok: true, id: row.id } : { ok: false, message: deletedMeanwhile("Dieser Verteiler") };
+    } catch (err) {
+      return dbFailure(err, { unique: "Einen Verteiler mit diesem Namen gibt es schon." });
+    }
+  });
 }
 
 export async function deleteList(id: number): Promise<ActionResult> {
-  if (!(await getActionSession())) return SESSION_EXPIRED;
-  // Memberships and rules cascade; the mail log keeps its rows (list_id → NULL).
-  await db.delete(distributionLists).where(eq(distributionLists.id, id));
-  revalidateApp();
-  return { ok: true };
+  return mutation(async () => {
+    // Memberships and rules cascade; the mail log keeps its rows (list_id → NULL).
+    await db.delete(distributionLists).where(eq(distributionLists.id, id));
+    return { ok: true };
+  });
 }
 
 /**
@@ -109,53 +97,47 @@ export async function deleteList(id: number): Promise<ActionResult> {
  * success that never shows up on the list.
  */
 export async function addMembers(listId: number, personIds: number[]): Promise<AddMembersResult> {
-  const session = await getActionSession();
-  if (!session) return SESSION_EXPIRED;
-  const requested = [...new Set(personIds.filter((n) => Number.isInteger(n) && n > 0))];
-  if (requested.length === 0) return { ok: true, added: 0, skippedDeceased: 0 };
-  const deceased = new Set(
-    (
-      await db
-        .select({ id: persons.id })
-        .from(persons)
-        .where(and(inArray(persons.id, requested), isNotNull(persons.deathDate)))
-    ).map((p) => p.id),
-  );
-  const ids = requested.filter((id) => !deceased.has(id));
-  if (ids.length === 0)
-    return { ok: false, message: "Verstorbene Personen können keinem Verteiler hinzugefügt werden." };
-  let inserted: { personId: number }[];
-  try {
-    inserted = await db
-      .insert(distributionListMembers)
-      .values(ids.map((personId) => ({ listId, personId })))
-      .onConflictDoNothing()
-      .returning({ personId: distributionListMembers.personId });
-  } catch (err) {
-    // Race: the list or a person was deleted between page load and this call.
-    if (isForeignKeyViolation(err))
-      return { ok: false, message: `Verteiler oder Person existiert nicht mehr. ${RELOAD}` };
-    throw err;
-  }
-  const by = actorName(session);
-  await touchList(listId, by);
-  await touchPersons(inserted.map((r) => r.personId), by);
-  revalidateApp();
-  return { ok: true, added: ids.length, skippedDeceased: deceased.size };
+  return mutation(async (by) => {
+    const requested = [...new Set(personIds.filter((n) => Number.isInteger(n) && n > 0))];
+    if (requested.length === 0) return { ok: true, added: 0, skippedDeceased: 0 };
+    const deceased = new Set(
+      (
+        await db
+          .select({ id: persons.id })
+          .from(persons)
+          .where(and(inArray(persons.id, requested), isNotNull(persons.deathDate)))
+      ).map((p) => p.id),
+    );
+    const ids = requested.filter((id) => !deceased.has(id));
+    if (ids.length === 0)
+      return { ok: false, message: "Verstorbene Personen können keinem Verteiler hinzugefügt werden." };
+    let inserted: { personId: number }[];
+    try {
+      inserted = await db
+        .insert(distributionListMembers)
+        .values(ids.map((personId) => ({ listId, personId })))
+        .onConflictDoNothing()
+        .returning({ personId: distributionListMembers.personId });
+    } catch (err) {
+      // Race: the list or a person was deleted between page load and this call.
+      return dbFailure(err, { fk: `Verteiler oder Person existiert nicht mehr. ${RELOAD}` });
+    }
+    await touchList(listId, by);
+    await touchPersons(inserted.map((r) => r.personId), by);
+    return { ok: true, added: ids.length, skippedDeceased: deceased.size };
+  });
 }
 
 export async function removeMember(listId: number, personId: number): Promise<ActionResult> {
-  const session = await getActionSession();
-  if (!session) return SESSION_EXPIRED;
-  const removed = await db
-    .delete(distributionListMembers)
-    .where(and(eq(distributionListMembers.listId, listId), eq(distributionListMembers.personId, personId)))
-    .returning({ personId: distributionListMembers.personId });
-  const by = actorName(session);
-  await touchList(listId, by);
-  await touchPersons(removed.map((r) => r.personId), by);
-  revalidateApp();
-  return { ok: true };
+  return mutation(async (by) => {
+    const removed = await db
+      .delete(distributionListMembers)
+      .where(and(eq(distributionListMembers.listId, listId), eq(distributionListMembers.personId, personId)))
+      .returning({ personId: distributionListMembers.personId });
+    await touchList(listId, by);
+    await touchPersons(removed.map((r) => r.personId), by);
+    return { ok: true };
+  });
 }
 
 // --- automatic rules (Amt / Stand / Gliederung, see src/lib/rule-kinds.ts) -----------
@@ -171,37 +153,30 @@ const ruleSchema = z.object({
  * to it is then an automatic member. Idempotent.
  */
 export async function addListRule(listId: number, kind: RuleKind, targetId: number): Promise<ActionResult> {
-  const session = await getActionSession();
-  if (!session) return SESSION_EXPIRED;
-  const parsed = ruleSchema.safeParse({ listId, kind, targetId });
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  const rule = parsed.data;
-  try {
-    await RULE_TABLES[rule.kind].insert(rule.listId, rule.targetId);
-  } catch (err) {
-    // Race: the list or the target was deleted between page load and this call.
-    if (isForeignKeyViolation(err))
-      return {
-        ok: false,
-        message: `Verteiler oder ${RULE_KIND_LABELS[rule.kind]} existiert nicht mehr. ${RELOAD}`,
-      };
-    throw err;
-  }
-  await touchList(rule.listId, actorName(session));
-  revalidateApp();
-  return { ok: true };
+  return mutation(async (by) => {
+    const parsed = ruleSchema.safeParse({ listId, kind, targetId });
+    if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
+    const rule = parsed.data;
+    try {
+      await RULE_TABLES[rule.kind].insert(rule.listId, rule.targetId);
+    } catch (err) {
+      // Race: the list or the target was deleted between page load and this call.
+      return dbFailure(err, { fk: `Verteiler oder ${RULE_KIND_LABELS[rule.kind]} existiert nicht mehr. ${RELOAD}` });
+    }
+    await touchList(rule.listId, by);
+    return { ok: true };
+  });
 }
 
 /** Remove a rule from a list. Persons it matched are no longer auto-included. */
 export async function removeListRule(listId: number, kind: RuleKind, targetId: number): Promise<ActionResult> {
-  const session = await getActionSession();
-  if (!session) return SESSION_EXPIRED;
-  const parsed = ruleSchema.safeParse({ listId, kind, targetId });
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  const rule = parsed.data;
-  const t = RULE_TABLES[rule.kind];
-  await db.delete(t.rules).where(and(eq(t.rules.listId, rule.listId), eq(t.ruleTarget, rule.targetId)));
-  await touchList(rule.listId, actorName(session));
-  revalidateApp();
-  return { ok: true };
+  return mutation(async (by) => {
+    const parsed = ruleSchema.safeParse({ listId, kind, targetId });
+    if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
+    const rule = parsed.data;
+    const t = RULE_TABLES[rule.kind];
+    await db.delete(t.rules).where(and(eq(t.rules.listId, rule.listId), eq(t.ruleTarget, rule.targetId)));
+    await touchList(rule.listId, by);
+    return { ok: true };
+  });
 }

@@ -7,18 +7,16 @@ import { db } from "@/db";
 import { rankDeleteBlockers } from "@/db/queries";
 import { ranks } from "@/db/schema";
 import {
+  dbFailure,
   deletedMeanwhile,
   firstError,
-  getActionSession,
-  isForeignKeyViolation,
-  isUniqueViolation,
+  guardedDelete,
+  mutation,
   nameField,
   orderNumber,
-  revalidateApp,
-  SESSION_EXPIRED,
+  stamp,
   type ActionResult,
 } from "@/lib/action-helpers";
-import { actorName } from "@/lib/auth-helpers";
 
 const rankSchema = z.object({
   name: nameField,
@@ -29,38 +27,24 @@ export type RankInput = z.input<typeof rankSchema>;
 
 /** Create (`id` null) or update a Stand. */
 export async function saveRank(id: number | null, raw: RankInput): Promise<ActionResult> {
-  const session = await getActionSession();
-  if (!session) return SESSION_EXPIRED;
-  const parsed = rankSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  const values = { ...parsed.data, updatedBy: actorName(session), updatedAt: new Date() };
-  try {
-    const saved =
-      id == null
-        ? await db.insert(ranks).values(values).returning({ id: ranks.id })
-        : await db.update(ranks).set(values).where(eq(ranks.id, id)).returning({ id: ranks.id });
-    if (saved.length === 0) return { ok: false, message: deletedMeanwhile("Dieser Stand") };
-  } catch (err) {
-    if (isUniqueViolation(err)) return { ok: false, message: "Ein Stand mit diesem Namen gibt es schon." };
-    throw err;
-  }
-  revalidateApp();
-  return { ok: true };
+  return mutation(async (by) => {
+    const parsed = rankSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
+    const values = { ...parsed.data, ...stamp(by) };
+    try {
+      const saved =
+        id == null
+          ? await db.insert(ranks).values(values).returning({ id: ranks.id })
+          : await db.update(ranks).set(values).where(eq(ranks.id, id)).returning({ id: ranks.id });
+      return saved.length > 0 ? { ok: true } : { ok: false, message: deletedMeanwhile("Dieser Stand") };
+    } catch (err) {
+      return dbFailure(err, { unique: "Ein Stand mit diesem Namen gibt es schon." });
+    }
+  });
 }
 
 export async function deleteRank(id: number): Promise<ActionResult> {
-  if (!(await getActionSession())) return SESSION_EXPIRED;
-  // Same guard as the page's up-front check (persons with this Stand, Verteiler rules).
-  const blocker = (await rankDeleteBlockers()).get(id);
-  if (blocker) return { ok: false, message: blocker };
-  try {
-    await db.delete(ranks).where(eq(ranks.id, id));
-  } catch (err) {
-    // Race: a person got this rank between the check above and the delete.
-    if (isForeignKeyViolation(err))
-      return { ok: false, message: "Dieser Stand wird inzwischen verwendet und kann nicht gelöscht werden." };
-    throw err;
-  }
-  revalidateApp();
-  return { ok: true };
+  return mutation(() =>
+    guardedDelete(id, rankDeleteBlockers, () => db.delete(ranks).where(eq(ranks.id, id)), "Dieser Stand"),
+  );
 }

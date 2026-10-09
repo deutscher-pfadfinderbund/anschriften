@@ -7,15 +7,13 @@ import { db } from "@/db";
 import { assignments, persons } from "@/db/schema";
 import {
   changedMeanwhile,
+  dbFailure,
   deletedMeanwhile,
   firstError,
-  getActionSession,
-  isForeignKeyViolation,
-  revalidateApp,
-  SESSION_EXPIRED,
+  mutation,
+  stamp,
   UserFacingError,
 } from "@/lib/action-helpers";
-import { actorName } from "@/lib/auth-helpers";
 import { todayIso } from "@/lib/format";
 import { isValidDate, resolveTenureEnd } from "@/lib/person-schema";
 
@@ -47,9 +45,9 @@ async function bumpPerson(tx: Tx, personId: number, expected: string, by: string
     .for("update");
   if (!current) throw new UserFacingError(deletedMeanwhile("Diese Person"));
   if (current.updatedAt.toISOString() !== expected) throw new UserFacingError(changedMeanwhile(current.updatedBy));
-  const now = new Date();
-  await tx.update(persons).set({ updatedBy: by, updatedAt: now }).where(eq(persons.id, personId));
-  return now.toISOString();
+  const audit = stamp(by);
+  await tx.update(persons).set(audit).where(eq(persons.id, personId));
+  return audit.updatedAt.toISOString();
 }
 
 /** The history row to edit or delete; refuses an active one (that belongs to the person form). */
@@ -64,13 +62,19 @@ async function historyRow(tx: Tx, assignmentId: number, activeMessage: string) {
   return { ...row, endDate: row.endDate };
 }
 
-/** A failed write as a result: user-facing errors and vanished references; anything else is a bug. */
-function failure(err: unknown, missingMessage: string): HistoryResult {
-  if (err instanceof UserFacingError) return { ok: false, message: err.message };
-  // Race: the group or office (or the person) was deleted between page load and this call.
-  if (isForeignKeyViolation(err)) return { ok: false, message: missingMessage };
-  throw err;
+/**
+ * Run a history write in one transaction; `work` returns the person's new `updatedAt`.
+ * `missing` answers a reference (group, office or the person) deleted since page load.
+ */
+async function inHistoryTx(work: (tx: Tx) => Promise<string>, missing: string): Promise<HistoryResult> {
+  try {
+    return { ok: true, updatedAt: await db.transaction(work) };
+  } catch (err) {
+    return dbFailure(err, { fk: missing });
+  }
 }
+
+const MISSING_REFERENCE = "Gliederung oder Amt existiert nicht mehr. Bitte lade die Seite neu.";
 
 const dateField = z
   .string()
@@ -99,18 +103,16 @@ const addHistoricalSchema = z.object({ personId: z.number().int().positive(), ..
 
 /** Create an ended tenure for retroactive capture (e.g. an office held before the app existed). */
 export async function addHistoricalAssignment(raw: z.input<typeof addHistoricalSchema>): Promise<HistoryResult> {
-  const session = await getActionSession();
-  if (!session) return SESSION_EXPIRED;
-  const parsed = addHistoricalSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  const { personId, updatedAt, groupId, officeId, startDate, endDate, endUnknown } = parsed.data;
+  return mutation(async (by) => {
+    const parsed = addHistoricalSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
+    const { personId, updatedAt, groupId, officeId, startDate, endDate, endUnknown } = parsed.data;
 
-  const resolved = resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
-  if (!resolved.ok) return { ok: false, message: resolved.message };
+    const resolved = resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
+    if (!resolved.ok) return { ok: false, message: resolved.message };
 
-  try {
-    const version = await db.transaction(async (tx) => {
-      const next = await bumpPerson(tx, personId, updatedAt, actorName(session));
+    return inHistoryTx(async (tx) => {
+      const next = await bumpPerson(tx, personId, updatedAt, by);
       await tx.insert(assignments).values({
         personId,
         groupId,
@@ -120,12 +122,8 @@ export async function addHistoricalAssignment(raw: z.input<typeof addHistoricalS
         endUnknown: resolved.endUnknown,
       });
       return next;
-    });
-    revalidateApp();
-    return { ok: true, updatedAt: version };
-  } catch (err) {
-    return failure(err, "Gliederung oder Amt existiert nicht mehr. Bitte lade die Seite neu.");
-  }
+    }, MISSING_REFERENCE);
+  });
 }
 
 // --- edit a past tenure ---------------------------------------------------------
@@ -136,14 +134,12 @@ const updateHistoricalSchema = z.object({ assignmentId: z.number().int().positiv
 export async function updateHistoricalAssignment(
   raw: z.input<typeof updateHistoricalSchema>,
 ): Promise<HistoryResult> {
-  const session = await getActionSession();
-  if (!session) return SESSION_EXPIRED;
-  const parsed = updateHistoricalSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  const { assignmentId, updatedAt, groupId, officeId, startDate, endDate, endUnknown } = parsed.data;
+  return mutation(async (by) => {
+    const parsed = updateHistoricalSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
+    const { assignmentId, updatedAt, groupId, officeId, startDate, endDate, endUnknown } = parsed.data;
 
-  try {
-    const version = await db.transaction(async (tx) => {
+    return inHistoryTx(async (tx) => {
       const row = await historyRow(tx, assignmentId, "Ein aktives Amt wird über das Formular bearbeitet, nicht hier.");
       // "Ende unbekannt" documents an upper bound (the recording date). When it stays unknown
       // and still lies after the Von date, keep that bound: recomputing it would move the end
@@ -153,7 +149,7 @@ export async function updateHistoricalAssignment(
         ? { endDate: row.endDate, endUnknown: true }
         : resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
       if ("message" in resolved) throw new UserFacingError(resolved.message);
-      const next = await bumpPerson(tx, row.personId, updatedAt, actorName(session));
+      const next = await bumpPerson(tx, row.personId, updatedAt, by);
       await tx
         .update(assignments)
         .set({
@@ -166,12 +162,8 @@ export async function updateHistoricalAssignment(
         })
         .where(eq(assignments.id, assignmentId));
       return next;
-    });
-    revalidateApp();
-    return { ok: true, updatedAt: version };
-  } catch (err) {
-    return failure(err, "Gliederung oder Amt existiert nicht mehr. Bitte lade die Seite neu.");
-  }
+    }, MISSING_REFERENCE);
+  });
 }
 
 // --- delete a tenure ("Eintrag löschen") ----------------------------------------
@@ -184,22 +176,16 @@ const deleteSchema = z.object({ assignmentId: z.number().int().positive(), updat
  * request from deleting a current office through the history action.
  */
 export async function deleteAssignment(raw: z.input<typeof deleteSchema>): Promise<HistoryResult> {
-  const session = await getActionSession();
-  if (!session) return SESSION_EXPIRED;
-  const parsed = deleteSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  const { assignmentId, updatedAt } = parsed.data;
+  return mutation(async (by) => {
+    const parsed = deleteSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
+    const { assignmentId, updatedAt } = parsed.data;
 
-  try {
-    const version = await db.transaction(async (tx) => {
+    return inHistoryTx(async (tx) => {
       const row = await historyRow(tx, assignmentId, "Aktive Ämter werden über das Formular entfernt oder beendet.");
-      const next = await bumpPerson(tx, row.personId, updatedAt, actorName(session));
+      const next = await bumpPerson(tx, row.personId, updatedAt, by);
       await tx.delete(assignments).where(eq(assignments.id, assignmentId));
       return next;
-    });
-    revalidateApp();
-    return { ok: true, updatedAt: version };
-  } catch (err) {
-    return failure(err, deletedMeanwhile("Diese Person"));
-  }
+    }, deletedMeanwhile("Diese Person"));
+  });
 }
