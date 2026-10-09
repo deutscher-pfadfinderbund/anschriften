@@ -18,9 +18,10 @@ import { PersonForm } from "../_components/person-form";
 // Memoized per request so generateMetadata and the page share one round-trip.
 const loadPerson = cache(getPersonForEdit);
 
+/** A person id from the URL, or null; anything beyond Postgres' `integer` cannot exist. */
 function parseId(raw: string): number | null {
   const id = Number(raw);
-  return Number.isInteger(id) && id > 0 ? id : null;
+  return Number.isInteger(id) && id > 0 && id <= 2_147_483_647 ? id : null;
 }
 
 export async function generateMetadata({
@@ -33,7 +34,7 @@ export async function generateMetadata({
   const { id } = await params;
   const personId = parseId(id);
   const person = personId != null ? await loadPerson(personId) : null;
-  return { title: person ? formatName(person) : "Person bearbeiten" };
+  return { title: person ? formatName(person) : "Seite nicht gefunden" };
 }
 
 export default async function EditPersonPage({
