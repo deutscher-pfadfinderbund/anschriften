@@ -80,9 +80,10 @@ COPY --from=build --chown=node:node /app/src/pdf/assets ./src/pdf/assets
 USER node
 EXPOSE 3000
 
-# Probes better-auth's own /api/auth/ok: it only answers 200 once the auth context (secret,
-# database adapter) has initialised, so a misconfigured container turns unhealthy instead
-# of serving the static login page. Uses Node's global fetch — no wget/curl in the image.
+# Probes better-auth's own /api/auth/ok: it only answers 200 once the server is up and the
+# auth handler has initialised, so a broken start turns unhealthy instead of serving the
+# static login page. It does not query the database (migrate.mjs already needs it to start).
+# Uses Node's global fetch — no wget/curl in the image.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/auth/ok').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 

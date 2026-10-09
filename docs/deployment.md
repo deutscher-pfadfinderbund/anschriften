@@ -24,8 +24,10 @@ Fehlt eine davon, startet der Container nicht: `docker compose logs app` zeigt e
 Zeile `FATAL: missing or invalid configuration: …` mit allen fehlenden Namen.
 
 **Healthcheck:** Der Container prüft `/api/auth/ok` (better-auth). Er wird erst
-„healthy", wenn die Anmeldung wirklich initialisiert ist — ein `unhealthy` nach dem Start
-deutet auf eine falsche Auth-Konfiguration oder eine nicht erreichbare DB hin.
+„healthy", wenn der Next-Server läuft und die Anmeldung initialisiert ist — ein `unhealthy`
+nach dem Start heißt: Server nicht hochgekommen, `docker compose logs app` prüfen. Die
+Datenbank prüft dieser Endpunkt nicht; ist sie beim Start nicht erreichbar, bricht schon
+die Migration ab und der Container startet gar nicht erst.
 
 **Update auf eine neue Version:**
 

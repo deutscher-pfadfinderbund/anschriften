@@ -29,7 +29,7 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 
 ## Architektur-Konventionen
 
-- Alle Mutationen als **Server Actions** in `src/actions/*.ts` (`"use server"`, danach `revalidatePath`)
+- Alle Mutationen als **Server Actions** in `src/actions/*.ts` (`"use server"`, nach jeder erfolgreichen Mutation `revalidateApp()` aus `src/lib/action-helpers.ts`; kein `router.refresh()` im Client)
 - Route Handler NUR für: Auth-Catch-all (`src/app/api/auth/[...all]/route.ts`), PDF-/CSV-Export (brauchen `Content-Disposition`)
 - Geschützter Bereich: Route-Group `src/app/(app)/`. **Jede Seite** ruft als Erstes `requirePageSession()` (`src/lib/auth-helpers.ts`) auf — das ist das Gate. `layout.tsx` ist KEINE Sicherheitsgrenze (Layouts werden bei RSC-Navigationen übersprungen). `proxy.ts` leitet nur Seitennavigationen ohne Cookie optimistisch nach `/login` um — keine Server Actions, kein `/api` (die Export-Routen antworten selbst mit 401)
 - Session in Server Actions: `const session = await getActionSession(); if (!session) return SESSION_EXPIRED;` (`src/lib/action-helpers.ts`). Nie werfen — ein Throw ersetzt die Seite durch die Fehlerseite und vernichtet Formulareingaben

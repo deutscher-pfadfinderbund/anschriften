@@ -10,8 +10,8 @@ import { auth } from "@/lib/auth";
  * so pages can render without it. Each protected page must call this first, before
  * loading any data; without a session it redirects to /login.
  *
- * Wrapped in React `cache()`, so the layout, the page and `generateMetadata` share one
- * session lookup per request instead of hitting the database once each.
+ * Wrapped in React `cache()`: every call within one request (page, `generateMetadata`,
+ * the layout) shares a single session lookup instead of hitting the database once each.
  */
 export const requirePageSession = cache(async () => {
   const session = await auth.api.getSession({ headers: await headers() });

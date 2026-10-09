@@ -25,8 +25,9 @@ const REQUIRED_ROLE = "anschriften";
  * Rejection happens here, inside `getUserInfo`, i.e. *before* better-auth creates
  * any user/session/account row, so a denied login leaves no orphan data. We throw
  * a `FOUND` (302) redirect to the login page instead of a `FORBIDDEN` error, so the
- * browser lands on our German "Kein Zugriff" page rather than a raw JSON 403. The login
- * page keys on `error=access_denied`. The denial is logged with the roles found: if every
+ * browser lands on our German login page rather than a raw JSON 403. `access_denied` is the
+ * one code for which the login page must say "Kein Zugriff"; every other `?error=` (see
+ * `onAPIError` below) only means "try again". The denial is logged with the roles found: if every
  * user is turned away, the usual cause is a Keycloak mapper that does not put the client
  * roles into the ID token, and this line is the only place that shows it.
  */
@@ -53,6 +54,7 @@ export const auth = betterAuth({
   // OAuth failures better-auth detects itself (expired/mismatched state after the back
   // button or a second tab, `?error=` from Keycloak, token exchange failures) land on our
   // German login page with `?error=<code>` instead of better-auth's English error page.
+  // These are retryable, so the login page must not show them as "Kein Zugriff".
   onAPIError: { errorURL: "/login" },
   // Endpoints the app never uses but a signed-in user could call directly. Most important:
   // /update-user would let anyone rename themselves, and that name is what every
