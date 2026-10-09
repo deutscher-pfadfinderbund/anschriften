@@ -5,10 +5,10 @@
 // (fir) only for the active marker and the primary button, per the design rules
 // in AGENTS.md.
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { downloadFile, toastDownloadError } from "@/lib/download";
 
 const PROFILES = [
   { id: "komplett", label: "Komplett", hint: "Alle Gliederungen und Älterengemeinschaften" },
@@ -47,25 +47,6 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-/** Parse a download filename out of a Content-Disposition header, if present. */
-function filenameFromDisposition(header: string | null): string | null {
-  if (!header) return null;
-  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header);
-  return match ? decodeURIComponent(match[1].replace(/"$/, "")) : null;
-}
-
-/** Trigger a browser download for an in-memory blob (keeps the user on the page). */
-function triggerBlobDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 export function ExportManager() {
   const [profile, setProfile] = useState<string>(PROFILES[0].id);
   const [options, setOptions] = useState<Record<OptionId, boolean>>({
@@ -85,15 +66,9 @@ export function ExportManager() {
     if (pending) return;
     setPending(true);
     try {
-      const res = await fetch(href);
-      if (!res.ok) throw new Error(String(res.status));
-      const blob = await res.blob();
-      const filename =
-        filenameFromDisposition(res.headers.get("Content-Disposition")) ??
-        "anschriftenverzeichnis.pdf";
-      triggerBlobDownload(blob, filename);
-    } catch {
-      toast.error("PDF konnte nicht erzeugt werden. Bitte erneut versuchen.");
+      await downloadFile(href, "anschriftenverzeichnis.pdf");
+    } catch (err) {
+      toastDownloadError(err, "PDF konnte nicht erzeugt werden. Bitte erneut versuchen.");
     } finally {
       setPending(false);
     }

@@ -64,6 +64,7 @@ import type {
   PersonOption,
   RankRow,
 } from "@/db/queries";
+import { downloadFile, toastDownloadError } from "@/lib/download";
 import { buildBcc, isEmail, type BccSeparator } from "@/lib/export";
 import { formatDateTime, formatName, formatNameWithScout, scoutAddition } from "@/lib/format";
 import { HOVER_REVEAL, TOUCH_HIT_Y, cn } from "@/lib/utils";
@@ -194,6 +195,7 @@ export function VerteilerManager({
   const [addOpen, setAddOpen] = useState(false);
   const [addSelection, setAddSelection] = useState<Set<number>>(new Set());
   const [composeOpen, setComposeOpen] = useState(false);
+  const [csvPending, setCsvPending] = useState(false);
   // Removing a rule can change many people's membership at once → confirm first.
   const [ruleRemoval, setRuleRemoval] = useState<
     { kind: "office" | "rank" | "group"; id: number; name: string } | null
@@ -231,6 +233,18 @@ export function VerteilerManager({
         hint: p.email && p.email.trim() ? p.email : "ohne E-Mail",
       }));
   }, [activeList, personOptions]);
+
+  async function downloadListCsv(listId: number) {
+    if (csvPending) return;
+    setCsvPending(true);
+    try {
+      await downloadFile(`/api/export/csv?listId=${listId}`, "anschriften.csv");
+    } catch (err) {
+      toastDownloadError(err, "CSV-Export fehlgeschlagen. Bitte erneut versuchen.");
+    } finally {
+      setCsvPending(false);
+    }
+  }
 
   function copyBcc() {
     if (bcc.text.length === 0) {
@@ -463,11 +477,13 @@ export function VerteilerManager({
                       <Copy className="size-4" />
                       Alle E-Mails kopieren
                     </Button>
-                    <Button variant="outline" asChild>
-                      <a href={`/api/export/csv?listId=${activeList.id}`}>
-                        <Download className="size-4" />
-                        CSV herunterladen
-                      </a>
+                    <Button
+                      variant="outline"
+                      onClick={() => downloadListCsv(activeList.id)}
+                      disabled={csvPending}
+                    >
+                      <Download className="size-4" />
+                      CSV herunterladen
                     </Button>
                     <Button
                       variant="outline"

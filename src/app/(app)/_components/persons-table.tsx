@@ -52,6 +52,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { DistributionListSummary, GroupRow, OfficeRow, PersonListRow } from "@/db/queries";
+import { downloadFile, toastDownloadError } from "@/lib/download";
 import { buildBcc } from "@/lib/export";
 import { birthYear, fold, formatName, scoutAddition } from "@/lib/format";
 import { SECTION_LABELS, type Section } from "@/lib/sections";
@@ -61,25 +62,6 @@ const ALL = "__all__";
 
 function distinct(values: string[]): string[] {
   return [...new Set(values)];
-}
-
-/** Parse a download filename out of a Content-Disposition header, if present. */
-function filenameFromDisposition(header: string | null): string | null {
-  if (!header) return null;
-  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header);
-  return match ? decodeURIComponent(match[1].replace(/"$/, "")) : null;
-}
-
-/** Trigger a browser download for an in-memory blob (keeps the user on the page). */
-function triggerBlobDownload(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
 }
 
 type Indexed = PersonListRow & { _search: string };
@@ -366,14 +348,9 @@ export function PersonsTable({
     const ids = selectedPersons.map((p) => p.id).join(",");
     setCsvPending(true);
     try {
-      const res = await fetch(`/api/export/csv?ids=${ids}`);
-      if (!res.ok) throw new Error(String(res.status));
-      const blob = await res.blob();
-      const filename =
-        filenameFromDisposition(res.headers.get("Content-Disposition")) ?? "anschriften.csv";
-      triggerBlobDownload(blob, filename);
-    } catch {
-      toast.error("CSV-Export fehlgeschlagen. Bitte erneut versuchen.");
+      await downloadFile(`/api/export/csv?ids=${ids}`, "anschriften.csv");
+    } catch (err) {
+      toastDownloadError(err, "CSV-Export fehlgeschlagen. Bitte erneut versuchen.");
     } finally {
       setCsvPending(false);
     }
