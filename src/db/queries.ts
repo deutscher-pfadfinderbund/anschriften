@@ -14,7 +14,8 @@ import {
 } from "@/db/schema";
 import { computeEffectiveMembership, type MemberOrigin } from "@/lib/effective-members";
 import type { CsvPerson } from "@/lib/export";
-import { fold, formatName, formatNameWithScout } from "@/lib/format";
+import { formatName } from "@/lib/format";
+import { byDirectoryName } from "@/lib/name-order";
 import { RULE_KINDS, type RuleKind, type RuleRef } from "@/lib/rule-kinds";
 import type { Section } from "@/lib/sections";
 
@@ -544,10 +545,7 @@ export async function listDistributionLists(): Promise<DistributionListWithMembe
         via: viaRefs(origin.via),
       };
     });
-    // By the displayed name (formatNameWithScout), folded like the directory (DIN 5007-2),
-    // so namesakes are ordered by first name too.
-    const key = new Map(members.map((m) => [m.personId, fold(formatNameWithScout(m))]));
-    members.sort((a, b) => key.get(a.personId)!.localeCompare(key.get(b.personId)!, "de"));
+    members.sort(byDirectoryName);
     return {
       ...dl,
       rules: rulesByList.get(dl.id) ?? { office: [], rank: [], group: [] },
