@@ -5,7 +5,7 @@ import { ChevronRight, Copy, Download, Pencil, Send, Trash2 } from "lucide-react
 import { toast } from "sonner";
 
 import { deleteList } from "@/actions/lists";
-import { ComposeMailDialog } from "@/components/compose-mail-dialog";
+import { ComposeMailDialog, emailAddressCount } from "@/components/compose-mail-dialog";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { Panel } from "@/components/panel";
 import { Tag } from "@/components/tag";
@@ -26,8 +26,6 @@ import { TOUCH_HIT_Y, cn } from "@/lib/utils";
 
 import { MembersPanel } from "./members-panel";
 import { RulesPanel } from "./rules-panel";
-
-const addressCount = (n: number) => `${n} ${n === 1 ? "E-Mail-Adresse" : "E-Mail-Adressen"}`;
 
 /** Header with the list's actions, then members, rules, address list and send history. */
 export function ListDetail({
@@ -72,7 +70,7 @@ export function ListDetail({
   async function copyAddresses() {
     try {
       await navigator.clipboard.writeText(bcc.text);
-      toast.success(`${addressCount(bcc.count)} kopiert.`, {
+      toast.success(`${emailAddressCount(bcc.count)} kopiert.`, {
         description:
           bcc.skipped > 0
             ? `${bcc.skipped} ${bcc.skipped === 1 ? "Mitglied" : "Mitglieder"} ohne gültige E-Mail übersprungen.`
@@ -170,7 +168,7 @@ export function ListDetail({
             />
             {addressesOpen ? "Adressliste ausblenden" : "Adressliste anzeigen"}
             <span className="ml-auto text-caption font-normal text-ink-faint tabular-nums">
-              {addressCount(bcc.count)}
+              {emailAddressCount(bcc.count)}
             </span>
           </summary>
           <div className="border-t border-line p-4 sm:p-gutter">

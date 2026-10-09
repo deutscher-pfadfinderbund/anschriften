@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Send } from "lucide-react";
 import { toast } from "sonner";
 
-import { sendMail } from "@/actions/mail";
+import { sendMail, type SendMailResult } from "@/actions/mail";
 import { FormLabel } from "@/components/form-label";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +21,9 @@ import { Textarea } from "@/components/ui/textarea";
 const SUBJECT_MAX = 200;
 const BODY_MAX = 50000;
 
-const addresses = (n: number) => `${n} ${n === 1 ? "Adresse" : "Adressen"}`;
+/** "1 E-Mail-Adresse" / "25 E-Mail-Adressen" — the one wording for address counts. */
+export const emailAddressCount = (n: number) =>
+  `${n} ${n === 1 ? "E-Mail-Adresse" : "E-Mail-Adressen"}`;
 
 /** Whether the mailing targets a whole list or an explicit table selection. */
 export type ComposeTarget = { kind: "list"; listId: number } | { kind: "selection"; personIds: number[] };
@@ -66,32 +68,52 @@ export function ComposeMailDialog({
     setConfirming(false);
   }
 
+  /**
+   * Part of the mailing may already be out. Keep the warning until it is read and close
+   * the dialog, so „Senden“ is not one click away from a double mailing.
+   */
+  function warnPartial(message: string, description?: string) {
+    toast.error(message, {
+      description,
+      duration: Infinity,
+      action: { label: "Verstanden", onClick: () => {} },
+    });
+    close();
+  }
+
   function submit() {
     const payload =
       target.kind === "list"
         ? { listId: target.listId, subject, body }
         : { personIds: target.personIds, subject, body };
     startTransition(async () => {
-      const res = await sendMail(payload);
+      let res: SendMailResult;
+      try {
+        res = await sendMail(payload);
+      } catch {
+        // The request itself failed (connection drop, proxy timeout) while the server
+        // may still be sending: treat it like a partial delivery.
+        warnPartial(
+          "Verbindung unterbrochen – die E-Mail ist womöglich schon bei einem Teil der Empfänger angekommen.",
+          "Sende sie nicht einfach noch einmal." +
+            (target.kind === "list"
+              ? " Nach dem Neuladen siehst du unter „Zuletzt versendet“, ob der Versand durchgelaufen ist."
+              : ""),
+        );
+        return;
+      }
       if (!res.ok) {
-        if (res.sent) {
-          // Part of the mailing is already out. Keep the warning until it is read and
-          // close the dialog, so „Senden“ is not one click away from a double mailing.
-          toast.error(res.message, {
-            duration: Infinity,
-            action: { label: "Verstanden", onClick: () => {} },
-          });
-          close();
-        } else {
+        if (res.sent) warnPartial(res.message);
+        else {
           toast.error(res.message);
           setConfirming(false);
         }
         return;
       }
-      toast.success(`E-Mail an ${addresses(res.recipientCount)} versendet.`, {
+      toast.success(`Rundmail an ${emailAddressCount(res.recipientCount)} versendet.`, {
         description:
           res.refused > 0
-            ? `${addresses(res.refused)} ${res.refused === 1 ? "hat" : "haben"} der Mailserver abgelehnt.`
+            ? `Der Mailserver hat ${emailAddressCount(res.refused)} abgelehnt.`
             : undefined,
       });
       close();
@@ -144,7 +166,7 @@ export function ComposeMailDialog({
           <p className="rounded-md border border-line bg-surface-2 px-3 py-2 text-caption text-ink-soft">
             {recipientCount > 0 ? (
               <>
-                an <span className="font-medium text-ink">{addresses(recipientCount)}</span>
+                an <span className="font-medium text-ink">{emailAddressCount(recipientCount)}</span>
                 {skippedCount > 0
                   ? ` · ${skippedCount} ${
                       skippedCount === 1
@@ -163,7 +185,7 @@ export function ComposeMailDialog({
             role="status"
             className="rounded-md border border-line-strong bg-surface-2 px-3 py-2 text-ui text-ink"
           >
-            Wirklich an <span className="font-medium">{addresses(recipientCount)}</span> senden? Der
+            Wirklich an <span className="font-medium">{emailAddressCount(recipientCount)}</span> senden? Der
             Versand lässt sich nicht rückgängig machen.
           </p>
         ) : null}
@@ -175,7 +197,7 @@ export function ComposeMailDialog({
               </Button>
               <Button onClick={submit} disabled={!canSend}>
                 <Send />
-                {isPending ? "Wird gesendet …" : `Jetzt an ${addresses(recipientCount)} senden`}
+                {isPending ? "Wird gesendet …" : `Jetzt an ${emailAddressCount(recipientCount)} senden`}
               </Button>
             </>
           ) : (
