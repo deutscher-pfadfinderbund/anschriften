@@ -14,7 +14,7 @@ import {
 } from "@/db/schema";
 import { computeEffectiveMembership, type MemberOrigin } from "@/lib/effective-members";
 import type { CsvPerson } from "@/lib/export";
-import { formatName } from "@/lib/format";
+import { formatFullName } from "@/lib/format";
 import { RULE_KINDS, type RuleKind, type RuleRef } from "@/lib/rule-kinds";
 import type { Section } from "@/lib/sections";
 
@@ -315,6 +315,7 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
 export type ActiveHolder = {
   assignmentId: number;
   personId: number;
+  /** "Vorname Nachname" — the warning uses it in running text. */
   name: string;
   startDate: string | null;
 };
@@ -346,7 +347,7 @@ export async function listActiveOfficeHolders(): Promise<ActiveOfficeHolder[]> {
     officeId: r.officeId!,
     groupId: r.groupId,
     personId: r.personId,
-    name: formatName(r),
+    name: formatFullName(r),
     startDate: r.startDate,
   }));
 }

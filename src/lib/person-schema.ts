@@ -65,6 +65,8 @@ export function isValidDate(value: string): boolean {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
 }
 
+const INVALID_START = "Der Beginn ist kein gültiges Datum.";
+
 /**
  * Validate an Amtszeit (von/bis) for the office history. Pure (given `today`) so it can be
  * unit-tested and reused by every server action. Returns a German error message, or null
@@ -78,29 +80,36 @@ export function validateTenure(
   endDate: string | null,
   today: string = todayIso(),
 ): string | null {
-  if (startDate != null && !isValidDate(startDate)) return "Ungültiges Von-Datum.";
-  if (endDate != null && !isValidDate(endDate)) return "Ungültiges Bis-Datum.";
+  // Worded by "Beginn"/"Ende": the editor's rows say "Seit", the history dialog "Von"/"Bis".
+  if (startDate != null && !isValidDate(startDate)) return INVALID_START;
+  if (endDate != null && !isValidDate(endDate)) return "Das Ende ist kein gültiges Datum.";
   if (endDate != null && endDate > today)
-    return "Das Bis-Datum darf nicht in der Zukunft liegen – lass das Amt bis dahin aktiv.";
+    return "Das Ende darf nicht in der Zukunft liegen – lass das Amt bis dahin aktiv.";
   // ISO date strings compare lexicographically in chronological order.
   if (startDate != null && endDate != null && endDate < startDate)
-    return "Das Bis-Datum darf nicht vor dem Von-Datum liegen.";
+    return "Das Ende darf nicht vor dem Beginn liegen.";
   return null;
 }
 
 /**
- * Validate a person's own life dates (Geburts-/Sterbedatum). Both bounds are optional
- * (empty/null accepted); when both are set the death must not precede the birth. Pure so
- * savePerson can share it. Returns a German error message, or null when valid.
+ * Validate a person's own life dates (Geburts-/Sterbedatum). Both are optional (null
+ * accepted); neither may lie in the future, and the death must not precede the birth.
+ * Pure (given `today`, default: the Berlin date) so it can be unit-tested. Returns the
+ * offending field with a German message, or null when valid.
  */
 export function validatePersonDates(
   birthDate: string | null,
   deathDate: string | null,
-): string | null {
-  if (birthDate != null && !isValidDate(birthDate)) return "Ungültiges Geburtsdatum.";
-  if (deathDate != null && !isValidDate(deathDate)) return "Ungültiges Sterbedatum.";
+  today: string = todayIso(),
+): { field: "birthDate" | "deathDate"; message: string } | null {
+  if (birthDate != null && !isValidDate(birthDate)) return { field: "birthDate", message: "Ungültiges Geburtsdatum." };
+  if (birthDate != null && birthDate > today)
+    return { field: "birthDate", message: "Das Geburtsdatum darf nicht in der Zukunft liegen." };
+  if (deathDate != null && !isValidDate(deathDate)) return { field: "deathDate", message: "Ungültiges Sterbedatum." };
+  if (deathDate != null && deathDate > today)
+    return { field: "deathDate", message: "Das Sterbedatum darf nicht in der Zukunft liegen." };
   if (birthDate != null && deathDate != null && deathDate < birthDate)
-    return "Das Sterbedatum darf nicht vor dem Geburtsdatum liegen.";
+    return { field: "deathDate", message: "Das Sterbedatum darf nicht vor dem Geburtsdatum liegen." };
   return null;
 }
 
@@ -137,7 +146,7 @@ export function resolveTenureEnd(input: {
 
 /** Which date field an assignment's `validateTenure` message belongs to. */
 function tenureErrorField(message: string): "startDate" | "endDate" {
-  return message === "Ungültiges Von-Datum." ? "startDate" : "endDate";
+  return message === INVALID_START ? "startDate" : "endDate";
 }
 
 /**
@@ -188,10 +197,7 @@ export const personInputSchema = z
       ctx.addIssue({ code: "custom", path: ["postalCode"], message: "Die PLZ muss aus 5 Ziffern bestehen." });
 
     const dateError = validatePersonDates(val.birthDate, val.deathDate);
-    if (dateError) {
-      const field = val.birthDate != null && !isValidDate(val.birthDate) ? "birthDate" : "deathDate";
-      ctx.addIssue({ code: "custom", path: [field], message: dateError });
-    }
+    if (dateError) ctx.addIssue({ code: "custom", path: [dateError.field], message: dateError.message });
 
     const seen = new Set<string>();
     val.assignments.forEach((a, i) => {
@@ -201,7 +207,7 @@ export const personInputSchema = z
         ctx.addIssue({
           code: "custom",
           path: ["assignments", i, "groupId"],
-          message: "Bitte zu jedem Amt eine Gliederung wählen.",
+          message: "Bitte eine Gliederung wählen.",
         });
         return;
       }

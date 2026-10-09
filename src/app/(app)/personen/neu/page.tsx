@@ -12,7 +12,7 @@ import { requirePageSession } from "@/lib/auth-helpers";
 
 import { PersonForm } from "../_components/person-form";
 
-export const metadata: Metadata = { title: "Neue Anschrift" };
+export const metadata: Metadata = { title: "Neue Person" };
 
 export default async function NewPersonPage() {
   // Authoritative gate: the layout is not re-rendered on RSC navigations.
@@ -29,7 +29,6 @@ export default async function NewPersonPage() {
 
   return (
     <PersonForm
-      mode="create"
       groups={groups}
       offices={offices}
       ranks={ranks}

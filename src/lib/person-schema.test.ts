@@ -43,19 +43,19 @@ describe("validateTenure", () => {
 
   it("rejects an end before the start with a German message", () => {
     expect(validateTenure("2019-01-01", "2015-01-01")).toBe(
-      "Das Bis-Datum darf nicht vor dem Von-Datum liegen.",
+      "Das Ende darf nicht vor dem Beginn liegen.",
     );
   });
 
   it("rejects malformed dates on either bound", () => {
-    expect(validateTenure("01.03.2019", null)).toBe("Ungültiges Von-Datum.");
-    expect(validateTenure(null, "2019-02-30")).toBe("Ungültiges Bis-Datum.");
+    expect(validateTenure("01.03.2019", null)).toBe("Der Beginn ist kein gültiges Datum.");
+    expect(validateTenure(null, "2019-02-30")).toBe("Das Ende ist kein gültiges Datum.");
   });
 
   it("rejects a Bis-Datum in the future (active means: no end date)", () => {
     const today = "2026-07-04";
     expect(validateTenure("2015-01-01", "2026-07-05", today)).toBe(
-      "Das Bis-Datum darf nicht in der Zukunft liegen – lass das Amt bis dahin aktiv.",
+      "Das Ende darf nicht in der Zukunft liegen – lass das Amt bis dahin aktiv.",
     );
     expect(validateTenure(null, "2030-01-01", today)).not.toBeNull();
     // Ending today is fine — that is the default of „Amt beenden“.
@@ -84,14 +84,25 @@ describe("validatePersonDates", () => {
   });
 
   it("rejects a malformed birth or death date with a German message", () => {
-    expect(validatePersonDates("01.05.1950", null)).toBe("Ungültiges Geburtsdatum.");
-    expect(validatePersonDates(null, "2020-02-30")).toBe("Ungültiges Sterbedatum.");
+    expect(validatePersonDates("01.05.1950", null)).toEqual({ field: "birthDate", message: "Ungültiges Geburtsdatum." });
+    expect(validatePersonDates(null, "2020-02-30")).toEqual({ field: "deathDate", message: "Ungültiges Sterbedatum." });
   });
 
   it("rejects a death date before the birth date", () => {
-    expect(validatePersonDates("1950-05-01", "1940-05-01")).toBe(
-      "Das Sterbedatum darf nicht vor dem Geburtsdatum liegen.",
-    );
+    expect(validatePersonDates("1950-05-01", "1940-05-01")).toEqual({
+      field: "deathDate",
+      message: "Das Sterbedatum darf nicht vor dem Geburtsdatum liegen.",
+    });
+  });
+
+  it("rejects life dates in the future (today itself is fine)", () => {
+    const today = "2026-10-09";
+    expect(validatePersonDates("2026-10-10", null, today)?.field).toBe("birthDate");
+    expect(validatePersonDates(null, "2026-10-10", today)).toEqual({
+      field: "deathDate",
+      message: "Das Sterbedatum darf nicht in der Zukunft liegen.",
+    });
+    expect(validatePersonDates(today, today, today)).toBeNull();
   });
 });
 
@@ -134,18 +145,18 @@ describe("resolveTenureEnd", () => {
   it("rejects a Bis-Datum after the injected today", () => {
     expect(resolveTenureEnd({ startDate: "2015-01-01", endDate: "2026-07-05", endUnknown: false, today })).toEqual({
       ok: false,
-      message: "Das Bis-Datum darf nicht in der Zukunft liegen – lass das Amt bis dahin aktiv.",
+      message: "Das Ende darf nicht in der Zukunft liegen – lass das Amt bis dahin aktiv.",
     });
   });
 
   it("rejects an invalid or out-of-order Bis-Datum (delegates to validateTenure)", () => {
     expect(resolveTenureEnd({ startDate: null, endDate: "2019-02-30", endUnknown: false, today })).toEqual({
       ok: false,
-      message: "Ungültiges Bis-Datum.",
+      message: "Das Ende ist kein gültiges Datum.",
     });
     expect(resolveTenureEnd({ startDate: "2019-01-01", endDate: "2015-01-01", endUnknown: false, today })).toEqual({
       ok: false,
-      message: "Das Bis-Datum darf nicht vor dem Von-Datum liegen.",
+      message: "Das Ende darf nicht vor dem Beginn liegen.",
     });
   });
 });
@@ -325,7 +336,7 @@ describe("personInputSchema: assignment rows", () => {
   it("rejects an Amt without a Gliederung instead of dropping it silently", () => {
     const r = parsePersonInput(base({ assignments: [row({ groupId: null, officeId: 7 })] }));
     expect(r.ok ? null : r.errors).toEqual({
-      "assignments.0.groupId": "Bitte zu jedem Amt eine Gliederung wählen.",
+      "assignments.0.groupId": "Bitte eine Gliederung wählen.",
     });
   });
 
@@ -337,10 +348,10 @@ describe("personInputSchema: assignment rows", () => {
   it("validates the tenure per row with a field path", () => {
     const bad = parsePersonInput(base({ assignments: [row({ startDate: "2019-01-01", endDate: "2015-01-01" })] }));
     expect(bad.ok ? null : bad.errors).toEqual({
-      "assignments.0.endDate": "Das Bis-Datum darf nicht vor dem Von-Datum liegen.",
+      "assignments.0.endDate": "Das Ende darf nicht vor dem Beginn liegen.",
     });
     const start = parsePersonInput(base({ assignments: [row({ startDate: "1.3.2019" })] }));
-    expect(start.ok ? null : start.errors).toEqual({ "assignments.0.startDate": "Ungültiges Von-Datum." });
+    expect(start.ok ? null : start.errors).toEqual({ "assignments.0.startDate": "Der Beginn ist kein gültiges Datum." });
     const future = parsePersonInput(base({ assignments: [row({ endDate: "2999-01-01" })] }));
     expect(future.ok ? null : Object.keys(future.errors)).toEqual(["assignments.0.endDate"]);
   });

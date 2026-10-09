@@ -51,6 +51,19 @@ export function scoutAddition(p: {
   return p.lastName?.trim() || p.firstName?.trim() ? scout : null;
 }
 
+/**
+ * "Vorname Nachname" — the form for running text („Amtszeit von Hannes Hoffmann beenden“),
+ * where the list form "Nachname, Vorname" reads oddly. Falls back to the Fahrtenname.
+ */
+export function formatFullName(p: {
+  firstName?: string | null;
+  lastName?: string | null;
+  scoutName?: string | null;
+}): string {
+  const name = [p.firstName?.trim(), p.lastName?.trim()].filter(Boolean).join(" ");
+  return name || p.scoutName?.trim() || "—";
+}
+
 /** "Nachname, Vorname „Fahrtenname“" — the plain-text form for headings, options and lists. */
 export function formatNameWithScout(p: {
   firstName?: string | null;
