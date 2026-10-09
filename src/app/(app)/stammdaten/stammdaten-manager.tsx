@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Award, Briefcase, Plus } from "lucide-react";
-import { toast } from "sonner";
 
 import { deleteOffice, saveOffice } from "@/actions/offices";
 import { deleteRank, saveRank } from "@/actions/ranks";
@@ -15,7 +14,7 @@ import type { ListRef, OfficeRow, RankRow } from "@/db/queries";
 import { isDuplicateName, nextOrder, orderError, parseOrder } from "@/lib/master-data";
 import { RANK_UNRANKED } from "@/lib/rank";
 
-import { EntryDialog, EntryList, EntryRow, TextField } from "./_components/master-data-ui";
+import { EntryDialog, EntryList, EntryRow, TextField, useEntryDialog } from "./_components/master-data-ui";
 
 type Kind = "office" | "rank";
 
@@ -71,17 +70,10 @@ export function StammdatenManager({
   /** Per rank id: why it cannot be deleted (absent = deletable), same rule as the action. */
   rankBlockers: Record<number, string>;
 }) {
-  const [isPending, startTransition] = useTransition();
   // Controlled so the header shows the create action of the visible tab.
   const [tab, setTab] = useState<Kind>("office");
-
-  // `open` is kept apart from the draft so the dialog keeps its content while it fades out.
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Draft>({ kind: "office", entry: null, name: "", order: "" });
-  const [formError, setFormError] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  // The server's refusal, when a delete the page thought possible was refused after all.
-  const [deleteRefusal, setDeleteRefusal] = useState<string | null>(null);
+  const dialog = useEntryDialog<Draft>({ kind: "office", entry: null, name: "", order: "" });
+  const { draft } = dialog;
 
   const copy = COPY[draft.kind];
   const entries = draft.kind === "office" ? offices.map(officeEntry) : ranks.map(rankEntry);
@@ -101,37 +93,28 @@ export function StammdatenManager({
             : ranks.map((r) => r.sortOrder),
         ),
       );
-    setDraft({ kind, entry, name: entry?.name ?? "", order });
-    setFormError(null);
-    setConfirmOpen(false);
-    setOpen(true);
+    dialog.show({ kind, entry, name: entry?.name ?? "", order });
   }
 
   function submit() {
     const { kind, entry, name } = draft;
     const order = parseOrder(draft.order) ?? RANK_UNRANKED;
-    setFormError(null);
-    startTransition(async () => {
-      const res =
+    dialog.run(
+      () =>
         kind === "office"
-          ? await saveOffice(entry?.id ?? null, { name, rank: order })
-          : await saveRank(entry?.id ?? null, { name, sortOrder: order });
-      if (!res.ok) return setFormError(res.message);
-      toast.success(entry ? COPY[kind].saved : COPY[kind].created);
-      setOpen(false);
-    });
+          ? saveOffice(entry?.id ?? null, { name, rank: order })
+          : saveRank(entry?.id ?? null, { name, sortOrder: order }),
+      entry ? COPY[kind].saved : COPY[kind].created,
+    );
   }
 
   function confirmDelete() {
     const { kind, entry } = draft;
     if (!entry) return;
-    startTransition(async () => {
-      const res = kind === "office" ? await deleteOffice(entry.id) : await deleteRank(entry.id);
-      // Keep the confirmation open and let it say why (e.g. a Verteiler rule added meanwhile).
-      if (!res.ok) return setDeleteRefusal(res.message);
-      toast.success(COPY[kind].deleted);
-      setOpen(false); // takes the confirmation with it
-    });
+    dialog.run(
+      () => (kind === "office" ? deleteOffice(entry.id) : deleteRank(entry.id)),
+      COPY[kind].deleted,
+    );
   }
 
   return (
@@ -219,25 +202,17 @@ export function StammdatenManager({
       </PageBody>
 
       <EntryDialog
-        open={open}
-        onOpenChange={setOpen}
+        state={dialog}
         title={draft.entry ? copy.edit : copy.create}
         description={copy.description}
         canSave={draft.name.trim() !== "" && !nameTaken && orderErr == null}
-        pending={isPending}
-        error={formError}
         onSubmit={submit}
         deletion={
           draft.entry
             ? {
                 title: copy.deleteTitle,
                 description: `„${draft.entry.name}“ wird gelöscht. Das kann nicht rückgängig gemacht werden.`,
-                blockedMessage: deleteRefusal ?? blockers[draft.entry.id],
-                open: confirmOpen,
-                onOpenChange: (o) => {
-                  if (o) setDeleteRefusal(null);
-                  setConfirmOpen(o);
-                },
+                blockedReason: blockers[draft.entry.id],
                 onConfirm: confirmDelete,
               }
             : undefined
@@ -247,7 +222,7 @@ export function StammdatenManager({
           id="entry-name"
           label="Name"
           value={draft.name}
-          onChange={(name) => setDraft((d) => ({ ...d, name }))}
+          onChange={(name) => dialog.edit({ name })}
           error={nameTaken ? copy.duplicate : null}
         />
         <TextField
@@ -255,7 +230,7 @@ export function StammdatenManager({
           label={copy.orderLabel}
           numeric
           value={draft.order}
-          onChange={(order) => setDraft((d) => ({ ...d, order }))}
+          onChange={(order) => dialog.edit({ order })}
           placeholder={draft.kind === "office" ? "am Ende" : undefined}
           hint={copy.orderHint}
           error={orderErr}

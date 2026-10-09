@@ -1,11 +1,16 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo } from "react";
 import { Building2, Plus } from "lucide-react";
-import { toast } from "sonner";
 
 import { deleteGroup, saveGroup } from "@/actions/groups";
-import { EntryDialog, EntryList, EntryRow, TextField } from "@/app/(app)/stammdaten/_components/master-data-ui";
+import {
+  EntryDialog,
+  EntryList,
+  EntryRow,
+  TextField,
+  useEntryDialog,
+} from "@/app/(app)/stammdaten/_components/master-data-ui";
 import { Combobox, type ComboOption } from "@/components/combobox";
 import { EmptyState } from "@/components/empty-state";
 import { FormLabel } from "@/components/form-label";
@@ -38,12 +43,8 @@ export function GliederungenManager({
   /** Per group id: why it cannot be deleted (absent = deletable), same rule as the action. */
   blockers: Record<number, string>;
 }) {
-  const [isPending, startTransition] = useTransition();
   const ordered = useMemo(() => orderGroups(groups), [groups]);
-
-  // `open` is kept apart from the draft so the dialog keeps its content while it fades out.
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Draft>({
+  const dialog = useEntryDialog<Draft>({
     group: null,
     name: "",
     kind: "",
@@ -51,10 +52,7 @@ export function GliederungenManager({
     parentId: null,
     section: "bund",
   });
-  const [formError, setFormError] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  // The server's refusal, when a delete the page thought possible was refused after all.
-  const [deleteRefusal, setDeleteRefusal] = useState<string | null>(null);
+  const { draft } = dialog;
 
   const editId = draft.group?.id ?? null;
   const parentOptions: ComboOption[] = useMemo(() => {
@@ -74,7 +72,7 @@ export function GliederungenManager({
   const orderErr = orderError(draft.order);
 
   function openDialog(group: GroupRow | null) {
-    setDraft(
+    dialog.show(
       group
         ? {
             group,
@@ -93,9 +91,6 @@ export function GliederungenManager({
             section: "bund",
           },
     );
-    setFormError(null);
-    setConfirmOpen(false);
-    setOpen(true);
   }
 
   function submit() {
@@ -108,25 +103,16 @@ export function GliederungenManager({
       // For a child the action takes the parent's Bereich anyway; send the one shown.
       section: parent?.section ?? draft.section,
     };
-    setFormError(null);
-    startTransition(async () => {
-      const res = await saveGroup(group?.id ?? null, payload);
-      if (!res.ok) return setFormError(res.message);
-      toast.success(group ? "Gliederung gespeichert." : "Gliederung angelegt.");
-      setOpen(false);
-    });
+    dialog.run(
+      () => saveGroup(group?.id ?? null, payload),
+      group ? "Gliederung gespeichert." : "Gliederung angelegt.",
+    );
   }
 
   function confirmDelete() {
     const { group } = draft;
     if (!group) return;
-    startTransition(async () => {
-      const res = await deleteGroup(group.id);
-      // Keep the confirmation open and let it say why (e.g. a person assigned meanwhile).
-      if (!res.ok) return setDeleteRefusal(res.message);
-      toast.success("Gliederung gelöscht.");
-      setOpen(false); // takes the confirmation with it
-    });
+    dialog.run(() => deleteGroup(group.id), "Gliederung gelöscht.");
   }
 
   return (
@@ -173,26 +159,18 @@ export function GliederungenManager({
       </PageBody>
 
       <EntryDialog
-        open={open}
-        onOpenChange={setOpen}
+        state={dialog}
         title={draft.group ? "Gliederung bearbeiten" : "Neue Gliederung"}
         description="Gliederungen stehen bei Personen, Verteilern und im PDF zur Auswahl."
         className="sm:max-w-md"
         canSave={draft.name.trim() !== "" && !nameTaken && orderErr == null}
-        pending={isPending}
-        error={formError}
         onSubmit={submit}
         deletion={
           draft.group
             ? {
                 title: "Gliederung löschen?",
                 description: `„${draft.group.name}“ wird gelöscht. Das kann nicht rückgängig gemacht werden.`,
-                blockedMessage: deleteRefusal ?? blockers[draft.group.id],
-                open: confirmOpen,
-                onOpenChange: (o) => {
-                  if (o) setDeleteRefusal(null);
-                  setConfirmOpen(o);
-                },
+                blockedReason: blockers[draft.group.id],
                 onConfirm: confirmDelete,
               }
             : undefined
@@ -202,7 +180,7 @@ export function GliederungenManager({
           id="group-name"
           label="Name"
           value={draft.name}
-          onChange={(name) => setDraft((d) => ({ ...d, name }))}
+          onChange={(name) => dialog.edit({ name })}
           error={nameTaken ? "Eine Gliederung mit diesem Namen gibt es schon." : null}
         />
         <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
@@ -210,7 +188,7 @@ export function GliederungenManager({
             id="group-kind"
             label="Art"
             value={draft.kind}
-            onChange={(kind) => setDraft((d) => ({ ...d, kind }))}
+            onChange={(kind) => dialog.edit({ kind })}
             placeholder="z. B. Gau, Horte, Konvent"
             hint="Optional."
           />
@@ -219,7 +197,7 @@ export function GliederungenManager({
             label="Reihenfolge im PDF"
             numeric
             value={draft.order}
-            onChange={(order) => setDraft((d) => ({ ...d, order }))}
+            onChange={(order) => dialog.edit({ order })}
             hint="Kleiner = weiter oben."
             error={orderErr}
           />
@@ -230,14 +208,12 @@ export function GliederungenManager({
             id="group-parent"
             options={parentOptions}
             value={draft.parentId != null ? String(draft.parentId) : PARENT_NONE}
-            onChange={(v) =>
-              setDraft((d) => {
-                const parentId = v === PARENT_NONE ? null : Number(v);
-                // Keep the inherited Bereich when the parent is cleared again.
-                const inherited = groups.find((g) => g.id === parentId)?.section;
-                return { ...d, parentId, section: inherited ?? d.section };
-              })
-            }
+            onChange={(v) => {
+              const parentId = v === PARENT_NONE ? null : Number(v);
+              // Keep the inherited Bereich when the parent is cleared again.
+              const inherited = groups.find((g) => g.id === parentId)?.section;
+              dialog.edit({ parentId, section: inherited ?? draft.section });
+            }}
             searchPlaceholder="Gliederung suchen …"
           />
         </div>
@@ -256,7 +232,7 @@ export function GliederungenManager({
             <FormLabel htmlFor="group-section">Bereich</FormLabel>
             <Select
               value={draft.section}
-              onValueChange={(v) => setDraft((d) => ({ ...d, section: v as Section }))}
+              onValueChange={(v) => dialog.edit({ section: v as Section })}
             >
               <SelectTrigger
                 id="group-section"

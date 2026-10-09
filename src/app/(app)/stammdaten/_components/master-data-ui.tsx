@@ -3,9 +3,11 @@
 // The building blocks the three master-data lists share (Ämter, Stände on /stammdaten,
 // Gliederungen on /gliederungen): the list card, a row that opens its edit dialog, and that
 // dialog with its Name and Reihenfolge fields. One recipe, so the lists look and behave alike.
+import { useId, useRef, useState, useTransition } from "react";
+import { flushSync } from "react-dom";
 import { Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
-import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { FormLabel } from "@/components/form-label";
 import { NumberBadge } from "@/components/number-badge";
 import { Panel } from "@/components/panel";
@@ -19,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import type { ActionResult } from "@/lib/action-helpers";
 import { cn } from "@/lib/utils";
 
 /**
@@ -100,111 +103,205 @@ export function EntryRow({
   );
 }
 
-/** Löschen in an edit dialog and its confirmation. */
+/**
+ * State of a create/edit dialog: what it edits, which view is up (form or delete
+ * confirmation), the server's last refusal and the action in flight.
+ */
+export function useEntryDialog<D extends object>(initial: D) {
+  const [pending, startTransition] = useTransition();
+  // `open` is kept apart from the draft so the dialog keeps its content while it fades out.
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(initial);
+  const [confirming, setConfirmingState] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return {
+    open,
+    draft,
+    pending,
+    confirming,
+    error,
+    /** Opens the dialog on this draft, in its form view. */
+    show(next: D) {
+      setDraft(next);
+      setConfirmingState(false);
+      setError(null);
+      setOpen(true);
+    },
+    /** Changes fields; the server's refusal of the previous input no longer applies. */
+    edit(patch: Partial<D>) {
+      setDraft((d) => ({ ...d, ...patch }));
+      setError(null);
+    },
+    close() {
+      setOpen(false);
+    },
+    /** Switches between the form and the delete confirmation. */
+    setConfirming(next: boolean) {
+      setConfirmingState(next);
+      setError(null);
+    },
+    /**
+     * Runs a save or delete: success toasts and closes the dialog; a refusal keeps it
+     * open on the same view with the server's message, ready for another try.
+     */
+    run(action: () => Promise<ActionResult>, success: string) {
+      setError(null);
+      startTransition(async () => {
+        const res = await action();
+        if (!res.ok) return setError(res.message);
+        toast.success(success);
+        setOpen(false);
+      });
+    },
+  };
+}
+
+type EntryDialogState = ReturnType<typeof useEntryDialog<object>>;
+
+/** Löschen in an edit dialog. */
 export type Deletion = {
   /** e.g. „Amt löschen?“ */
   title: string;
   description: string;
-  /** Why the entry cannot be deleted: the page's up-front check, or the server's refusal. */
-  blockedMessage?: string;
-  /** Confirmation shown. Reset it when the dialog opens; a successful delete only closes the dialog. */
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  /** Why the entry cannot be deleted (the page's up-front check): Löschen stays disabled. */
+  blockedReason?: string;
   onConfirm: () => void;
 };
 
 /**
  * Create/edit dialog as a real form: Enter saves, Speichern stays disabled until the
  * input is valid, and a refused save shows the server's message here instead of a
- * toast. `deletion` (edit mode only) adds Löschen on the left of the footer; its
- * confirmation takes this dialog's place and returns here on Abbrechen.
+ * toast. `deletion` (edit mode only) adds Löschen on the left of the footer, which swaps
+ * the form for a confirmation in the same dialog; Abbrechen or Escape there return to
+ * the form. While an action runs the dialog cannot be dismissed, so its answer is
+ * never lost.
  */
 export function EntryDialog({
-  open,
-  onOpenChange,
+  state,
   title,
   description,
   className,
   canSave,
-  pending,
-  error,
   onSubmit,
   deletion,
   children,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  state: Pick<EntryDialogState, "open" | "pending" | "confirming" | "error" | "close" | "setConfirming">;
   title: string;
   description: string;
   /** Extra classes for the dialog panel, e.g. a wider max width. */
   className?: string;
   canSave: boolean;
-  pending: boolean;
-  /** The server's message after a refused save. */
-  error: string | null;
   onSubmit: () => void;
   deletion?: Deletion;
   children: React.ReactNode;
 }) {
+  const { open, pending, confirming, error, close, setConfirming } = state;
+  const id = useId();
+  const deleteButton = useRef<HTMLButtonElement>(null);
+  const confirmation = confirming && deletion ? deletion : null;
+
+  function backToForm() {
+    flushSync(() => setConfirming(false));
+    deleteButton.current?.focus();
+  }
+
+  const errorLine = error ? (
+    <p role="alert" className="text-ui text-crit">
+      {error}
+    </p>
+  ) : null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* While the confirmation is up, this dialog steps aside instead of showing a
-          second set of buttons behind it; Abbrechen there brings it back. */}
-      <DialogContent className={cn(className, deletion?.open && "invisible")}>
-        <form
-          noValidate
-          className="grid gap-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (canSave && !pending) onSubmit();
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{description}</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">{children}</div>
-          {error ? (
-            <p role="alert" className="text-ui text-crit">
-              {error}
-            </p>
-          ) : null}
-          <DialogFooter>
-            {deletion ? (
-              <Button
-                type="button"
-                variant="ghost"
-                className="text-crit hover:bg-crit-tint hover:text-crit sm:mr-auto"
-                onClick={() => deletion.onOpenChange(true)}
-                disabled={pending}
-              >
-                <Trash2 aria-hidden />
-                Löschen
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !pending) close();
+      }}
+    >
+      <DialogContent
+        className={className}
+        onEscapeKeyDown={(e) => {
+          if (!confirmation) return;
+          e.preventDefault();
+          if (!pending) backToForm();
+        }}
+      >
+        {confirmation ? (
+          // A group named like the question, so screen readers announce the switch when
+          // focus lands on Abbrechen.
+          <div
+            role="group"
+            aria-label={confirmation.title}
+            aria-describedby={`${id}-confirm`}
+            className="grid gap-4"
+          >
+            <DialogHeader>
+              <DialogTitle>{confirmation.title}</DialogTitle>
+              <DialogDescription>
+                <span id={`${id}-confirm`}>{confirmation.description}</span>
+              </DialogDescription>
+            </DialogHeader>
+            {errorLine}
+            <DialogFooter>
+              <Button variant="outline" onClick={backToForm} disabled={pending} autoFocus>
+                Abbrechen
               </Button>
-            ) : null}
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
-              Abbrechen
-            </Button>
-            <Button type="submit" disabled={!canSave || pending}>
-              {pending ? "Speichern …" : "Speichern"}
-            </Button>
-          </DialogFooter>
-        </form>
-        {/* Rendered inside this dialog's React tree on purpose: Radix then treats clicks
-            in the confirmation as inside, so its Abbrechen does not dismiss both. After a
-            delete the caller just closes this dialog: the confirmation fades out with it
-            while this one stays hidden. */}
-        {deletion ? (
-          <ConfirmDeleteDialog
-            open={open && deletion.open}
-            onOpenChange={deletion.onOpenChange}
-            title={deletion.title}
-            description={deletion.description}
-            blockedMessage={deletion.blockedMessage}
-            pending={pending}
-            onConfirm={deletion.onConfirm}
-          />
-        ) : null}
+              <Button variant="destructive" onClick={confirmation.onConfirm} disabled={pending}>
+                {pending ? "Löschen …" : "Löschen"}
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <form
+            noValidate
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (canSave && !pending) onSubmit();
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{title}</DialogTitle>
+              <DialogDescription>{description}</DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-4">{children}</div>
+            {errorLine}
+            <DialogFooter className="sm:flex-wrap">
+              {deletion ? (
+                <Button
+                  ref={deleteButton}
+                  type="button"
+                  variant="ghost"
+                  className="text-crit hover:bg-crit-tint hover:text-crit sm:mr-auto"
+                  onClick={() => setConfirming(true)}
+                  disabled={pending || deletion.blockedReason != null}
+                  aria-describedby={deletion.blockedReason ? `${id}-blocked` : undefined}
+                >
+                  <Trash2 aria-hidden />
+                  Löschen
+                </Button>
+              ) : null}
+              <Button type="button" variant="outline" onClick={close} disabled={pending}>
+                Abbrechen
+              </Button>
+              <Button type="submit" disabled={!canSave || pending}>
+                {pending ? "Speichern …" : "Speichern"}
+              </Button>
+              {/* Under the disabled Löschen: below the button row, or below the stacked
+                  buttons on phones (where the footer runs in reverse). */}
+              {deletion?.blockedReason ? (
+                <p
+                  id={`${id}-blocked`}
+                  className="order-first basis-full text-caption text-ink-faint sm:order-last"
+                >
+                  {deletion.blockedReason}
+                </p>
+              ) : null}
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );
