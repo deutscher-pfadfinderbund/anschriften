@@ -43,12 +43,14 @@ export function useDirectoryParams() {
 
   const [query, setQuery] = useState(params.q);
   // The URL's q as last seen, and as last written by us. When the URL's q changes to
-  // something we did not write (the "Verzeichnis" link while filtered), the field adopts
-  // it; our own debounced write catching up leaves the field alone, even if the user has
-  // typed on in the meantime.
+  // something we did not write (the "Verzeichnis" link while filtered, browser Back),
+  // the field adopts it; our own debounced write catching up leaves the field alone,
+  // even if the user has typed on in the meantime. `written` only bridges that gap: once
+  // the URL has caught up it is reset, so a later outside change to the same value
+  // (Back to "?q=Wolf" after the link cleared it) counts as outside again.
   const [urlQuery, setUrlQuery] = useState({ seen: params.q, written: params.q });
   if (params.q !== urlQuery.seen) {
-    setUrlQuery({ seen: params.q, written: urlQuery.written });
+    setUrlQuery({ seen: params.q, written: params.q });
     if (params.q !== urlQuery.written) setQuery(params.q);
   }
 
