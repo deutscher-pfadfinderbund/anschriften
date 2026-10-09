@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { logout } from "@/actions/auth";
-import { cn } from "@/lib/utils";
+import { TOUCH_HIT, cn } from "@/lib/utils";
 
 type NavEntry = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
@@ -139,18 +139,19 @@ export function SidebarContent({
         </div>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate text-caption font-medium text-ink">{userName}</div>
-          <div className="text-micro text-ink-faint">via Keycloak</div>
+          <form action={logout}>
+            <button
+              type="submit"
+              className={cn(
+                TOUCH_HIT,
+                "inline-flex items-center gap-1 rounded-sm text-micro text-ink-soft transition-colors hover:text-ink",
+              )}
+            >
+              <LogOut aria-hidden className="size-3" />
+              Abmelden
+            </button>
+          </form>
         </div>
-        <form action={logout}>
-          <button
-            type="submit"
-            title="Abmelden"
-            aria-label="Abmelden"
-            className="grid size-8 place-items-center rounded-md text-ink-faint transition-colors hover:bg-hover hover:text-ink pointer-coarse:size-11"
-          >
-            <LogOut className="size-4" />
-          </button>
-        </form>
       </div>
     </>
   );

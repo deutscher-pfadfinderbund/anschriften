@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from "react";
 
-const QUESTION = "Ungespeicherte Änderungen verwerfen?";
+// Phrased so the browser's own buttons read right: OK leaves, Abbrechen stays.
+const QUESTION = "Seite verlassen? Deine Änderungen sind noch nicht gespeichert und gehen dann verloren.";
 
 /**
  * Asks before unsaved changes are lost: on a reload or tab close (beforeunload) and on a

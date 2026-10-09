@@ -173,6 +173,8 @@ export function Directory({
             {/* Always mounted, so screen readers announce the count as it changes. */}
             <p role="status" className="text-caption tabular-nums text-ink-soft">
               {filtering ? `${rows.length} von ${persons.length} angezeigt` : ""}
+              {/* The Gliederung filter takes in the whole subtree (Verteiler rules do not). */}
+              {groupId != null && groups.some((g) => g.parentId === groupId) ? " · mit Untergliederungen" : ""}
             </p>
             {/* With no results the empty state offers the same button, larger. */}
             {filtering && rows.length > 0 ? (
@@ -185,6 +187,10 @@ export function Directory({
         }
       />
 
+      {/* Always mounted (unlike the bar), so ticking a row announces the new count. */}
+      <p role="status" className="sr-only">
+        {selected.length > 0 ? `${selected.length} ausgewählt` : ""}
+      </p>
       {selected.length > 0 ? (
         <SelectionBar
           className="order-last"

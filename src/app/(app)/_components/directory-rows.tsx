@@ -80,9 +80,11 @@ function groupNames(person: PersonListRow): string[] {
   return [...new Set(person.assignments.map((a) => a.groupName))];
 }
 
-/** E-mail and the first phone; `raised` lifts the link above the card's stretched name link. */
+/**
+ * E-mail and every phone number (the search matches all of them); `raised` lifts the link
+ * above the card's stretched name link.
+ */
 function Contact({ person, raised = false }: { person: PersonListRow; raised?: boolean }) {
-  const phone = person.phones[0];
   return (
     <>
       {person.email ? (
@@ -90,12 +92,12 @@ function Contact({ person, raised = false }: { person: PersonListRow; raised?: b
           <MailLink email={person.email} className={raised ? "relative z-10" : undefined} />
         </div>
       ) : null}
-      {phone ? (
-        <div className="text-caption tabular-nums text-ink-soft">
+      {person.phones.map((phone, i) => (
+        <div key={i} className="text-caption tabular-nums text-ink-soft">
           {phone.number}
           {phone.label ? ` · ${phone.label}` : ""}
         </div>
-      ) : null}
+      ))}
     </>
   );
 }

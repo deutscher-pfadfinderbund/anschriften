@@ -266,7 +266,7 @@ function AddMembersForm({
           options={options}
           selected={selected}
           onToggle={toggle}
-          searchPlaceholder="Name, Fahrtenname oder E-Mail suchen …"
+          searchPlaceholder="Name oder E-Mail suchen …"
           emptyText="Keine passende Person gefunden."
         />
       </div>
