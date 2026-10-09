@@ -94,21 +94,31 @@ export function AssignmentsPanel({
   }
 
   function endRow(row: AssignmentRow) {
+    // A row is Gliederung + Amt, so ending it ends the membership too. Offer to keep it
+    // (a new row without the Amt), unless another row already does.
+    const keepable =
+      row.officeId != null &&
+      !rows.some(
+        (r) => r !== row && r.groupId === row.groupId && ((r.officeId == null && !r.end) || r.end?.keepMember),
+      );
     setEnding({
       title: row.officeId != null ? "Amt beenden" : "Zugehörigkeit beenden",
       description: (
         <>„{rowLabel(row)}“ wird beim Speichern beendet und steht dann unter „Frühere Ämter“.</>
       ),
       start: row.startDate || null,
-      onConfirm: (end) => updateRow(row.key, { end }, ["endDate"]),
+      keepMemberIn: keepable ? labelOf(groupOptions, row.groupId) : undefined,
+      onConfirm: (end, keepMember) => updateRow(row.key, { end: { ...end, keepMember } }, ["endDate"]),
       focusAfter: rowId(row, "undo"),
     });
   }
 
-  function endHolder(h: ActiveHolder) {
+  function endHolder(h: ActiveHolder, row: AssignmentRow) {
     setEnding({
       title: `Amtszeit von ${h.name} beenden`,
-      description: "Die Amtszeit endet erst, wenn du speicherst – bis dahin lässt sich das rückgängig machen.",
+      description:
+        `Damit endet auch die Zugehörigkeit zu „${labelOf(groupOptions, row.groupId)}“. ` +
+        "Die Amtszeit endet erst, wenn du speicherst – bis dahin lässt sich das rückgängig machen.",
       start: h.startDate,
       onConfirm: (end) =>
         set("endPrevious", [
@@ -124,12 +134,14 @@ export function AssignmentsPanel({
       title="Ämter & Gliederungen"
       description={
         history
-          ? "Gliederung ist Pflicht, Amt und „Seit“ sind optional. Beendete Ämter stehen nach dem Speichern unter „Frühere Ämter“."
-          : "Gliederung ist Pflicht, Amt und „Seit“ sind optional."
+          ? "Jede Zeile braucht eine Gliederung, Amt und „Seit“ sind optional. „Beenden“ verschiebt eine Zeile beim Speichern unter „Frühere Ämter“, „Entfernen“ ist nur für Fehleingaben."
+          : "Jede Zeile braucht eine Gliederung, Amt und „Seit“ sind optional."
       }
     >
       {rows.length === 0 ? (
-        <p className="mb-3 text-ui text-ink-faint">Noch keiner Gliederung zugeordnet.</p>
+        <p className="mb-3 text-ui text-ink-faint">
+          Noch keiner Gliederung zugeordnet – so steht die Person nicht im gedruckten Verzeichnis.
+        </p>
       ) : (
         // Laid out by the panel's width, not the viewport's (the Verteiler column narrows it):
         // stacked when narrow, Gliederung | Amt over Seit | buttons in between, one line when
@@ -218,12 +230,13 @@ export function AssignmentsPanel({
                         }}
                       >
                         {capitalize(endingText(row.end))}
+                        {row.end.keepMember ? `; bleibt Mitglied in „${labelOf(groupOptions, row.groupId)}“` : null}
                       </EndingNote>
                     ) : null}
                     <HolderNotes
                       holders={otherHolders(row)}
                       orders={values.endPrevious}
-                      onEnd={endHolder}
+                      onEnd={(h) => endHolder(h, row)}
                       onUndo={(id) => {
                         set(
                           "endPrevious",

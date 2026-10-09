@@ -50,8 +50,11 @@ export type AssignmentRow = {
   groupId: number | null;
   officeId: number | null;
   startDate: string;
-  /** Buffered "Beenden": on save the row is written as a finished tenure (history). */
-  end: EndChoice | null;
+  /**
+   * Buffered "Beenden": on save the row is written as a finished tenure (history).
+   * `keepMember`: the person stays in the Gliederung, as a new row without the Amt.
+   */
+  end: (EndChoice & { keepMember?: boolean }) | null;
 };
 
 /** Buffered "end the current holder's tenure on save" (holder warning). */
@@ -188,12 +191,18 @@ export function toPayload(
     notes: v.notes,
     phones: v.phones.map(({ label, number }) => ({ label, number })),
     doNotPrint: v.doNotPrint,
-    assignments: v.assignments.map((a) => ({
-      groupId: a.groupId,
-      officeId: a.officeId,
-      startDate: a.startDate,
-      ...endFields(a.end),
-    })),
+    assignments: [
+      ...v.assignments.map((a) => ({
+        groupId: a.groupId,
+        officeId: a.officeId,
+        startDate: a.startDate,
+        ...endFields(a.end),
+      })),
+      // Appended, so the server's row errors ("assignments.2…") still match the rows above.
+      ...v.assignments
+        .filter((a) => a.end?.keepMember)
+        .map((a) => ({ groupId: a.groupId, officeId: null, startDate: "", endDate: null, endUnknown: false })),
+    ],
     endPrevious: orders.map((o) => ({ assignmentId: o.assignmentId, ...endFields(o) })),
     distributionListIds: v.listIds,
   };

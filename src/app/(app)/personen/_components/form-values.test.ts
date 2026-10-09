@@ -90,6 +90,19 @@ describe("toPayload", () => {
     ]);
     expect(p.endPrevious).toEqual([{ assignmentId: 1, endDate: null, endUnknown: true }]);
   });
+
+  it("keeps the Gliederung of an ended Amt as a new row without the Amt, after the others", () => {
+    const v = toFormValues(person);
+    v.assignments = [
+      { ...v.assignments[0], end: { endDate: "2026-10-01", endUnknown: false, keepMember: true } },
+      { key: "k1", id: null, groupId: 3, officeId: 5, startDate: "", end: null },
+    ];
+    expect(toPayload(v, person, []).assignments).toEqual([
+      { groupId: 2, officeId: 4, startDate: "2022-01-01", endDate: "2026-10-01", endUnknown: false },
+      { groupId: 3, officeId: 5, startDate: "", endDate: null, endUnknown: false },
+      { groupId: 2, officeId: null, startDate: "", endDate: null, endUnknown: false },
+    ]);
+  });
 });
 
 describe("keyRowErrors", () => {

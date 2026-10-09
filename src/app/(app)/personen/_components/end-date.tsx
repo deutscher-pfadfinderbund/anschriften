@@ -68,7 +68,9 @@ export type EndRequest = {
   description: React.ReactNode;
   /** Start of the tenure, if known: the earliest possible end. */
   start?: string | null;
-  onConfirm: (end: EndChoice) => void;
+  /** Ending an Amt: the Gliederung the person may stay a member of (offered, checked). */
+  keepMemberIn?: string;
+  onConfirm: (end: EndChoice, keepMember: boolean) => void;
   /** id to focus after confirming (the opener is gone then: it became a note). */
   focusAfter: string;
 };
@@ -118,6 +120,7 @@ function EndDateForm({
   onConfirmed: () => void;
 }) {
   const [end, setEnd] = useState<EndChoice>(() => ({ endDate: todayIso(), endUnknown: false }));
+  const [keepMember, setKeepMember] = useState(true);
   const ready = isEndChoiceReady(end, request.start);
 
   return (
@@ -129,7 +132,7 @@ function EndDateForm({
         // The dialog is portalled, but React still bubbles the submit to the person form.
         e.stopPropagation();
         if (!ready) return;
-        request.onConfirm(end);
+        request.onConfirm(end, request.keepMemberIn != null && keepMember);
         onConfirmed();
         onClose();
       }}
@@ -139,6 +142,12 @@ function EndDateForm({
         <DialogDescription>{request.description}</DialogDescription>
       </DialogHeader>
       <EndDateChoice id="end-date" value={end} onChange={setEnd} start={request.start} />
+      {request.keepMemberIn ? (
+        <label className="-mt-1 flex items-center gap-2.5 text-ui text-ink">
+          <Checkbox checked={keepMember} onCheckedChange={(v) => setKeepMember(v === true)} />
+          Bleibt Mitglied in „{request.keepMemberIn}“ (ohne Amt)
+        </label>
+      ) : null}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onClose}>
           Abbrechen
