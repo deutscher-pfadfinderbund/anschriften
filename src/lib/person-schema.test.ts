@@ -50,6 +50,21 @@ describe("validateTenure", () => {
     expect(validateTenure("01.03.2019", null)).toBe("Ungültiges Von-Datum.");
     expect(validateTenure(null, "2019-02-30")).toBe("Ungültiges Bis-Datum.");
   });
+
+  it("rejects a Bis-Datum in the future (active means: no end date)", () => {
+    const today = "2026-07-04";
+    expect(validateTenure("2015-01-01", "2026-07-05", today)).toBe(
+      "Das Bis-Datum darf nicht in der Zukunft liegen – lass das Amt bis dahin aktiv.",
+    );
+    expect(validateTenure(null, "2030-01-01", today)).not.toBeNull();
+    // Ending today is fine — that is the default of „Amt beenden“.
+    expect(validateTenure("2015-01-01", today, today)).toBeNull();
+  });
+
+  it("checks against the real (Berlin) today when none is passed", () => {
+    expect(validateTenure(null, "2999-01-01")).not.toBeNull();
+    expect(validateTenure(null, "2000-01-01")).toBeNull();
+  });
 });
 
 describe("validatePersonDates", () => {
@@ -111,8 +126,15 @@ describe("resolveTenureEnd", () => {
 
   it("rejects a missing Bis-Datum when the end is not unknown", () => {
     const r = resolveTenureEnd({ startDate: "2015-01-01", endDate: null, endUnknown: false, today });
-    expect(r).toEqual({ ok: false, message: "Bitte ein Bis-Datum angeben oder „Datum unbekannt“ wählen." });
+    expect(r).toEqual({ ok: false, message: "Bitte gib ein Bis-Datum an oder wähle „Ende unbekannt“." });
     expect(resolveTenureEnd({ startDate: null, endDate: "   ", endUnknown: false, today })).toMatchObject({ ok: false });
+  });
+
+  it("rejects a Bis-Datum after the injected today", () => {
+    expect(resolveTenureEnd({ startDate: "2015-01-01", endDate: "2026-07-05", endUnknown: false, today })).toEqual({
+      ok: false,
+      message: "Das Bis-Datum darf nicht in der Zukunft liegen – lass das Amt bis dahin aktiv.",
+    });
   });
 
   it("rejects an invalid or out-of-order Bis-Datum (delegates to validateTenure)", () => {

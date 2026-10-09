@@ -11,7 +11,7 @@ import {
 import { EndDateChoice } from "./form-primitives";
 
 // Active row being ended via the "Amt beenden…" dialog (only persisted rows).
-// `endUnknown` toggles "Datum unbekannt" (disables the date field).
+// `endUnknown` toggles "Ende unbekannt" (disables the date field).
 export type EndTarget = {
   key: string;
   id: number;

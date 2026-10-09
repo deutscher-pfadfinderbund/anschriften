@@ -174,7 +174,7 @@ export function HolderDialog({
           <DialogDescription>
             Die Amtszeit wird erst beim <strong>Speichern</strong> beendet. Bis dahin lässt sich
             die Entscheidung rückgängig machen; brichst du das Formular ab, bleibt alles
-            unverändert. „Datum unbekannt“ wählen, wenn das Ende nicht mehr bekannt ist.
+            unverändert. Wähle „Ende unbekannt“, wenn das Ende nicht mehr bekannt ist.
           </DialogDescription>
         </DialogHeader>
         {dialog ? (

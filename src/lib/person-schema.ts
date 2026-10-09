@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { EMAIL_RE } from "@/lib/export";
+import { todayIso } from "@/lib/format";
 
 // Shared input contract for the person editor (client) and the save action (server).
 // German, field-keyed messages so the editor can show them inline.
@@ -48,16 +49,22 @@ export function isValidDate(value: string): boolean {
 }
 
 /**
- * Validate an Amtszeit (von/bis) for the office history. Pure so it can be unit-tested
- * and reused by every server action. Returns a German error message, or null when valid.
- * Either bound may be null (unknown); when both are set, end must not precede start.
+ * Validate an Amtszeit (von/bis) for the office history. Pure (given `today`) so it can be
+ * unit-tested and reused by every server action. Returns a German error message, or null
+ * when valid. Either bound may be null (unknown); when both are set, end must not precede
+ * start. The end must not lie in the future: "active" means `end_date IS NULL` everywhere
+ * (table, Verteiler, mail, PDF), so a planned end date would drop the person from every
+ * list at once. `today` defaults to the current Berlin date.
  */
 export function validateTenure(
   startDate: string | null,
   endDate: string | null,
+  today: string = todayIso(),
 ): string | null {
   if (startDate != null && !isValidDate(startDate)) return "Ungültiges Von-Datum.";
   if (endDate != null && !isValidDate(endDate)) return "Ungültiges Bis-Datum.";
+  if (endDate != null && endDate > today)
+    return "Das Bis-Datum darf nicht in der Zukunft liegen – lass das Amt bis dahin aktiv.";
   // ISO date strings compare lexicographically in chronological order.
   if (startDate != null && endDate != null && endDate < startDate)
     return "Das Bis-Datum darf nicht vor dem Von-Datum liegen.";
@@ -105,8 +112,8 @@ export function resolveTenureEnd(input: {
   }
   const end = (input.endDate ?? "").trim();
   if (end.length === 0)
-    return { ok: false, message: "Bitte ein Bis-Datum angeben oder „Datum unbekannt“ wählen." };
-  const tenureError = validateTenure(input.startDate, end);
+    return { ok: false, message: "Bitte gib ein Bis-Datum an oder wähle „Ende unbekannt“." };
+  const tenureError = validateTenure(input.startDate, end, input.today);
   if (tenureError) return { ok: false, message: tenureError };
   return { ok: true, endDate: end, endUnknown: false };
 }
