@@ -54,8 +54,7 @@ function keepKeyboardFocus(target: HTMLElement | null) {
 
 /**
  * Tri-state "select all" over the persons currently shown: selected persons the
- * filters hide neither count nor change (the selection bar reports them). The shared
- * Checkbox draws its check mark for "indeterminate" too; here the mixed state gets a dash.
+ * filters hide neither count nor change (the selection bar reports them).
  */
 function SelectAllCheckbox({
   ref,
@@ -74,7 +73,6 @@ function SelectAllCheckbox({
       aria-label={filtered ? "Alle angezeigten auswählen" : "Alle auswählen"}
       checked={checked}
       onCheckedChange={(v) => onCheckedChange(v === true)}
-      className="data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:before:h-0.5 data-[state=indeterminate]:before:w-2 data-[state=indeterminate]:before:rounded-full data-[state=indeterminate]:before:bg-primary-foreground data-[state=indeterminate]:[&_svg]:hidden"
     />
   );
 }
