@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { effectiveMemberIds, personEmailsByIds } from "@/db/queries";
-import { firstError } from "@/lib/action-helpers";
-import { actorName, requireSession } from "@/lib/auth-helpers";
-import { isMailEnabled, normalizeRecipients, sendListMail } from "@/lib/mail";
+import { SESSION_EXPIRED, firstError, getActionSession } from "@/lib/action-helpers";
+import { actorName } from "@/lib/auth-helpers";
+import { collectEmails } from "@/lib/export";
+import { isMailEnabled, mailFailureMessage, sendListMail } from "@/lib/mail";
 
 export type SendMailResult =
   | { ok: true; recipientCount: number; chunks: number }
@@ -39,7 +40,8 @@ export type SendMailInput = z.infer<typeof composeSchema>;
  * list, the selection as-is otherwise) — the client-supplied list is never trusted.
  */
 export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   // Defense in depth: the UI hides the buttons when the module is off, but the
   // action re-checks so a stale client or a direct call still cannot send.
   if (!isMailEnabled()) return { ok: false, message: "Das Mail-Modul ist nicht aktiv." };
@@ -60,7 +62,9 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
     return { ok: false, message: "Kein Verteiler und keine Auswahl angegeben." };
   }
 
-  const { recipients } = normalizeRecipients(emails);
+  // Same rule as the compose preview and the clipboard copy (collectEmails), so the
+  // count the user confirmed is the count that goes out.
+  const { recipients } = collectEmails(emails);
   if (recipients.length === 0) return { ok: false, message: "Keine Empfänger mit E-Mail-Adresse." };
 
   const result = await sendListMail({
@@ -74,6 +78,6 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
   // Refresh the "Zuletzt versendet" card regardless of outcome (failures are logged too).
   revalidatePath("/verteiler");
 
-  if (!result.ok) return { ok: false, message: `E-Mail-Versand fehlgeschlagen: ${result.error}` };
+  if (!result.ok) return { ok: false, message: mailFailureMessage(result) };
   return { ok: true, recipientCount: result.recipientCount, chunks: result.chunks };
 }

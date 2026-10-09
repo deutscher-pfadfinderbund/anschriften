@@ -32,39 +32,6 @@ export function bccChunkSize(): number {
   return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 50;
 }
 
-export type NormalizedRecipients = {
-  /** Deduplicated, trimmed, non-empty addresses in first-seen order. */
-  recipients: string[];
-  /** How many inputs were dropped because they had no (blank) address. */
-  skipped: number;
-};
-
-/**
- * Turn raw person e-mails (some null/blank, possibly duplicated) into the actual
- * BCC recipient set: trim, drop blanks and malformed addresses (counted as
- * `skipped`), dedupe case-insensitively, preserve order.
- */
-export function normalizeRecipients(emails: (string | null | undefined)[]): NormalizedRecipients {
-  const seen = new Set<string>();
-  const recipients: string[] = [];
-  let skipped = 0;
-  for (const raw of emails) {
-    const e = (raw ?? "").trim();
-    // The legacy email column is free text — entries like "a@x.de, b@y.de" or
-    // stray notes exist. Anything that is not a single plausible address is
-    // skipped (counted like "no e-mail") instead of being handed to SMTP.
-    if (!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) {
-      skipped += 1;
-      continue;
-    }
-    const key = e.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    recipients.push(e);
-  }
-  return { recipients, skipped };
-}
-
 /**
  * Turn a caught SMTP error into a short, privacy-preserving string for
  * `mail_log.error`. SMTP rejections often echo recipient addresses; those are
@@ -88,7 +55,7 @@ export function sanitizeMailError(err: unknown): string {
 export type SendListMailInput = {
   subject: string;
   body: string;
-  /** Already-normalized recipient addresses (deduped, non-empty). */
+  /** Recipient addresses, already cleaned by `collectEmails` (src/lib/export.ts). */
   recipients: string[];
   /** Recorded in `mail_log.sent_by` (display name or e-mail from the session). */
   sentBy: string;
@@ -98,20 +65,46 @@ export type SendListMailInput = {
 
 export type SendListMailResult =
   | { ok: true; chunks: number; recipientCount: number }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      /** Sanitized error (no recipient addresses) — safe for the log and the toast. */
+      error: string;
+      /** Recipients whose BCC chunk was accepted before the failure (0 = nothing went out). */
+      sent: number;
+      recipientCount: number;
+    };
+
+/**
+ * The user-facing German message for a failed mailing. After a partial send the earlier
+ * chunks are already delivered, so the message must stop the natural reflex of clicking
+ * "Senden" again, which would mail those recipients twice. Pure, for the action and tests.
+ */
+export function mailFailureMessage(result: { error: string; sent: number; recipientCount: number }): string {
+  if (result.sent > 0) {
+    return (
+      `Versand abgebrochen: ${result.sent} von ${result.recipientCount} Empfängern haben die E-Mail ` +
+      `bereits erhalten. Bitte nicht noch einmal an alle senden. (Fehler: ${result.error})`
+    );
+  }
+  return `E-Mail-Versand fehlgeschlagen: ${result.error}`;
+}
 
 /**
  * Send one plaintext mailing to `recipients` via SMTP, split into BCC chunks of
  * `MAIL_BCC_CHUNK_SIZE`. `To:` is `MAIL_FROM` so recipients never see each other.
- * Writes exactly one `mail_log` row per mailing (not per chunk), for both the
- * success and the failure path, and returns a plain result for the caller's toast.
+ * Counts delivered recipients chunk by chunk, so a failure midway reports how many
+ * already got the mail. Writes exactly one `mail_log` row per mailing (not per chunk)
+ * for both outcomes; a failing log write is only logged to the console and never turns
+ * a delivered mailing into a reported failure.
  */
 export async function sendListMail(input: SendListMailInput): Promise<SendListMailResult> {
   const from = process.env.MAIL_FROM?.trim();
   const host = process.env.SMTP_HOST?.trim();
-  if (!from || !host) return { ok: false, error: "Das Mail-Modul ist nicht konfiguriert." };
-  if (input.recipients.length === 0)
-    return { ok: false, error: "Keine Empfänger mit E-Mail-Adresse." };
+  const recipientCount = input.recipients.length;
+  if (!from || !host)
+    return { ok: false, error: "Das Mail-Modul ist nicht konfiguriert.", sent: 0, recipientCount };
+  if (recipientCount === 0)
+    return { ok: false, error: "Keine Empfänger mit E-Mail-Adresse.", sent: 0, recipientCount };
 
   const port = Number(process.env.SMTP_PORT) || 587;
   const secure = process.env.SMTP_SECURE === "true";
@@ -122,12 +115,13 @@ export async function sendListMail(input: SendListMailInput): Promise<SendListMa
     host,
     port,
     secure,
-    // When not on an implicit-TLS port (secure === false, i.e. STARTTLS on 587),
-    // require STARTTLS: nodemailer refuses to send rather than silently falling
-    // back to plaintext, so credentials/messages are never sent in the clear.
-    ...(secure ? {} : { requireTLS: true }),
-    // Auth-less relays (Mailpit in dev, some internal servers) must get no auth
-    // block at all — an empty user/pass pair makes some transports misbehave.
+    // When credentials are sent over a non-implicit-TLS port (STARTTLS on 587), require
+    // STARTTLS: nodemailer then refuses to send rather than falling back to plaintext, so
+    // credentials never travel in the clear. Auth-less relays (Mailpit in dev, internal
+    // servers) often offer no STARTTLS at all and must still work.
+    ...(!secure && user ? { requireTLS: true } : {}),
+    // Auth-less relays must get no auth block at all — an empty user/pass pair makes
+    // some transports misbehave.
     ...(user ? { auth: { user, pass } } : {}),
     // Without timeouts a dead SMTP server would hang the server action forever.
     connectionTimeout: 10_000,
@@ -136,8 +130,8 @@ export async function sendListMail(input: SendListMailInput): Promise<SendListMa
   });
 
   const chunks = chunk(input.recipients, bccChunkSize());
-  const recipientCount = input.recipients.length;
-
+  let sent = 0;
+  let failure: string | null = null;
   try {
     for (const bcc of chunks) {
       await transport.sendMail({
@@ -147,31 +141,39 @@ export async function sendListMail(input: SendListMailInput): Promise<SendListMa
         subject: input.subject,
         text: input.body,
       });
+      sent += bcc.length;
     }
-    await db.insert(mailLog).values({
-      sentBy: input.sentBy,
-      listId: input.listId ?? null,
-      subject: input.subject,
-      recipientCount,
-      status: "sent",
-      error: null,
-    });
-    return { ok: true, chunks: chunks.length, recipientCount };
   } catch (err) {
-    // SMTP rejections often echo recipient addresses (PII). Sanitize once and use
-    // the same masked string both for the log AND for the result the caller shows
-    // in a toast — the raw error must never reach the client.
-    const safeError = sanitizeMailError(err);
-    await db.insert(mailLog).values({
-      sentBy: input.sentBy,
-      listId: input.listId ?? null,
-      subject: input.subject,
-      recipientCount,
-      status: "failed",
-      error: safeError,
-    });
-    return { ok: false, error: safeError };
+    // SMTP rejections often echo recipient addresses (PII). Sanitize once and use the same
+    // masked string for the log AND the result — the raw error must never reach the client.
+    failure = sanitizeMailError(err);
   } finally {
     transport.close();
+  }
+
+  await writeMailLog({
+    sentBy: input.sentBy,
+    listId: input.listId ?? null,
+    subject: input.subject,
+    recipientCount,
+    status: failure == null ? "sent" : "failed",
+    error:
+      failure == null
+        ? null
+        : sent > 0
+          ? `Abgebrochen nach ${sent} von ${recipientCount} Empfängern: ${failure}`
+          : failure,
+  });
+
+  if (failure != null) return { ok: false, error: failure, sent, recipientCount };
+  return { ok: true, chunks: chunks.length, recipientCount };
+}
+
+/** Insert the `mail_log` row; a DB error here is logged, never thrown (the mail is already out). */
+async function writeMailLog(row: typeof mailLog.$inferInsert): Promise<void> {
+  try {
+    await db.insert(mailLog).values(row);
+  } catch (err) {
+    console.error("mail_log insert failed", err);
   }
 }

@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Mock the SMTP transport and the DB write so the failure path can be exercised
 // without a real SMTP server or database.
 const sendMailMock = vi.fn();
+const createTransportMock = vi.fn<(opts: Record<string, unknown>) => unknown>(() => ({
+  sendMail: sendMailMock,
+  close: () => {},
+}));
 vi.mock("nodemailer", () => ({
-  default: {
-    createTransport: () => ({ sendMail: sendMailMock, close: () => {} }),
-  },
+  default: { createTransport: (opts: Record<string, unknown>) => createTransportMock(opts) },
 }));
 
 const insertValuesMock = vi.fn();
@@ -19,7 +21,7 @@ import {
   bccChunkSize,
   chunk,
   isMailEnabled,
-  normalizeRecipients,
+  mailFailureMessage,
   sanitizeMailError,
   sendListMail,
 } from "./mail";
@@ -44,36 +46,6 @@ describe("chunk", () => {
   it("clamps a size below 1 to 1 (never an infinite loop)", () => {
     expect(chunk([1, 2], 0)).toEqual([[1], [2]]);
     expect(chunk([1, 2], -5)).toEqual([[1], [2]]);
-  });
-});
-
-describe("normalizeRecipients", () => {
-  it("trims, drops blanks (counted), dedupes case-insensitively, keeps order", () => {
-    const res = normalizeRecipients([
-      "A@example.org",
-      " b@example.org ",
-      "",
-      null,
-      "a@example.org",
-      undefined,
-    ]);
-    expect(res.recipients).toEqual(["A@example.org", "b@example.org"]);
-    expect(res.skipped).toBe(3);
-  });
-
-  it("handles an all-empty input", () => {
-    expect(normalizeRecipients([null, "", "  "])).toEqual({ recipients: [], skipped: 3 });
-  });
-
-  it("skips malformed legacy values instead of passing them to SMTP", () => {
-    const res = normalizeRecipients([
-      "a@x.de, b@y.de", // legacy double-address in one field
-      "kein-at-zeichen",
-      "leerzeichen @x.de",
-      "ok@example.org",
-    ]);
-    expect(res.recipients).toEqual(["ok@example.org"]);
-    expect(res.skipped).toBe(3);
   });
 });
 
@@ -146,6 +118,115 @@ describe("sendListMail failure path masks recipient PII", () => {
     expect(result.error).toContain("SMTP 550");
     // Both surfaces carry the identical sanitized string.
     expect(result.error).toBe(logged.error);
+  });
+});
+
+describe("sendListMail partial failure (chunked BCC)", () => {
+  const saved = { ...process.env };
+  beforeEach(() => {
+    process.env.SMTP_HOST = "localhost";
+    process.env.MAIL_FROM = "Kanzlei <kanzlei@example.org>";
+    process.env.MAIL_BCC_CHUNK_SIZE = "2";
+    sendMailMock.mockReset();
+    insertValuesMock.mockReset();
+  });
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  const recipients = ["a@example.org", "b@example.org", "c@example.org", "d@example.org", "e@example.org"];
+
+  it("counts the recipients of every delivered chunk and logs where it stopped", async () => {
+    // Chunks of 2: the first two go out, the third call fails.
+    sendMailMock
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(Object.assign(new Error("421 too many messages"), { responseCode: 421 }));
+
+    const result = await sendListMail({ subject: "S", body: "B", recipients, sentBy: "K" });
+
+    expect(sendMailMock).toHaveBeenCalledTimes(3);
+    expect(result).toMatchObject({ ok: false, sent: 4, recipientCount: 5 });
+    const logged = insertValuesMock.mock.calls[0][0] as { status: string; error: string; recipientCount: number };
+    expect(logged.status).toBe("failed");
+    expect(logged.recipientCount).toBe(5);
+    expect(logged.error).toMatch(/^Abgebrochen nach 4 von 5 Empfängern: /);
+  });
+
+  it("reports sent = 0 when the very first chunk fails", async () => {
+    sendMailMock.mockRejectedValue(new Error("ECONNREFUSED"));
+    const result = await sendListMail({ subject: "S", body: "B", recipients, sentBy: "K" });
+    expect(result).toMatchObject({ ok: false, sent: 0 });
+    const logged = insertValuesMock.mock.calls[0][0] as { error: string };
+    expect(logged.error).not.toMatch(/Abgebrochen/);
+  });
+
+  it("still reports a delivered mailing as sent when the log write fails", async () => {
+    sendMailMock.mockResolvedValue({});
+    insertValuesMock.mockRejectedValue(new Error("db down"));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = await sendListMail({ subject: "S", body: "B", recipients, sentBy: "K" });
+    expect(result).toEqual({ ok: true, chunks: 3, recipientCount: 5 });
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+});
+
+describe("mailFailureMessage", () => {
+  it("tells the user not to resend after a partial send", () => {
+    const msg = mailFailureMessage({ error: "SMTP 421", sent: 50, recipientCount: 120 });
+    expect(msg).toContain("50 von 120 Empfängern haben die E-Mail bereits erhalten");
+    expect(msg).toContain("nicht noch einmal an alle senden");
+    expect(msg).toContain("SMTP 421");
+  });
+
+  it("is a plain failure when nothing went out", () => {
+    expect(mailFailureMessage({ error: "ECONNREFUSED", sent: 0, recipientCount: 10 })).toBe(
+      "E-Mail-Versand fehlgeschlagen: ECONNREFUSED",
+    );
+  });
+});
+
+describe("sendListMail transport options", () => {
+  const saved = { ...process.env };
+  beforeEach(() => {
+    process.env.SMTP_HOST = "localhost";
+    process.env.MAIL_FROM = "Kanzlei <kanzlei@example.org>";
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_SECURE;
+    sendMailMock.mockReset().mockResolvedValue({});
+    insertValuesMock.mockReset();
+    createTransportMock.mockClear();
+  });
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  const send = () => sendListMail({ subject: "S", body: "B", recipients: ["a@example.org"], sentBy: "K" });
+
+  it("does not require STARTTLS for an auth-less relay (Mailpit)", async () => {
+    await send();
+    const opts = createTransportMock.mock.calls[0][0];
+    expect(opts.requireTLS).toBeUndefined();
+    expect(opts.auth).toBeUndefined();
+  });
+
+  it("requires STARTTLS when credentials are sent on a non-TLS port", async () => {
+    process.env.SMTP_USER = "kanzlei";
+    process.env.SMTP_PASS = "geheim";
+    await send();
+    const opts = createTransportMock.mock.calls[0][0];
+    expect(opts.requireTLS).toBe(true);
+    expect(opts.auth).toEqual({ user: "kanzlei", pass: "geheim" });
+  });
+
+  it("uses implicit TLS without requireTLS when SMTP_SECURE=true", async () => {
+    process.env.SMTP_USER = "kanzlei";
+    process.env.SMTP_SECURE = "true";
+    await send();
+    const opts = createTransportMock.mock.calls[0][0];
+    expect(opts.secure).toBe(true);
+    expect(opts.requireTLS).toBeUndefined();
   });
 });
 
