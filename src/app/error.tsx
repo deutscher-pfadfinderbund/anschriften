@@ -1,7 +1,7 @@
 "use client";
 
-// Global error boundary. Catches errors thrown by Server Actions and pages
-// (e.g. an expired session in requireSession, or a database error) so the user
+// Global error boundary. Catches unexpected errors thrown while rendering pages
+// (e.g. an unreachable database) so the user
 // sees a calm German screen instead of Next's English crash page — and keeps a
 // path back into the app.
 import Link from "next/link";
