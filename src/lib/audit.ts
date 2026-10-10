@@ -8,6 +8,9 @@ import { canonicalPhoneLabel, formatDate, tenureRange } from "@/lib/format";
 
 export type AuditAction = "created" | "updated" | "deleted";
 
+/** What a new person's entry leads with (shown and searched). */
+export const CREATED_LABEL = "Person angelegt";
+
 /**
  * Every logged field with its German label, in display order: the person's own fields,
  * then its tenures and its manual Verteiler. The keys are stored in `audit_log.changes`,
@@ -35,7 +38,7 @@ export const AUDIT_FIELD_LABELS = {
   list: "Verteiler",
 } as const;
 
-export type AuditField = keyof typeof AUDIT_FIELD_LABELS;
+type AuditField = keyof typeof AUDIT_FIELD_LABELS;
 
 /** One changed value; null stands for "empty" (shown as "—"). */
 export type AuditChange = { field: AuditField; from: string | null; to: string | null };
@@ -105,14 +108,14 @@ const text = (v: string | null) => v?.trim() || null;
 const date = (v: string | null) => formatDate(v) || null;
 
 /**
- * "Mobil: 0170 1234567; Privat: 0251 123456" (a number without a label stands alone).
+ * "Mobil 0170 1234567; Privat 0251 123456" (a number without a label stands alone).
  * Labels in their curated spelling, as the editor shows them: the editor saves an imported
  * "mobil" as "Mobil", which is no change worth logging.
  */
 export function formatPhones(phones: AuditSnapshot["phones"]): string | null {
   const parts = phones.map((p) => {
     const label = canonicalPhoneLabel(p.label);
-    return label ? `${label}: ${p.number}` : p.number;
+    return label ? `${label} ${p.number}` : p.number;
   });
   return parts.join("; ") || null;
 }
@@ -140,14 +143,14 @@ function scalarValues(s: AuditSnapshot): Record<ScalarField, string | null> {
 }
 
 /** "Bundeskanzler · Bundeskanzlei, seit 01.01.2020" — "Ohne Amt · …" for a plain membership. */
-export function tenureLabel(t: AuditTenure): string {
+function tenureLabel(t: AuditTenure): string {
   const name = `${t.office ?? "Ohne Amt"} · ${t.group}`;
   const range = tenureRange(t);
   return range ? `${name}, ${range}` : name;
 }
 
 /** What an active tenure became when it was ended: "beendet am 31.12.2025". */
-export function endedLabel(t: AuditTenure): string {
+function endedLabel(t: AuditTenure): string {
   return t.endUnknown ? "beendet, Ende unbekannt" : `beendet am ${formatDate(t.endDate)}`;
 }
 

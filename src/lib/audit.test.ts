@@ -53,7 +53,7 @@ describe("diffSnapshots: the person's own fields", () => {
     expect(diffSnapshots(before, after)).toEqual([
       { field: "birthDate", from: "01.05.1990", to: "02.05.1990" },
       { field: "city", from: "Münster", to: "Köln" },
-      { field: "phones", from: "Mobil: 0170 1", to: "Mobil: 0170 1; Privat: 0221 2" },
+      { field: "phones", from: "Mobil 0170 1", to: "Mobil 0170 1; Privat 0221 2" },
       { field: "doNotPrint", from: "nein", to: "ja" },
     ]);
   });
@@ -184,12 +184,12 @@ describe("formatPhones", () => {
         { label: "Mobil", number: "0170 1234567" },
         { label: "", number: "0251 123456" },
       ]),
-    ).toBe("Mobil: 0170 1234567; 0251 123456");
+    ).toBe("Mobil 0170 1234567; 0251 123456");
     expect(formatPhones([])).toBeNull();
   });
 
   it("spells labels the curated way, so the editor's re-spelling of an import is no change", () => {
-    expect(formatPhones([{ label: " mobil ", number: "0170 1" }])).toBe("Mobil: 0170 1");
+    expect(formatPhones([{ label: " mobil ", number: "0170 1" }])).toBe("Mobil 0170 1");
     const imported = person({ phones: [{ label: "privat", number: "0251 2" }] });
     expect(diffSnapshots(imported, person({ phones: [{ label: "Privat", number: "0251 2" }] }))).toEqual([]);
   });
