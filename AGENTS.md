@@ -29,13 +29,13 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 
 ## Architektur-Konventionen
 
-- Alle Mutationen als **Server Actions** in `src/actions/*.ts` (`"use server"`, nach jeder erfolgreichen Mutation `revalidateApp()` aus `src/lib/action-helpers.ts`; kein `router.refresh()` im Client)
+- Alle Mutationen als **Server Actions** in `src/actions/*.ts` (`"use server"`), Rumpf in `return mutation(async (by) => { … })` aus `src/lib/action-helpers.ts`: prüft die Session, liefert `by` für `updated_by` und ruft nach Erfolg `revalidateApp()` auf. Kein `router.refresh()` im Client
 - Route Handler NUR für: Auth-Catch-all (`src/app/api/auth/[...all]/route.ts`), PDF-/CSV-Export (brauchen `Content-Disposition`)
 - Geschützter Bereich: Route-Group `src/app/(app)/`. **Jede Seite** ruft als Erstes `requirePageSession()` (`src/lib/auth-helpers.ts`) auf — das ist das Gate. `layout.tsx` ist KEINE Sicherheitsgrenze (Layouts werden bei RSC-Navigationen übersprungen). `proxy.ts` leitet nur Seitennavigationen ohne Cookie optimistisch nach `/login` um — keine Server Actions, kein `/api` (die Export-Routen antworten selbst mit 401)
-- Session in Server Actions: `const session = await getActionSession(); if (!session) return SESSION_EXPIRED;` (`src/lib/action-helpers.ts`). Nie werfen — ein Throw ersetzt die Seite durch die Fehlerseite und vernichtet Formulareingaben
+- Abgelaufene Session in Server Actions: `mutation()` gibt `SESSION_EXPIRED` zurück (ohne `mutation()`: `getActionSession()` + `return SESSION_EXPIRED`). Nie werfen — ein Throw ersetzt die Seite durch die Fehlerseite und vernichtet Formulareingaben
 - Fachregeln an genau einer Stelle: „heute" = `todayIso()` aus `src/lib/format.ts` (Europe/Berlin, nie `toISOString()`); aktive Amtszeit = `end_date IS NULL` (Bis-Daten in der Zukunft werden abgelehnt); Bereiche = `SECTIONS` aus `src/lib/sections.ts`; E-Mail-Gültigkeit = `EMAIL_RE`/`collectEmails` aus `src/lib/export.ts`; Downloads = `downloadFile` aus `src/lib/download.ts`
 - DB-Zugriff: zentraler Client `src/db/index.ts`; niemals SQL-Strings in Komponenten. Zwei dokumentierte Ausnahmen greifen direkt auf `db` zu: `src/pdf/build-data.ts` (isolierte Full-Table-Reads fürs PDF) und `src/lib/mail.ts` (`mail_log`-Schreiben atomar zum SMTP-Versand)
-- Personentabelle: alle Datensätze serverseitig laden (~600, schon in Verzeichnis-Reihenfolge `byDirectoryName`), clientseitig filtern, sortieren und auswählen mit schlichtem React-State (keine Tabellen-Bibliothek). Keine Pagination
+- Personentabelle: alle Datensätze serverseitig laden (~600, schon in Verzeichnis-Reihenfolge `sortByDirectoryName`), clientseitig filtern, sortieren und auswählen mit schlichtem React-State (keine Tabellen-Bibliothek). Keine Pagination
 - `updated_by` = Name/E-Mail aus der Session bei jeder Mutation setzen
 
 ## Design (UI)
