@@ -70,9 +70,9 @@
 // Office label and grid live in ONE unbreakable block so an entry is never split and a sticky
 // heading above it drags the whole entry along.
 #let render-entry(e) = {
-  let officeline = if e.office != none [
-    #text(size: 8pt, style: "italic", weight: "bold")[#e.office]#linebreak()
-  ]
+  let officeline = if e.office != none {
+    text(size: 8pt, style: "italic", weight: "bold")[#e.office]
+  }
   let namecell = if e.label != none [#strong(e.name)#label(e.label)] else [#strong(e.name)]
 
   // Phone numbers as compact "Label: number" strings (issue #8): every number keeps its label
@@ -102,16 +102,19 @@
   if e.email != none { rows.push((grid.cell(colspan: 2)[#wrappable-email(e.email)],)) }
   if e.birth != none { rows.push((grid.cell(colspan: 2)[#emph[(\* #e.birth)]],)) }
 
-  block(breakable: false, {
-    officeline
-    grid(
+  // A stack, not paragraph + block: between a paragraph and the grid Typst would put the full
+  // block spacing (1.2em), setting the office label visibly apart from the name it belongs to.
+  block(breakable: false, stack(
+    dir: ttb,
+    spacing: line-gap,
+    ..(officeline, grid(
       columns: (1fr, phone-col),
       row-gutter: line-gap,
       column-gutter: 3pt,
       ..rows.flatten(),
-    )
-  })
-  v(6pt, weak: true)
+    )).filter(x => x != none),
+  ))
+  v(10pt, weak: true)
 }
 
 // --- subtree rendered inside the two body columns (subgroup headings stay in-column) ----
