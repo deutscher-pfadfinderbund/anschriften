@@ -25,11 +25,13 @@ export function cn(...inputs: ClassValue[]) {
  * so "anna müller" finds "Müller, Anna".
  */
 export function matchesQuery(text: string, query: string): boolean {
-  const haystack = fold(text)
-  return fold(query)
-    .split(/\s+/)
-    .every((word) => haystack.includes(word))
+  return matchesWords(fold(text), queryWords(query))
 }
+
+/** `matchesQuery` in two halves for long lists: fold each text once, split the query once. */
+export const queryWords = (query: string): string[] => fold(query).split(/\s+/)
+export const matchesWords = (folded: string, words: readonly string[]): boolean =>
+  words.every((word) => folded.includes(word))
 
 /**
  * The one skin for text-like form controls: Input, Textarea, SelectTrigger and

@@ -129,19 +129,20 @@ export function todayIso(now: Date = new Date()): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+const berlinDateTime = new Intl.DateTimeFormat("de-DE", {
+  timeZone: BERLIN,
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 /** German date + time in Europe/Berlin, e.g. "09.10.2026, 18:49" (the "zuletzt geändert" line). */
 export function formatDateTime(value?: string | Date | null): string {
   if (!value) return "";
   const d = typeof value === "string" ? new Date(value) : value;
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("de-DE", {
-    timeZone: BERLIN,
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return Number.isNaN(d.getTime()) ? "" : berlinDateTime.format(d);
 }
 
 /** Salutation options for the editor. Empty string = keine Anrede. */
