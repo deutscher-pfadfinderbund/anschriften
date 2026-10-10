@@ -85,14 +85,6 @@ export async function logPersonChange(
   await tx.insert(auditLog).values({ personId, actor, action: before ? "updated" : "created", changes });
 }
 
-/** Run `work` — writes to an existing person inside `tx` — and log what it changed. */
-export async function audited<T>(tx: Tx, personId: number, actor: string, work: () => Promise<T>): Promise<T> {
-  const before = await personSnapshot(tx, personId);
-  const result = await work();
-  if (before) await logPersonChange(tx, personId, actor, before);
-  return result;
-}
-
 /** Log manual memberships of a Verteiler added (or removed): one entry per person. */
 export async function logMemberships(
   tx: Tx,
@@ -101,7 +93,6 @@ export async function logMemberships(
   actor: string,
   added: boolean,
 ): Promise<void> {
-  if (personIds.length === 0) return;
   const [list] = await tx
     .select({ name: distributionLists.name })
     .from(distributionLists)

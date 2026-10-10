@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db, type Tx } from "@/db";
-import { audited } from "@/db/audit";
+import { logPersonChange, personSnapshot } from "@/db/audit";
 import { assignments, persons } from "@/db/schema";
 import {
   dbFailure,
@@ -46,7 +46,9 @@ async function changePerson(
   work: () => Promise<unknown>,
 ): Promise<string> {
   await lockPerson(tx, personId, expected);
-  await audited(tx, personId, by, work);
+  const before = await personSnapshot(tx, personId);
+  await work();
+  await logPersonChange(tx, personId, by, before);
   const stamped = stamp(by);
   await tx.update(persons).set(stamped).where(eq(persons.id, personId));
   return stamped.updatedAt.toISOString();

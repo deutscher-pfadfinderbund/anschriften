@@ -3,7 +3,7 @@
 import { and, eq, isNull, ne } from "drizzle-orm";
 
 import { db } from "@/db";
-import { audited, logDeletion, logPersonChange, personSnapshot } from "@/db/audit";
+import { logDeletion, logPersonChange, personSnapshot } from "@/db/audit";
 import { assignments, distributionListMembers, persons } from "@/db/schema";
 import {
   dbFailure,
@@ -91,18 +91,18 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
           });
           if (!resolved.ok) throw new UserFacingError(resolved.message);
           // Logged on the former holder: their tenure ended.
-          await audited(tx, target.personId, by, async () => {
-            const ended = await tx
-              .update(assignments)
-              .set({ endDate: resolved.endDate, endUnknown: resolved.endUnknown, updatedAt: new Date() })
-              .where(
-                and(eq(assignments.id, ep.assignmentId), isNull(assignments.endDate), ne(assignments.personId, personId)),
-              )
-              .returning({ id: assignments.id });
-            if (ended.length === 0) throw new StaleError(TENURE_CHANGED);
-            // Attribute the change on the former holder too, so their "zuletzt geändert" reflects it.
-            await tx.update(persons).set(stamp(by)).where(eq(persons.id, target.personId));
-          });
+          const holderBefore = await personSnapshot(tx, target.personId);
+          const ended = await tx
+            .update(assignments)
+            .set({ endDate: resolved.endDate, endUnknown: resolved.endUnknown, updatedAt: new Date() })
+            .where(
+              and(eq(assignments.id, ep.assignmentId), isNull(assignments.endDate), ne(assignments.personId, personId)),
+            )
+            .returning({ id: assignments.id });
+          if (ended.length === 0) throw new StaleError(TENURE_CHANGED);
+          // Attribute the change on the former holder too, so their "zuletzt geändert" reflects it.
+          await tx.update(persons).set(stamp(by)).where(eq(persons.id, target.personId));
+          await logPersonChange(tx, target.personId, by, holderBefore);
         }
 
         // Delete + recreate only the ACTIVE tenures. Ended tenures (end_date set) are the
