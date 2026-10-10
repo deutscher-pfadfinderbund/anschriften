@@ -15,8 +15,9 @@
  * assignment with such data, unless --overwrite-assignments is passed explicitly.
  */
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { parse } from "csv-parse/sync";
-import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
@@ -505,6 +506,13 @@ async function writeModel(model: Model, databaseUrl: string, overwriteAssignment
 
       if (assignmentRows.length > 0) await tx.insert(assignments).values(assignmentRows);
       if (membershipRows.length > 0) await tx.insert(distributionListMembers).values(membershipRows);
+
+      // --- legacy print order (Mädchen-Gaue, section/office order) on what was just imported ---
+      const legacyOrder = readFileSync(new URL("./import-legacy-order.sql", import.meta.url), "utf8");
+      for (const statement of legacyOrder.split(/;\s*$/m).map((s) => s.trim()).filter(Boolean)) {
+        if (statement.split("\n").every((line) => line.trim() === "" || line.trim().startsWith("--"))) continue;
+        await tx.execute(sql.raw(statement));
+      }
     });
   } finally {
     await pool.end();

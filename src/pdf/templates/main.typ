@@ -11,7 +11,7 @@
 //
 // Typst gotchas: page numbers come from `context` + `query(label)` (the old
 // `locate(loc => …)` API is gone), and `pagebreak()` is not allowed inside `columns(…)`,
-// so `render-section` breaks the page before it opens its two-column block.
+// so `render-chunk` breaks the page before it opens its two-column block.
 
 #let data = json("data.json")
 
@@ -26,10 +26,14 @@
 // `sticky` keeps a sub-group heading with the first entry of that group instead of stranding it
 // at the foot of a column — it only works because `render-entry` puts the office label AND the
 // data grid into one block, so the heading cannot stick to a lone office label.
-#show heading.where(level: 1): it => block(above: 0pt, below: 4pt)[
+// No hyphenation in headings ("Schleif-/fras").
+#show heading: set text(hyphenate: false)
+// `above` separates a section that runs on in the columns from the one before it; at the top
+// of a page or column the spacing collapses.
+#show heading.where(level: 1): it => block(above: 14pt, below: 6pt)[
   #text(size: 14pt, weight: "bold", bottom-edge: "descender")[#it.body]
 ]
-#show heading.where(level: 2): it => block(above: 8pt, below: 3pt, sticky: true)[
+#show heading.where(level: 2): it => block(above: 10pt, below: 5pt, sticky: true)[
   #text(size: 11pt, weight: "bold", bottom-edge: "descender")[#it.body]
 ]
 #show heading.where(level: 3): it => block(above: 5pt, below: 2.5pt, sticky: true)[
@@ -38,13 +42,15 @@
 
 // Gap between the stacked lines of an entry — identical for grid rows and for the lines inside
 // the address / phone stacks, so the entry reads as one evenly set block.
-#let line-gap = 2.6pt
-// Share of the entry grid taken by the right-hand phone column: 46% of a body column is 26.5mm,
-// just enough for a labelled number of the usual shape ("Mobil: 0160 98765432" = area code plus
-// 6–8 digits) on a single line. The address column takes the REST via `1fr` — with the former
-// `(57%, 43%)` both tracks were measured against the full width, so the column gutter pushed the
-// grid ~1mm past the column edge and long e-mails bled into the outside margin.
-#let phone-col = 46%
+#let line-gap = 4.5pt
+// Share of the entry grid taken by the right-hand column (Fahrtenname, phone numbers), as in the
+// legacy print. The address column takes the REST via `1fr` — with fixed shares for both tracks
+// the column gutter pushed the grid past the column edge and long e-mails bled into the margin.
+#let phone-col = 42%
+// The entry body is set in a little under its office label, like the legacy print.
+#let entry-indent = 1.8mm
+// Gap between the two columns of a leadership block or overview table.
+#let pair-gutter = 6mm
 
 // Long e-mail addresses have no natural break opportunity, so they used to run past the outside
 // margin. Insert a zero-width space after the "@" — the only place where a broken address still
@@ -68,73 +74,89 @@
 
 // --- one person entry: optional office label + two-column data grid --------------------
 // Office label and grid live in ONE unbreakable block so an entry is never split and a sticky
-// heading above it drags the whole entry along.
+// heading above it drags the whole entry along. Label and grid are a stack, not paragraph +
+// block: between those Typst would put the full block spacing and part label from name.
 #let render-entry(e) = {
   let officeline = if e.office != none {
     text(size: 8pt, style: "italic", weight: "bold")[#e.office]
   }
-  let namecell = if e.label != none [#strong(e.name)#label(e.label)] else [#strong(e.name)]
+  let namecell = if e.label != none [#text(e.name)#label(e.label)] else [#e.name]
 
-  // Phone numbers as compact "Label: number" strings (issue #8): every number keeps its label
-  // so mobil/privat/dienstlich are distinguishable, and no number is dropped. Set one step
-  // below the body size so the labelled number fits the narrow column without wrapping.
-  let fmt-phone(p) = if p.label != none [#p.label: #p.number] else [#p.number]
-
-  // Address lines and phone numbers form two INDEPENDENT stacks side by side. Aligning them
-  // row by row meant a wrapped phone number pushed a blank line between the street and the PLZ
-  // line, and a third number had to escape into a full-width row below the address, where an
-  // unlabelled number reads like part of the address.
+  // Address lines and phone numbers form two INDEPENDENT stacks side by side; the numbers sit
+  // at the foot of the address, ending on the PLZ/Ort line as in the legacy print.
   let stacked(items) = stack(dir: ttb, spacing: line-gap, ..items)
   let addr = ()
   if e.street != none { addr.push([#street-line(e.street)]) }
   if e.city != none { addr.push([#e.city]) }
-  let phones = e.phones.map(fmt-phone)
+  let phones = e.phones.map(p => [#p])
 
   let rows = ()
   rows.push((namecell, [#e.detail]))
   if e.extra != none { rows.push((grid.cell(colspan: 2)[#e.extra],)) }
   if addr.len() > 0 or phones.len() > 0 {
-    rows.push((
-      stacked(addr),
-      if phones.len() > 0 { text(size: 8pt, stacked(phones)) } else { [] },
-    ))
+    rows.push((stacked(addr), grid.cell(align: bottom, stacked(phones))))
   }
   if e.email != none { rows.push((grid.cell(colspan: 2)[#wrappable-email(e.email)],)) }
   if e.birth != none { rows.push((grid.cell(colspan: 2)[#emph[(\* #e.birth)]],)) }
 
-  // A stack, not paragraph + block: between a paragraph and the grid Typst would put the full
-  // block spacing (1.2em), setting the office label visibly apart from the name it belongs to.
   block(breakable: false, stack(
     dir: ttb,
     spacing: line-gap,
-    ..(officeline, grid(
+    ..(officeline, pad(left: entry-indent, grid(
       columns: (1fr, phone-col),
       row-gutter: line-gap,
       column-gutter: 3pt,
       ..rows.flatten(),
-    )).filter(x => x != none),
+    ))).filter(x => x != none),
   ))
   v(10pt, weak: true)
 }
 
-// --- subtree rendered inside the two body columns (subgroup headings stay in-column) ----
+// --- a group with its entries and subgroups, inside the two body columns -----------------
 #let render-subtree(g) = {
-  heading(level: g.level)[#g.name]
+  heading(level: g.level, outlined: g.toc)[#g.name]
   for e in g.entries { render-entry(e) }
   for c in g.children { render-subtree(c) }
 }
 
-// --- one top-level section: fresh page, full-width heading, then a 2-column body --------
-// Every Gliederung deliberately starts on a fresh page. Typst's `columns()` fills the left
-// column before the right one and does not balance them, so a short section legitimately
-// leaves its right column empty; that is the intended look for a printed directory.
-#let render-section(sec) = {
+// --- leadership block (Bundesführung, Orden, Bundesgilde): the head alone, then pairs ------
+#let render-leadership(sec) = {
+  let es = sec.entries
+  if es.len() == 0 { return }
+  grid(columns: (1fr, 1fr), column-gutter: pair-gutter, render-entry(es.first()))
+  v(4pt)
+  grid(columns: (1fr, 1fr), column-gutter: pair-gutter, row-gutter: 10pt, ..es.slice(1).map(render-entry))
+}
+
+// --- "Konvente" / "Kollegien": group name beside its Meister or Sprecher --------------------
+#let render-overview(t) = {
+  heading(level: 2, outlined: false)[#t.title]
+  pad(left: entry-indent, grid(
+    columns: (1fr, 1.2fr),
+    column-gutter: pair-gutter,
+    row-gutter: line-gap,
+    ..t.rows.map(r => ([#r.group], [#r.leaders])).flatten(),
+  ))
+}
+
+// --- one page group: sections that run on together in the two body columns ----------------
+// `pagebreak()` is not allowed inside `columns(…)`, so every page group gets its own block. A
+// leadership section prints its heading, block and overview tables across the full width first.
+// Typst's `columns()` fills the left column before the right one and does not balance them.
+#let render-chunk(secs) = {
   pagebreak(weak: true)
-  heading(level: 1)[#sec.name]
-  columns(2, {
-    for e in sec.entries { render-entry(e) }
-    for c in sec.children { render-subtree(c) }
-  })
+  let first = secs.first()
+  if first.leadership {
+    heading(level: 1, outlined: first.toc)[#first.name]
+    render-leadership(first)
+    for t in first.overviews { render-overview(t) }
+    columns(2, {
+      for c in first.children { render-subtree(c) }
+      for s in secs.slice(1) { render-subtree(s) }
+    })
+  } else {
+    columns(2, { for s in secs { render-subtree(s) } })
+  }
 }
 
 // ========================================================================================
@@ -142,7 +164,7 @@
 // ========================================================================================
 #set page(
   paper: "a5",
-  margin: (inside: 1.7cm, outside: 1.1cm, top: 1.4cm, bottom: 1.4cm),
+  margin: (inside: 1.0cm, outside: 0.6cm, top: 1.4cm, bottom: 1.4cm),
   columns: 1,
   header: none,
   footer: none,
@@ -196,11 +218,13 @@ bestätigt sind. Dies gilt sinngemäß auch für die Ordensgruppen.
   header-ascent: 40%,
   footer-descent: 40%,
   header: context {
-    // running section = last level-1 heading located on or before the current page
+    // running section = the first level-1 heading on this page (pages are shared), else the
+    // last one before it
     let pg = here().page()
     let cur = none
     for h in query(heading.where(level: 1)) {
-      if h.location().page() <= pg { cur = h }
+      let hp = h.location().page()
+      if hp < pg or (hp == pg and (cur == none or cur.location().page() < pg)) { cur = h }
     }
     let name = if cur != none { upper(cur.body) }
     let odd = calc.odd(pg)
@@ -228,11 +252,27 @@ bestätigt sind. Dies gilt sinngemäß auch für die Ordensgruppen.
 )
 
 #heading(level: 1, outlined: false)[Inhalt]
-#show outline.entry.where(level: 1): it => { v(2pt, weak: true); strong(it) }
-#columns(2, outline(title: none, depth: 3))
+// Legacy contents: a section bold with its page number and no dot leaders, set apart from the
+// one before; its Gliederungen indented beneath with dots. Which headings appear is decided in
+// build-data.ts (`toc`).
+#show outline.entry.where(level: 1): it => {
+  v(7pt, weak: true)
+  link(it.element.location(), strong[#it.body() #h(1fr) #it.page()])
+}
+#show outline: set text(hyphenate: false)
+#columns(2, outline(title: none))
 
-// --- the directory itself ---
-#for sec in data.sections { render-section(sec) }
+// --- the directory itself: page groups split where build-data.ts set `newPage` ---
+#{
+  let secs = data.sections
+  let i = 0
+  while i < secs.len() {
+    let start = i
+    i += 1
+    while i < secs.len() and not secs.at(i).newPage { i += 1 }
+    render-chunk(secs.slice(start, i))
+  }
+}
 
 // --- memorial (optional) ---
 #if data.options.withMemorial and data.memorial.len() > 0 {

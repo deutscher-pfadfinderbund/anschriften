@@ -10,9 +10,11 @@
  * Fidelity notes vs. the legacy LaTeX/Java generator:
  *  - Register sort key is Fahrtenname else Vorname (as the confidential text and IndexWorker.java
  *    specify), umlauts folded ae/oe/ue.
- *  - Section order in `komplett` follows `sort_key`; the old template hard-coded Mädchenbund
- *    before Jungenbund.
- *  - The Konvente/Kollegien summary tables of the Älterengemeinschaften are not reproduced.
+ *  - Section order in `komplett` follows `sort_key`; the import sets the legacy order
+ *    (scripts/import-legacy-order.sql).
+ *  - Layout decisions the template merely follows are made here as flags on `GroupNode`: which
+ *    section opens a new page, which top group gets the paired leadership block, which headings
+ *    enter the table of contents, and the Konvente/Kollegien overview tables.
  */
 import { db } from "@/db";
 import { assignments, groups, offices, persons, ranks } from "@/db/schema";
@@ -108,10 +110,9 @@ export interface Entry {
   extra: string | null; // address addition
   street: string | null;
   city: string | null; // "PLZ Ort"
-  // All phone numbers with their labels (issue #8): the template prints "Label: number" so a
-  // reader can tell mobil/privat/dienstlich apart; no extras are silently dropped. `label` is
-  // null when the number carries no label.
-  phones: { label: string | null; number: string }[];
+  // All phone numbers, unlabelled like the legacy print (a mobile number is recognisable as
+  // such); none is silently dropped.
+  phones: string[];
   email: string | null;
   birth: string | null; // formatted birth date when withBirthdays
 }
@@ -121,6 +122,19 @@ export interface GroupNode {
   level: number; // heading level 1..3
   entries: Entry[];
   children: GroupNode[];
+  /** Listed in the table of contents. */
+  toc: boolean;
+  /** Top level only: start a fresh page; otherwise the section runs on in the columns. */
+  newPage: boolean;
+  /** Top level only: head entry alone, the rest in pairs across the full width. */
+  leadership: boolean;
+  /** Top level only: "Konvente"/"Kollegien" summary tables (group → its Meister/Sprecher). */
+  overviews: Overview[];
+}
+
+export interface Overview {
+  title: string;
+  rows: { group: string; leaders: string }[];
 }
 
 interface RegisterEntry {
@@ -180,9 +194,43 @@ function joinNonEmpty(parts: (string | null | undefined)[], sep = " "): string {
 const SECTION_HEAD_OFFICES: Partial<Record<Section, string[]>> = {
   jungenbund: ["Bundesjungenvogt"],
   maedchenbund: ["Bundesmädchenvögtin"],
-  orden_st_georg: ["Hochmeister des Ordens St. Georg", "Hochmeister"],
-  orden_st_christophorus: ["Ordensmeisterin des Ordens St. Christophorus", "Ordensmeisterin"],
+  // Short form first: inside the Orden the head is just "Hochmeister" / "Ordensmeisterin".
+  orden_st_georg: ["Hochmeister", "Hochmeister des Ordens St. Georg"],
+  orden_st_christophorus: ["Ordensmeisterin", "Ordensmeisterin des Ordens St. Christophorus"],
+  bundesgilde: ["Bundesgildenmeisterin", "Bundesgildenmeister"],
 };
+
+/** Sections whose top group prints as a leadership block (head alone, then pairs). */
+const LEADERSHIP_SECTIONS = new Set<Section>(["bund", "orden_st_georg", "orden_st_christophorus", "bundesgilde"]);
+
+/**
+ * Orden-wide offices (Ordenskomtur, Ordensherold, Novizenmeister …). They are held in a Konvent
+ * but belong to the Ordensleitung: printed in the Orden's leadership block, not as a label in
+ * the Konvent.
+ */
+function isOrdenOffice(name: string): boolean {
+  return /^(hochmeister|ordens|novizenmeister)/i.test(name.trim());
+}
+
+/** The Meister/Sprecher of a Konvent or Kollegium, as listed in the overview tables. */
+function isOverviewLeaderOffice(name: string): boolean {
+  return /^(konventmeister|kollegiumssprecher)/i.test(name.trim());
+}
+
+/** Konvente, then Kollegien, then the rest (Einzelsassen, ohne Bindung …) — the legacy order. */
+function groupClass(name: string): number {
+  if (/konvent/i.test(name)) return 0;
+  if (/kollegium/i.test(name)) return 1;
+  return 2;
+}
+
+/** Sort name without the kind prefix: „Konvent Avalon“ files under A like „Hansischer Konvent“ under H. */
+function groupSortName(name: string): string {
+  return fold(name.replace(/^(konvent|kollegium|aufbaukollegium)\s+/i, ""));
+}
+
+const isGauOrRing = (name: string) => /^(gau|ring)\s/i.test(name.trim());
+
 
 /** Leadership offices whose label is implied by the (sub)group heading and thus suppressed. */
 function isLeaderOffice(name: string): boolean {
@@ -196,11 +244,9 @@ function personDisplayName(p: DataPerson): string {
   return joinNonEmpty([p.title, p.firstName, p.lastName]);
 }
 
-/** All non-empty phone numbers with their (trimmed, else null) labels, order preserved. */
-function entryPhones(p: DataPerson): { label: string | null; number: string }[] {
-  return p.phones
-    .map((ph) => ({ label: nullIfEmpty(ph.label), number: (ph.number ?? "").trim() }))
-    .filter((ph) => ph.number.length > 0);
+/** All non-empty phone numbers, order preserved. */
+function entryPhones(p: DataPerson): string[] {
+  return p.phones.map((ph) => (ph.number ?? "").trim()).filter((n) => n.length > 0);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -248,8 +294,12 @@ export function buildProfileData(
     assignmentsByGroup.get(a.groupId)!.push(a);
   }
 
+  // sort_key first (the editable order), then Konvente → Kollegien → the rest, then the name
+  // without its kind prefix — the legacy order inside the Orden and the Bundesgilde.
   const groupSort = (a: DataGroup, b: DataGroup) =>
-    a.sortKey - b.sortKey || fold(a.name).localeCompare(fold(b.name), "de");
+    a.sortKey - b.sortKey ||
+    groupClass(a.name) - groupClass(b.name) ||
+    groupSortName(a.name).localeCompare(groupSortName(b.name), "de");
 
   const detailFor = (p: DataPerson): string | null => {
     const parts: string[] = [];
@@ -262,6 +312,7 @@ export function buildProfileData(
   };
 
   const anchored = new Set<number>(); // persons that already carry a register label
+  const printable = (p: DataPerson | undefined): p is DataPerson => p != null && !p.doNotPrint && !p.deathDate;
 
   // Build one entry for a person's presence in a group (offices already collapsed).
   const makeEntry = (p: DataPerson, officeNames: string[], depth: number): Entry => {
@@ -291,31 +342,83 @@ export function buildProfileData(
     };
   };
 
-  // Collapse a group's assignments into sorted per-person entries.
-  const entriesForGroup = (groupId: number, depth: number): Entry[] => {
-    const list = assignmentsByGroup.get(groupId) ?? [];
-    const byPerson = new Map<number, DataOffice[]>();
-    for (const a of list) {
-      if (!byPerson.has(a.personId)) byPerson.set(a.personId, []);
-      if (a.officeId != null) {
-        const o = officeById.get(a.officeId);
-        if (o) byPerson.get(a.personId)!.push(o);
-      }
-    }
+  /** Record an assignment's office (once) under its person; a person without office gets []. */
+  const addOffice = (byPerson: Map<number, DataOffice[]>, personId: number, officeId: number | null) => {
+    if (!byPerson.has(personId)) byPerson.set(personId, []);
+    const o = officeId != null ? officeById.get(officeId) : undefined;
+    const list = byPerson.get(personId)!;
+    if (o && !list.includes(o)) list.push(o);
+  };
+
+  // Per-person offices → sorted entries: best office rank, then office name (the
+  // Bundesbeauftragte share a rank and print A–Z by office), then name. `pinned` persons — a
+  // section's heads — come first, in the given order.
+  const toEntries = (byPerson: Map<number, DataOffice[]>, depth: number, pinned: number[] = []): Entry[] => {
     const rows = [...byPerson.entries()].map(([personId, offs]) => {
       const p = personById.get(personId)!;
       const sortedOffs = [...offs].sort((x, y) => x.rank - y.rank || byName(x, y));
-      const minRank = sortedOffs.length > 0 ? sortedOffs[0].rank : RANK_UNRANKED;
-      const sortName = fold(joinNonEmpty([p.scoutName || p.lastName || p.firstName]));
-      return { p, officeNames: sortedOffs.map((o) => o.name), minRank, sortName };
+      const pin = pinned.indexOf(personId);
+      return {
+        p,
+        officeNames: sortedOffs.map((o) => o.name),
+        pin: pin === -1 ? pinned.length : pin,
+        minRank: sortedOffs.length > 0 ? sortedOffs[0].rank : RANK_UNRANKED,
+        officeKey: sortedOffs.length > 0 ? fold(sortedOffs[0].name) : "",
+        sortName: fold(joinNonEmpty([p.scoutName || p.lastName || p.firstName])),
+      };
     });
     rows.sort(
       (a, b) =>
+        a.pin - b.pin ||
         a.minRank - b.minRank ||
+        a.officeKey.localeCompare(b.officeKey, "de") ||
         a.sortName.localeCompare(b.sortName, "de") ||
         fold(a.p.lastName ?? "").localeCompare(fold(b.p.lastName ?? ""), "de"),
     );
     return rows.map((r) => makeEntry(r.p, r.officeNames, depth));
+  };
+
+  // A group's own members. Below the top level the Orden-wide offices are left out — they
+  // print in the Ordensleitung (see `topEntries`), the person stays listed in the Konvent.
+  const entriesForGroup = (groupId: number, depth: number): Entry[] => {
+    const byPerson = new Map<number, DataOffice[]>();
+    for (const a of assignmentsByGroup.get(groupId) ?? []) {
+      const o = a.officeId != null ? officeById.get(a.officeId) : undefined;
+      addOffice(byPerson, a.personId, depth > 0 && o && isOrdenOffice(o.name) ? null : a.officeId);
+    }
+    return toEntries(byPerson, depth);
+  };
+
+  // A section's first top group opens with the section's head office(s), held anywhere
+  // (usually the Bundesführung); an Orden's also gathers the Orden-wide offices held in its
+  // Konvente. Built before the children so the register anchors these persons up here.
+  const headed = new Set<Section>();
+  const topEntries = (g: DataGroup): Entry[] => {
+    const byPerson = new Map<number, DataOffice[]>();
+    const pinned: number[] = [];
+    if (!headed.has(g.section)) {
+      headed.add(g.section);
+      for (const name of SECTION_HEAD_OFFICES[g.section] ?? []) {
+        for (const a of activeAssignments) {
+          if (a.officeId == null || officeById.get(a.officeId)?.name !== name || pinned.includes(a.personId)) continue;
+          if (!printable(personById.get(a.personId))) continue;
+          pinned.push(a.personId);
+          addOffice(byPerson, a.personId, a.officeId);
+        }
+      }
+      if (g.section === "orden_st_georg" || g.section === "orden_st_christophorus") {
+        for (const a of activeAssignments) {
+          const o = a.officeId != null ? officeById.get(a.officeId) : undefined;
+          if (!o || !isOrdenOffice(o.name) || groupById.get(a.groupId)?.section !== g.section) continue;
+          if (!printable(personById.get(a.personId))) continue;
+          // A head keeps the one office it is pinned with, not its long form a second time.
+          if (pinned.includes(a.personId)) continue;
+          addOffice(byPerson, a.personId, a.officeId);
+        }
+      }
+    }
+    for (const a of assignmentsByGroup.get(g.id) ?? []) addOffice(byPerson, a.personId, a.officeId);
+    return toEntries(byPerson, 0, pinned);
   };
 
   // Recursive group node builder; returns null for groups with no printed content (pruned).
@@ -324,7 +427,7 @@ export function buildProfileData(
   const buildNode = (g: DataGroup, depth: number): GroupNode | null => {
     if (visited.has(g.id)) return null;
     visited.add(g.id);
-    const entries = entriesForGroup(g.id, depth);
+    const entries = depth === 0 ? topEntries(g) : entriesForGroup(g.id, depth);
     const kids = (childrenByParent.get(g.id) ?? [])
       .filter((c) => includedSections.has(c.section))
       .sort(groupSort);
@@ -334,43 +437,68 @@ export function buildProfileData(
       if (node) children.push(node);
     }
     if (entries.length === 0 && children.length === 0) return null;
-    return { name: g.name, level: Math.min(depth + 1, 3), entries, children };
+    // The contents list the Gliederungen down to Jungenschaft/Mädelschaft — no Stämme or Hage,
+    // and nothing inside the Älterengemeinschaften (their overview tables serve instead).
+    const inGliederung = g.section === "bund" || g.section === "jungenbund" || g.section === "maedchenbund";
+    const toc = depth === 0 || (inGliederung && !/^(aufbau)?(stamm|hag)\b/i.test(g.name));
+    return {
+      name: g.name,
+      level: Math.min(depth + 1, 3),
+      entries,
+      children,
+      toc,
+      newPage: false,
+      leadership: false,
+      overviews: [],
+    };
+  };
+
+  // "Konvente" / "Kollegien": each child group with its Meister or Sprecher, in print order.
+  const overviewsFor = (g: DataGroup): Overview[] => {
+    const tables: Overview[] = [
+      { title: "Konvente", rows: [] },
+      { title: "Kollegien", rows: [] },
+    ];
+    for (const c of (childrenByParent.get(g.id) ?? []).filter((c) => includedSections.has(c.section)).sort(groupSort)) {
+      const cls = groupClass(c.name);
+      if (cls > 1) continue;
+      const leaders: string[] = [];
+      for (const a of assignmentsByGroup.get(c.id) ?? []) {
+        const o = a.officeId != null ? officeById.get(a.officeId) : undefined;
+        if (!o || !isOverviewLeaderOffice(o.name)) continue;
+        const p = personById.get(a.personId)!;
+        const scout = nullIfEmpty(p.scoutName);
+        leaders.push(`${o.name} ${personDisplayName(p)}${scout ? ` (${scout})` : ""}`);
+      }
+      tables[cls].rows.push({ group: c.name, leaders: leaders.join("; ") });
+    }
+    return tables.filter((t) => t.rows.length > 0);
   };
 
   // Top-level groups in the included sections drive render + anchor order.
   const topGroups = (childrenByParent.get(null) ?? [])
     .filter((g) => includedSections.has(g.section))
     .sort(groupSort);
-  // The section's head office(s), held anywhere (usually the Bundesführung), one entry per person.
-  const sectionHeads = (section: Section): Entry[] => {
-    const heads: Entry[] = [];
-    const seen = new Set<number>();
-    for (const name of SECTION_HEAD_OFFICES[section] ?? []) {
-      for (const a of activeAssignments) {
-        if (a.officeId == null || officeById.get(a.officeId)?.name !== name || seen.has(a.personId)) continue;
-        const p = personById.get(a.personId);
-        if (!p || p.doNotPrint || p.deathDate) continue;
-        seen.add(p.id);
-        heads.push(makeEntry(p, [name], 0));
-      }
-    }
-    return heads;
-  };
 
+  // Page flow like the legacy print: every Bereich, the leadership pages (Bundesführung, Orden,
+  // Bundesgilde) and every Gau and Ring start a page; the small sections in between share pages.
   const sections: GroupNode[] = [];
-  const headed = new Set<Section>();
+  let prev: { node: GroupNode; group: DataGroup } | null = null;
   for (const g of topGroups) {
-    let node = buildNode(g, 0);
-    // The first top-level group of a section opens it with the section's head office.
-    if (!headed.has(g.section)) {
-      headed.add(g.section);
-      const heads = sectionHeads(g.section);
-      if (heads.length > 0) {
-        node ??= { name: g.name, level: 1, entries: [], children: [] };
-        node.entries = [...heads, ...node.entries];
-      }
-    }
-    if (node) sections.push(node);
+    const leadership = LEADERSHIP_SECTIONS.has(g.section) && !headed.has(g.section);
+    const node = buildNode(g, 0);
+    if (!node) continue;
+    node.leadership = leadership;
+    node.newPage =
+      prev == null ||
+      leadership ||
+      prev.node.leadership ||
+      isGauOrRing(g.name) ||
+      isGauOrRing(prev.group.name) ||
+      g.section !== prev.group.section;
+    if (leadership && g.section !== "bund") node.overviews = overviewsFor(g);
+    sections.push(node);
+    prev = { node, group: g };
   }
 
   // ---- name register (only persons that were actually printed / anchored) ----

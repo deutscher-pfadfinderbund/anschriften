@@ -141,6 +141,89 @@ describe("section heads", () => {
   });
 });
 
+describe("legacy layout", () => {
+  const ORDEN_GROUPS: DataGroup[] = [
+    ...GROUPS,
+    { id: 10, name: "Orden St. Georg", parentId: null, section: "orden_st_georg", sortKey: 520 },
+    { id: 11, name: "Einzelsassen", parentId: 10, section: "orden_st_georg", sortKey: 0 },
+    { id: 12, name: "Kollegium Nordstern", parentId: 10, section: "orden_st_georg", sortKey: 0 },
+    { id: 13, name: "Konvent Wiking", parentId: 10, section: "orden_st_georg", sortKey: 0 },
+    { id: 14, name: "Hansischer Konvent", parentId: 10, section: "orden_st_georg", sortKey: 0 },
+  ];
+  const ORDEN_OFFICES: DataOffice[] = [
+    ...OFFICES,
+    { id: 20, name: "Hochmeister", rank: 999 },
+    { id: 21, name: "Ordenskomtur", rank: 12 },
+    { id: 22, name: "Konventmeister", rank: 10 },
+  ];
+  const raw: RawData = {
+    ranks: RANKS,
+    offices: ORDEN_OFFICES,
+    groups: ORDEN_GROUPS,
+    persons: [
+      person({ id: 1, firstName: "Holger", lastName: "Specht" }),
+      person({ id: 2, firstName: "Hans", lastName: "Hoch" }),
+      person({ id: 3, firstName: "Klaus", lastName: "Komtur", scoutName: "bodo" }),
+      person({ id: 4, firstName: "Gerd", lastName: "Gau" }),
+    ],
+    assignments: [
+      { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: null }, // Bundesvogt
+      { id: 2, personId: 2, groupId: 13, officeId: 20, endDate: null }, // Hochmeister, held in a Konvent
+      { id: 3, personId: 3, groupId: 13, officeId: 22, endDate: null }, // Konventmeister Wiking …
+      { id: 4, personId: 3, groupId: 13, officeId: 21, endDate: null }, // … and Ordenskomtur
+      { id: 5, personId: 4, groupId: 2, officeId: 4, endDate: null }, // Gauvogt Franken
+      { id: 6, personId: 4, groupId: 11, officeId: null, endDate: null }, // Einzelsasse
+      { id: 7, personId: 4, groupId: 12, officeId: null, endDate: null },
+      { id: 8, personId: 4, groupId: 14, officeId: null, endDate: null },
+    ],
+  };
+  const data = buildProfileData(raw, "komplett", ALL_OPTIONS);
+
+  it("starts a page for the leadership sections and every Gau, flagging the paired block", () => {
+    expect(data.sections.map((s) => [s.name, s.newPage, s.leadership])).toEqual([
+      ["Bundesführung", true, true],
+      ["Gau Franken", true, false],
+      ["Orden St. Georg", true, true],
+    ]);
+  });
+
+  it("hoists Orden-wide offices into the Ordensleitung and drops them from the Konvent label", () => {
+    const orden = findNode(data.sections, "Orden St. Georg")!;
+    expect(orden.entries.map((e) => [e.office, e.name])).toEqual([
+      ["Hochmeister", "Hans Hoch"],
+      ["Ordenskomtur", "Klaus Komtur"],
+    ]);
+    const wiking = findNode(data.sections, "Konvent Wiking")!;
+    expect(wiking.entries.find((e) => e.name === "Klaus Komtur")!.office).toBe("Konventmeister");
+  });
+
+  it("orders Orden groups Konvente (prefix ignored) → Kollegien → rest, outside the contents", () => {
+    const orden = findNode(data.sections, "Orden St. Georg")!;
+    expect(orden.children.map((c) => c.name)).toEqual([
+      "Hansischer Konvent",
+      "Konvent Wiking",
+      "Kollegium Nordstern",
+      "Einzelsassen",
+    ]);
+    expect(orden.children.every((c) => !c.toc)).toBe(true);
+    expect(findNode(data.sections, "Gau Franken")!.toc).toBe(true);
+  });
+
+  it("builds the Konvente/Kollegien overview tables with each group's Meister", () => {
+    const orden = findNode(data.sections, "Orden St. Georg")!;
+    expect(orden.overviews).toEqual([
+      {
+        title: "Konvente",
+        rows: [
+          { group: "Hansischer Konvent", leaders: "" },
+          { group: "Konvent Wiking", leaders: "Konventmeister Klaus Komtur (bodo)" },
+        ],
+      },
+      { title: "Kollegien", rows: [{ group: "Kollegium Nordstern", leaders: "" }] },
+    ]);
+  });
+});
+
 describe("vacant placeholder", () => {
   it("prints „vakant“ for a nameless person and keeps it out of the register", () => {
     const raw: RawData = {
@@ -527,11 +610,8 @@ describe("options: ranks, birthdays, cover", () => {
     const rita = findNode(data.sections, "Bundesführung")!.entries.find((e) => e.name === "Rita Rang")!;
     expect(rita.detail).toBe("rambo (Späher)");
     expect(rita.birth).toBe("12.03.1985");
-    // All phones flow through with their labels, in input order (issue #8).
-    expect(rita.phones).toEqual([
-      { label: "Festnetz", number: "030 111" },
-      { label: "Mobil", number: "0173 222" },
-    ]);
+    // All phones flow through, unlabelled, in input order (issue #8).
+    expect(rita.phones).toEqual(["030 111", "0173 222"]);
     expect(data.date).toBe("04.07.2026");
   });
 
@@ -623,8 +703,8 @@ describe("issue #7 — a leader office does not hide co-held non-leader offices"
   });
 });
 
-describe("issue #8 — all phones pass through with their labels", () => {
-  it("carries every number with its label, nulls a blank label and drops empty numbers", () => {
+describe("issue #8 — all phones pass through, unlabelled like the legacy print", () => {
+  it("carries every number and drops empty ones", () => {
     const raw: RawData = {
       ranks: RANKS,
       offices: OFFICES,
@@ -638,7 +718,7 @@ describe("issue #8 — all phones pass through with their labels", () => {
             { label: "Mobil", number: "0173 1" },
             { label: "Privat", number: "030 2" },
             { label: "Dienstlich", number: "089 3" },
-            { label: "", number: "099 4" }, // blank label -> null
+            { label: "", number: "099 4" },
             { label: "Leer", number: "  " }, // empty number -> dropped
           ],
         }),
@@ -647,12 +727,7 @@ describe("issue #8 — all phones pass through with their labels", () => {
     };
     const data = buildProfileData(raw, "komplett", NO_OPTIONS);
     const entry = findNode(data.sections, "Bundesführung")!.entries[0];
-    expect(entry.phones).toEqual([
-      { label: "Mobil", number: "0173 1" },
-      { label: "Privat", number: "030 2" },
-      { label: "Dienstlich", number: "089 3" },
-      { label: null, number: "099 4" },
-    ]);
+    expect(entry.phones).toEqual(["0173 1", "030 2", "089 3", "099 4"]);
   });
 });
 
