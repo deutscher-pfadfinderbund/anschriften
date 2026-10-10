@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { CalendarOff, X } from "lucide-react";
 
 import { AddRowButton } from "@/components/add-row-button";
@@ -55,17 +55,15 @@ export function AssignmentsPanel({
   const [ending, setEnding] = useState<EndRequest | null>(null);
   const rows = values.assignments;
 
-  const groupOptions: ComboOption[] = useMemo(
-    () => orderGroups(groups).map(({ group, depth }) => ({ value: String(group.id), label: group.name, depth })),
-    [groups],
-  );
-  const officeOptions: ComboOption[] = useMemo(
-    () => [
-      { value: NONE, label: "Kein Amt (nur Mitglied)" },
-      ...offices.map((o) => ({ value: String(o.id), label: o.name })),
-    ],
-    [offices],
-  );
+  const groupOptions: ComboOption[] = orderGroups(groups).map(({ group, depth }) => ({
+    value: String(group.id),
+    label: group.name,
+    depth,
+  }));
+  const officeOptions: ComboOption[] = [
+    { value: NONE, label: "Kein Amt (nur Mitglied)" },
+    ...offices.map((o) => ({ value: String(o.id), label: o.name })),
+  ];
   const labelOf = (options: ComboOption[], id: number | null) =>
     options.find((o) => o.value === String(id))?.label;
   /** "Bundeskanzlerin · Bundeskanzlei": names the row for its dialog and its buttons. */

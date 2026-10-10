@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import Link from "next/link";
 
 import { TextField } from "@/components/field";
@@ -28,15 +27,8 @@ export function ListsPanel({
 }) {
   // Lists that include the person automatically (via Amt, Stand or Gliederung). Their
   // checkbox is ticked and locked; `listIds` only ever holds the manual memberships.
-  const reasons = useMemo(
-    () =>
-      new Map(
-        ruleMemberships.map((r) => [
-          r.listId,
-          r.via.map((v) => `${RULE_KIND_LABELS[v.kind]}: ${v.name}`).join(", "),
-        ]),
-      ),
-    [ruleMemberships],
+  const reasons = new Map(
+    ruleMemberships.map((r) => [r.listId, r.via.map((v) => `${RULE_KIND_LABELS[v.kind]}: ${v.name}`).join(", ")]),
   );
 
   function toggle(id: number, on: boolean) {

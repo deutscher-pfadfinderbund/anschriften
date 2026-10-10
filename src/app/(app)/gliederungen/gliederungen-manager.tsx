@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import { Building2, Plus } from "lucide-react";
 
 import { deleteGroup, saveGroup } from "@/actions/groups";
@@ -40,7 +39,7 @@ export function GliederungenManager({
   /** Per group id: why it cannot be deleted (absent = deletable), same rule as the action. */
   blockers: Record<number, string>;
 }) {
-  const ordered = useMemo(() => orderGroups(groups), [groups]);
+  const ordered = orderGroups(groups);
   const dialog = useEntryDialog<Draft>({
     group: null,
     name: "",
@@ -53,16 +52,14 @@ export function GliederungenManager({
   const { draft } = dialog;
 
   const editId = draft.group?.id ?? null;
-  const parentOptions: ComboOption[] = useMemo(() => {
-    // A group cannot move below itself or its own subtree (the action refuses cycles).
-    const forbidden = editId != null ? descendantIds(groups, editId).add(editId) : new Set<number>();
-    return [
-      { value: PARENT_NONE, label: "keine (oberste Ebene)" },
-      ...ordered
-        .filter(({ group }) => !forbidden.has(group.id))
-        .map(({ group, depth }) => ({ value: String(group.id), label: group.name, depth })),
-    ];
-  }, [groups, ordered, editId]);
+  // A group cannot move below itself or its own subtree (the action refuses cycles).
+  const forbidden = editId != null ? descendantIds(groups, editId).add(editId) : new Set<number>();
+  const parentOptions: ComboOption[] = [
+    { value: PARENT_NONE, label: "keine (oberste Ebene)" },
+    ...ordered
+      .filter(({ group }) => !forbidden.has(group.id))
+      .map(({ group, depth }) => ({ value: String(group.id), label: group.name, depth })),
+  ];
 
   const parent = draft.parentId != null ? groups.find((g) => g.id === draft.parentId) : undefined;
   const hasChildren = editId != null && groups.some((g) => g.parentId === editId);

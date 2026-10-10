@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -46,17 +46,11 @@ export function RulesPanel({
   const [removal, setRemoval] = useState<PendingRemoval | null>(null);
 
   // Per kind: the targets that are not yet a rule on this list.
-  const options = useMemo(() => {
-    const targets: Record<RuleKind, Target[]> = { office: offices, rank: ranks, group: groups };
-    const out = {} as Record<RuleKind, { value: string; label: string }[]>;
-    for (const kind of RULE_KINDS) {
-      const taken = new Set(list.rules[kind].map((r) => r.id));
-      out[kind] = targets[kind]
-        .filter((t) => !taken.has(t.id))
-        .map((t) => ({ value: String(t.id), label: t.name }));
-    }
-    return out;
-  }, [list.rules, offices, ranks, groups]);
+  const targets: Record<RuleKind, Target[]> = { office: offices, rank: ranks, group: groups };
+  const options = (kind: RuleKind) =>
+    targets[kind]
+      .filter((t) => !list.rules[kind].some((r) => r.id === t.id))
+      .map((t) => ({ value: String(t.id), label: t.name }));
 
   // Members that only this rule keeps on the list — they leave when it goes.
   const leaving = removal
@@ -66,7 +60,7 @@ export function RulesPanel({
     : 0;
 
   function add(kind: RuleKind, value: string) {
-    const name = options[kind].find((o) => o.value === value)?.label ?? RULE_KIND_LABELS[kind];
+    const name = targets[kind].find((t) => String(t.id) === value)?.name ?? RULE_KIND_LABELS[kind];
     startTransition(async () => {
       const res = await callAction(() => addListRule(list.id, kind, Number(value)));
       if (!res.ok) return void toast.error(res.message);
@@ -121,7 +115,7 @@ export function RulesPanel({
                 <div className="w-full sm:w-56">
                   <Combobox
                     aria-label={`${RULE_KIND_LABELS[kind]} hinzufügen`}
-                    options={options[kind]}
+                    options={options(kind)}
                     value={null}
                     onChange={(v) => add(kind, v)}
                     placeholder={`${RULE_KIND_LABELS[kind]} hinzufügen …`}
