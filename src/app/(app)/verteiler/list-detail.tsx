@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ChevronRight, Copy, Download, Pencil, Send, Trash2 } from "lucide-react";
+import { Copy, Download, Pencil, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { deleteList } from "@/actions/lists";
 import { ComposeMailDialog } from "@/components/compose-mail-dialog";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { Disclosure } from "@/components/disclosure";
 import { focusSoon } from "@/components/field";
 import { Panel } from "@/components/panel";
 import { Tag } from "@/components/tag";
@@ -151,71 +152,60 @@ export function ListDetail({
       <RulesPanel list={list} offices={offices} ranks={ranks} groups={groups} />
 
       {members.length > 0 ? (
-        <details
+        <Disclosure
           open={addressesOpen}
-          onToggle={(e) => setAddressesOpen(e.currentTarget.open)}
-          className="group min-w-0 rounded-lg border border-line bg-surface"
+          onOpenChange={setAddressesOpen}
+          summary={addressesOpen ? "E-Mail-Adressen ausblenden" : "E-Mail-Adressen anzeigen"}
+          count={emailAddressCount(bcc.count)}
         >
-          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-4 py-3 text-ui font-medium text-ink transition-colors select-none group-open:rounded-b-none hover:bg-hover sm:px-gutter [&::-webkit-details-marker]:hidden">
-            <ChevronRight
-              aria-hidden
-              className="size-4 shrink-0 text-ink-faint transition-transform group-open:rotate-90"
-            />
-            {addressesOpen ? "E-Mail-Adressen ausblenden" : "E-Mail-Adressen anzeigen"}
-            <span className="ml-auto text-caption font-normal text-ink-faint tabular-nums">
-              {emailAddressCount(bcc.count)}
-            </span>
-          </summary>
-          <div className="border-t border-line p-4 sm:p-gutter">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 pointer-coarse:mb-3">
-              <p className="text-caption text-ink-soft">Zum Einfügen ins BCC-Feld deines Mailprogramms.</p>
-              <div role="group" aria-label="Trennzeichen" className="inline-flex rounded-md border border-line p-0.5">
-                {(
-                  [
-                    ["; ", "Semikolon (Outlook)"],
-                    [", ", "Komma (Gmail)"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={separator === value}
-                    onClick={() => setSeparator(value)}
-                    className={cn(
-                      "rounded-[5px] px-2 py-0.5 text-caption transition-colors",
-                      // Taller tap band on touch; vertical only, so the two toggles' bands
-                      // do not overlap.
-                      "pointer-coarse:relative pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2",
-                      separator === value
-                        ? "bg-active font-medium text-fir"
-                        : "text-ink-soft hover:bg-hover hover:text-ink",
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 pointer-coarse:mb-3">
+            <p className="text-caption text-ink-soft">Zum Einfügen ins BCC-Feld deines Mailprogramms.</p>
+            <div role="group" aria-label="Trennzeichen" className="inline-flex rounded-md border border-line p-0.5">
+              {(
+                [
+                  ["; ", "Semikolon (Outlook)"],
+                  [", ", "Komma (Gmail)"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={separator === value}
+                  onClick={() => setSeparator(value)}
+                  className={cn(
+                    "rounded-[5px] px-2 py-0.5 text-caption transition-colors",
+                    // Taller tap band on touch; vertical only, so the two toggles' bands
+                    // do not overlap.
+                    "pointer-coarse:relative pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2",
+                    separator === value
+                      ? "bg-active font-medium text-fir"
+                      : "text-ink-soft hover:bg-hover hover:text-ink",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-            <Textarea
-              id="verteiler-adressen"
-              readOnly
-              value={bcc.text}
-              aria-label="E-Mail-Adressen für das BCC-Feld"
-              placeholder="Keine gültigen E-Mail-Adressen in diesem Verteiler."
-              className="h-28 resize-y text-caption md:text-caption"
-              onFocus={(e) => e.currentTarget.select()}
-            />
-            {withEmail < members.length ? (
-              <p className="mt-2 text-caption text-ink-faint">
-                Ohne gültige E-Mail, nur per Post erreichbar:{" "}
-                {members
-                  .filter((m) => !isEmail(m.email))
-                  .map(formatNameWithScout)
-                  .join(", ")}
-              </p>
-            ) : null}
           </div>
-        </details>
+          <Textarea
+            id="verteiler-adressen"
+            readOnly
+            value={bcc.text}
+            aria-label="E-Mail-Adressen für das BCC-Feld"
+            placeholder="Keine gültigen E-Mail-Adressen in diesem Verteiler."
+            className="h-28 resize-y text-caption md:text-caption"
+            onFocus={(e) => e.currentTarget.select()}
+          />
+          {withEmail < members.length ? (
+            <p className="mt-2 text-caption text-ink-faint">
+              Ohne gültige E-Mail, nur per Post erreichbar:{" "}
+              {members
+                .filter((m) => !isEmail(m.email))
+                .map(formatNameWithScout)
+                .join(", ")}
+            </p>
+          ) : null}
+        </Disclosure>
       ) : null}
 
       {mailEnabled && recentMail.length > 0 ? (
