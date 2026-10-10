@@ -11,6 +11,8 @@ type FieldBase = {
   error?: string;
   /** Quiet help line under the control. */
   hint?: string;
+  /** Announce the error as it appears: a refused save, not validation while typing. */
+  announce?: boolean;
   className?: string;
 };
 
@@ -24,7 +26,15 @@ export function fieldAria(id: string, error?: string, hint?: string) {
 }
 
 /** Label, control and an optional error or hint line. */
-export function Field({ label, id, error, hint, className, children }: FieldBase & { children: React.ReactNode }) {
+export function Field({
+  label,
+  id,
+  error,
+  hint,
+  announce,
+  className,
+  children,
+}: FieldBase & { children: React.ReactNode }) {
   const message = error ?? hint;
   return (
     <div className={className}>
@@ -33,7 +43,11 @@ export function Field({ label, id, error, hint, className, children }: FieldBase
       </label>
       {children}
       {message ? (
-        <p id={`${id}-msg`} className={error ? "mt-1 text-caption text-crit" : "mt-1 text-caption text-ink-faint"}>
+        <p
+          id={`${id}-msg`}
+          role={error && announce ? "alert" : undefined}
+          className={error ? "mt-1 text-caption text-crit" : "mt-1 text-caption text-ink-faint"}
+        >
           {message}
         </p>
       ) : null}
@@ -47,6 +61,7 @@ export function TextField({
   id,
   error,
   hint,
+  announce,
   className,
   value,
   onValueChange,
@@ -57,7 +72,7 @@ export function TextField({
     onValueChange: (value: string) => void;
   }) {
   return (
-    <Field label={label} id={id} error={error} hint={hint} className={className}>
+    <Field label={label} id={id} error={error} hint={hint} announce={announce} className={className}>
       <Input
         {...fieldAria(id, error, hint)}
         value={value}
@@ -74,11 +89,12 @@ export function ComboField({
   id,
   error,
   hint,
+  announce,
   className,
   ...combo
 }: FieldBase & Omit<React.ComponentProps<typeof Combobox>, "id" | "aria-invalid" | "aria-describedby">) {
   return (
-    <Field label={label} id={id} error={error} hint={hint} className={className}>
+    <Field label={label} id={id} error={error} hint={hint} announce={announce} className={className}>
       <Combobox {...fieldAria(id, error, hint)} {...combo} />
     </Field>
   );

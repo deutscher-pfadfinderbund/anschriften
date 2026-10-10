@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { saveList } from "@/actions/lists";
-import { Field, FormError, TextField } from "@/components/field";
+import { Field, TextField } from "@/components/field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -87,6 +87,8 @@ function ListForm({
           setError(null);
         }}
         placeholder="z. B. Bundesthing"
+        error={error ?? undefined}
+        announce
       />
       <Field label="Beschreibung (optional)" id="verteiler-beschreibung">
         <Textarea
@@ -97,7 +99,6 @@ function ListForm({
           placeholder="Wofür wird dieser Verteiler verwendet?"
         />
       </Field>
-      <FormError>{error}</FormError>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel} disabled={isPending}>
           Abbrechen
