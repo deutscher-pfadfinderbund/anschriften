@@ -10,6 +10,7 @@ import {
   formatFullName,
   formatName,
   formatNameWithScout,
+  isVacant,
   phoneLabelOptions,
   scoutAddition,
   tenureRange,
@@ -51,6 +52,14 @@ describe("fold", () => {
 
   it("trims surrounding whitespace", () => {
     expect(fold("  Falke  ")).toBe("falke");
+  });
+});
+
+describe("isVacant", () => {
+  it("is true only without any name part", () => {
+    expect(isVacant({ lastName: " ", firstName: null })).toBe(true);
+    expect(isVacant({ scoutName: "Falke" })).toBe(false);
+    expect(isVacant({ lastName: "Specht" })).toBe(false);
   });
 });
 

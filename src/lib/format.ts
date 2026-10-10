@@ -35,6 +35,11 @@ export function formatName(p: PersonName): string {
   return p.scoutName?.trim() || "—";
 }
 
+/** No name at all: the Access import kept vacant offices as nameless placeholder persons. */
+export function isVacant(p: PersonName): boolean {
+  return !p.lastName?.trim() && !p.firstName?.trim() && !p.scoutName?.trim();
+}
+
 /** The Fahrtenname when it adds to a Vor- or Nachname; null when absent or already the name itself. */
 export function scoutAddition(p: PersonName): string | null {
   const scout = p.scoutName?.trim();
