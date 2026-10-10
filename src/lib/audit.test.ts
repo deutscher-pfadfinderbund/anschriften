@@ -74,6 +74,11 @@ describe("diffSnapshots: the person's own fields", () => {
       { field: "rank", from: "Späherin", to: "Gildin" },
     ]);
   });
+
+  it("does not log a save re-spelling a stored phone label the curated way", () => {
+    const stored = person({ phones: [{ label: "mobil", number: "0170 1" }] });
+    expect(diffSnapshots(stored, person({ phones: [{ label: "Mobil", number: "0170 1" }] }))).toEqual([]);
+  });
 });
 
 describe("diffSnapshots: a new person", () => {
