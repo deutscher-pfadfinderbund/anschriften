@@ -37,7 +37,7 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 - DB-Zugriff: zentraler Client `src/db/index.ts`; niemals SQL-Strings in Komponenten. Zwei dokumentierte Ausnahmen greifen direkt auf `db` zu: `src/pdf/build-data.ts` (isolierte Full-Table-Reads fürs PDF) und `src/lib/mail.ts` (`mail_log`-Schreiben atomar zum SMTP-Versand)
 - Personentabelle: alle Datensätze serverseitig laden (~600, schon in Verzeichnis-Reihenfolge `sortByDirectoryName`), clientseitig filtern, sortieren und auswählen mit schlichtem React-State (keine Tabellen-Bibliothek). Keine Pagination
 - `updated_by` = Name/E-Mail aus der Session bei jeder Mutation setzen
-- Änderungsprotokoll: jede Mutation an einer Person (eigene Felder, Ämter aktiv und früher, manuelle Verteiler-Mitgliedschaften) schreibt in **derselben Transaktion** `audit_log` über `src/db/audit.ts` (`personSnapshot` vorher + `logPersonChange` nachher bzw. `audited(tx, personId, by, work)`, `logMemberships`, `logDeletion`). Werte werden beim Schreiben anzeigefertig formatiert (Diff + Feld-Labels in `src/lib/audit.ts`), die UI zeigt sie nur an. Stammdaten und Regel-Mitgliedschaften werden nicht protokolliert; der Verlauf einer gelöschten Person kaskadiert mit ihr
+- Änderungsprotokoll: jede Mutation an einer Person (eigene Felder, Ämter, manuelle Verteiler-Mitgliedschaften) schreibt in **derselben Transaktion** `audit_log` über die Helfer in `src/db/audit.ts`; Diff und Feld-Labels (anzeigefertig beim Schreiben) in `src/lib/audit.ts`. Stammdaten und Regel-Mitgliedschaften werden nicht protokolliert; der Verlauf einer gelöschten Person kaskadiert mit ihr
 
 ## Design (UI)
 
