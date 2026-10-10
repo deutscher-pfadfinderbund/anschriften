@@ -10,6 +10,7 @@ import {
   formatFullName,
   formatName,
   formatNameWithScout,
+  isVacant,
   phoneLabelOptions,
   scoutAddition,
   tenureRange,
@@ -54,6 +55,14 @@ describe("fold", () => {
   });
 });
 
+describe("isVacant", () => {
+  it("is true only without any name part", () => {
+    expect(isVacant({ lastName: " ", firstName: null })).toBe(true);
+    expect(isVacant({ scoutName: "Falke" })).toBe(false);
+    expect(isVacant({ lastName: "Specht" })).toBe(false);
+  });
+});
+
 describe("formatName", () => {
   it("joins last and first name as 'Nachname, Vorname'", () => {
     expect(formatName({ lastName: "Specht", firstName: "Holger" })).toBe("Specht, Holger");
@@ -73,10 +82,10 @@ describe("formatName", () => {
     expect(formatName({ lastName: "  ", firstName: "  ", scoutName: " Falke " })).toBe("Falke");
   });
 
-  it("returns the em dash when nothing is set", () => {
-    expect(formatName({})).toBe("—");
-    expect(formatName({ lastName: null, firstName: null, scoutName: null })).toBe("—");
-    expect(formatName({ lastName: "", firstName: "", scoutName: "  " })).toBe("—");
+  it("calls a nameless placeholder „vakant“", () => {
+    expect(formatName({})).toBe("vakant");
+    expect(formatName({ lastName: null, firstName: null, scoutName: null })).toBe("vakant");
+    expect(formatName({ lastName: "", firstName: "", scoutName: "  " })).toBe("vakant");
   });
 });
 
@@ -110,7 +119,7 @@ describe("scoutAddition / formatNameWithScout", () => {
   it("is the plain name without a scout name", () => {
     expect(scoutAddition({ lastName: "Specht", scoutName: "  " })).toBeNull();
     expect(formatNameWithScout({ lastName: "Specht", firstName: "Holger" })).toBe("Specht, Holger");
-    expect(formatNameWithScout({})).toBe("—");
+    expect(formatNameWithScout({})).toBe("vakant");
   });
 });
 

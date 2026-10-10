@@ -25,14 +25,19 @@ export function fold(s: string): string {
 /** The name fields of a person, as every name helper here (and the sort order) reads them. */
 export type PersonName = { firstName?: string | null; lastName?: string | null; scoutName?: string | null };
 
-/** "Nachname, Vorname" — the list form; falls back to either part alone, then the Fahrtenname. */
+/** "Nachname, Vorname" — the list form; falls back to either part alone, the Fahrtenname, then „vakant“. */
 export function formatName(p: PersonName): string {
   const last = p.lastName?.trim() ?? "";
   const first = p.firstName?.trim() ?? "";
   if (last && first) return `${last}, ${first}`;
   if (last) return last;
   if (first) return first;
-  return p.scoutName?.trim() || "—";
+  return p.scoutName?.trim() || "vakant";
+}
+
+/** No name at all: the Access import kept vacant offices as nameless placeholder persons. */
+export function isVacant(p: PersonName): boolean {
+  return !p.lastName?.trim() && !p.firstName?.trim() && !p.scoutName?.trim();
 }
 
 /** The Fahrtenname when it adds to a Vor- or Nachname; null when absent or already the name itself. */
