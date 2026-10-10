@@ -114,6 +114,21 @@ describe("profile filtering", () => {
   });
 });
 
+describe("vacant placeholder", () => {
+  it("prints „vakant“ for a nameless person and keeps it out of the register", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [person({ id: 1 })],
+      assignments: [{ id: 1, personId: 1, groupId: 1, officeId: 1, endDate: null }],
+    };
+    const data = buildProfileData(raw, "komplett", ALL_OPTIONS);
+    expect(allEntries(data.sections).map((e) => e.name)).toEqual(["vakant"]);
+    expect(data.register).toHaveLength(0);
+  });
+});
+
 describe("office history — only active tenures are printed (issue #22)", () => {
   it("omits an ended tenure from the group tree and the register", () => {
     const raw: RawData = {

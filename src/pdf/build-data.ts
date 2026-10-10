@@ -16,7 +16,7 @@
  */
 import { db } from "@/db";
 import { assignments, groups, offices, persons, ranks } from "@/db/schema";
-import { fold, formatDate, nullIfEmpty, todayIso } from "@/lib/format";
+import { fold, formatDate, isVacant, nullIfEmpty, todayIso } from "@/lib/format";
 import { byName, collateDe, compareFields } from "@/lib/name-order";
 import { RANK_UNRANKED } from "@/lib/rank";
 import { SECTIONS, type Section } from "@/lib/sections";
@@ -179,6 +179,8 @@ function isLeaderOffice(name: string): boolean {
 }
 
 function personDisplayName(p: DataPerson): string {
+  // A nameless placeholder stands for an unfilled office — say so instead of a blank.
+  if (isVacant(p)) return "vakant";
   return joinNonEmpty([p.title, p.firstName, p.lastName]);
 }
 
@@ -406,7 +408,8 @@ function buildRegister(
 
   for (const pid of anchored) {
     const p = personById.get(pid);
-    if (!p) continue;
+    // A vacant placeholder has no name to look up.
+    if (!p || isVacant(p)) continue;
 
     const scout = nullIfEmpty(p.scoutName);
     const first = (p.firstName ?? "").trim();
