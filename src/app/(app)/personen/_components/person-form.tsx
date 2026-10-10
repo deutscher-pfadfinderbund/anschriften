@@ -268,8 +268,8 @@ export function PersonForm({
           title="Person löschen?"
           description={
             <>
-              {formatFullName(person)} wird mit allen Ämtern endgültig aus dem Verzeichnis entfernt. Das
-              lässt sich nicht rückgängig machen.
+              {formatFullName(person)} wird mit allen Ämtern und dem Änderungsverlauf endgültig aus dem
+              Verzeichnis entfernt. Das lässt sich nicht rückgängig machen.
             </>
           }
           confirmLabel="Endgültig löschen"

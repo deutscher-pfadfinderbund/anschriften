@@ -33,7 +33,6 @@ export function ChangeLogPanel({ entries, className }: { entries: AuditEntry[]; 
           <span className="font-sans text-ui font-normal text-ink-faint tabular-nums">({entries.length})</span>
         </button>
       }
-      description={open ? "Wer wann was an dieser Person geändert hat, die neueste Änderung zuerst." : undefined}
     >
       {open ? (
         entries.length === 0 ? (
