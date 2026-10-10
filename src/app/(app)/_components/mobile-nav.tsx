@@ -14,11 +14,10 @@ import { SidebarContent, Wordmark } from "./sidebar";
 
 /**
  * Top bar for viewports below `lg`, where the desktop rail is hidden. The
- * hamburger opens the same navigation as a left-anchored, full-height drawer —
- * built from the shared Dialog primitive with call-site class overrides rather
- * than a second primitive. Escape and a tap on the overlay close it; tapping a
- * nav link closes it too, so the target page is not left covered. Its height is
- * --top-bar (globals.css), which toasts and sticky elements keep clear of.
+ * hamburger opens the same navigation as the dialog's left drawer. Escape and a
+ * tap on the overlay close it; tapping a nav link closes it too, so the target
+ * page is not left covered. Its height is --top-bar (globals.css), which toasts
+ * and sticky elements keep clear of.
  */
 export function MobileNav({ userName }: { userName: string }) {
   const [open, setOpen] = useState(false);
@@ -36,10 +35,8 @@ export function MobileNav({ userName }: { userName: string }) {
             <Menu className="size-5" />
           </button>
         </DialogTrigger>
-        {/* Left-anchored, full-height variant of the shared dialog. The nav rows
-            size themselves (see NavItem in sidebar.tsx) — nothing here reaches
-            into the shared SidebarContent. */}
         <DialogContent
+          side="left"
           aria-describedby={undefined}
           // Radix would focus the first non-link control — "Abmelden". Start on
           // the current page's entry instead, so Enter cannot log out by accident.
@@ -51,10 +48,6 @@ export function MobileNav({ userName }: { userName: string }) {
               drawer.querySelector<HTMLElement>("nav a")
             )?.focus();
           }}
-          // max-h-none/overflow-hidden opt out of DialogContent's viewport cap:
-          // the drawer is meant to be exactly full height and scrolls inside its
-          // own <nav>, so the shared max-h would leave a 2rem gap at the bottom.
-          className="top-0 left-0 flex h-dvh max-h-none w-72 max-w-[85vw] translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-r border-line bg-surface-2 p-0 ring-0 data-open:zoom-in-100 data-open:slide-in-from-left data-closed:zoom-out-100 data-closed:slide-out-to-left"
         >
           {/* The drawer repeats the wordmark, so a visible title would be noise. */}
           <DialogTitle className="sr-only">Navigation</DialogTitle>

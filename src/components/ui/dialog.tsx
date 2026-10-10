@@ -68,12 +68,18 @@ function focusOpener(opener: Element | null): boolean {
   return document.activeElement === opener
 }
 
-function DialogPanel({
-  className,
-  children,
-  onCloseAutoFocus,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+const SIDES = {
+  // Sized against the viewport (dvw/dvh), never `100%`, which follows a page that scrolls
+  // sideways; max-h keeps a tall dialog's buttons reachable on a phone.
+  center:
+    "top-1/2 left-1/2 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100dvw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 ring-1 ring-line-strong sm:max-w-sm data-open:zoom-in-95 data-closed:zoom-out-95",
+  // A full-height drawer (the mobile navigation); its content scrolls itself.
+  left: "top-0 left-0 flex h-dvh w-72 max-w-[85vw] flex-col overflow-hidden border-r border-line bg-surface-2 data-open:slide-in-from-left data-closed:slide-out-to-left",
+}
+
+type PanelProps = React.ComponentProps<typeof DialogPrimitive.Content> & { side?: keyof typeof SIDES }
+
+function DialogPanel({ className, children, onCloseAutoFocus, side = "center", ...props }: PanelProps) {
   // Mounted fresh on every open (the portal's Presence unmounts it when
   // closed), and captured during render — before an `autoFocus` field inside
   // the dialog has moved focus away from the opener.
@@ -105,12 +111,8 @@ function DialogPanel({
         })
       }}
       className={cn(
-        // Sized against the viewport (dvw/dvh), not `100%`: a fixed element's
-        // percentage resolves against the initial containing block, which the
-        // browser widens to the document's overflow width — so on a page that
-        // scrolls sideways the dialog grew with it and got clipped on both
-        // edges. max-h keeps a tall dialog's buttons reachable on a phone.
-        "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100dvw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-body text-popover-foreground shadow-lg ring-1 ring-line-strong duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+        "fixed z-50 text-body text-popover-foreground shadow-lg duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        SIDES[side],
         className
       )}
       {...props}
@@ -135,7 +137,7 @@ function DialogPanel({
 }
 
 /** Overlay plus panel. DialogPanel is its own component so it mounts fresh per opening. */
-function DialogContent(props: React.ComponentProps<typeof DialogPrimitive.Content>) {
+function DialogContent(props: PanelProps) {
   return (
     <DialogPortal>
       <DialogOverlay />
