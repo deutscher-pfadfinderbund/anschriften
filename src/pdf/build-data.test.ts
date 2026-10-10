@@ -114,6 +114,33 @@ describe("profile filtering", () => {
   });
 });
 
+describe("section heads", () => {
+  it("repeats the Bundesjungenvogt from the Bundesführung atop the Jungenbund section", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: [...OFFICES, { id: 8, name: "Bundesjungenvogt", rank: 10 }],
+      groups: GROUPS,
+      persons: [
+        person({ id: 1, firstName: "Holger", lastName: "Specht" }),
+        person({ id: 2, firstName: "Jan", lastName: "Gauer" }),
+      ],
+      assignments: [
+        { id: 1, personId: 1, groupId: 1, officeId: 8, endDate: null }, // Bundesführung
+        { id: 2, personId: 2, groupId: 2, officeId: 4, endDate: null }, // Gau Franken
+      ],
+    };
+    const data = buildProfileData(raw, "komplett", ALL_OPTIONS);
+    expect(findNode(data.sections, "Bundesführung")!.entries.map((e) => e.name)).toEqual(["Holger Specht"]);
+    const gau = findNode(data.sections, "Gau Franken")!;
+    expect(gau.entries.map((e) => [e.office, e.name])).toEqual([
+      ["Bundesjungenvogt", "Holger Specht"],
+      ["Gauvogt", "Jan Gauer"],
+    ]);
+    // Anchored once, in the Bundesführung: one register line.
+    expect(data.register).toHaveLength(2);
+  });
+});
+
 describe("vacant placeholder", () => {
   it("prints „vakant“ for a nameless person and keeps it out of the register", () => {
     const raw: RawData = {

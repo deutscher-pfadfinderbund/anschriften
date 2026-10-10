@@ -172,6 +172,18 @@ function joinNonEmpty(parts: (string | null | undefined)[], sep = " "): string {
   return parts.map((p) => (p ?? "").trim()).filter((p) => p.length > 0).join(sep);
 }
 
+/**
+ * Bund-level offices that also head a section: the Bundesjungenvogt sits in the Bundesführung
+ * but opens the Jungenbund too, and so on. Matched by exact office name — renaming one of these
+ * offices in the Stammdaten needs this list updated.
+ */
+const SECTION_HEAD_OFFICES: Partial<Record<Section, string[]>> = {
+  jungenbund: ["Bundesjungenvogt"],
+  maedchenbund: ["Bundesmädchenvögtin"],
+  orden_st_georg: ["Hochmeister des Ordens St. Georg", "Hochmeister"],
+  orden_st_christophorus: ["Ordensmeisterin des Ordens St. Christophorus", "Ordensmeisterin"],
+};
+
 /** Leadership offices whose label is implied by the (sub)group heading and thus suppressed. */
 function isLeaderOffice(name: string): boolean {
   const s = name.toLowerCase();
@@ -329,9 +341,35 @@ export function buildProfileData(
   const topGroups = (childrenByParent.get(null) ?? [])
     .filter((g) => includedSections.has(g.section))
     .sort(groupSort);
+  // The section's head office(s), held anywhere (usually the Bundesführung), one entry per person.
+  const sectionHeads = (section: Section): Entry[] => {
+    const heads: Entry[] = [];
+    const seen = new Set<number>();
+    for (const name of SECTION_HEAD_OFFICES[section] ?? []) {
+      for (const a of activeAssignments) {
+        if (a.officeId == null || officeById.get(a.officeId)?.name !== name || seen.has(a.personId)) continue;
+        const p = personById.get(a.personId);
+        if (!p || p.doNotPrint || p.deathDate) continue;
+        seen.add(p.id);
+        heads.push(makeEntry(p, [name], 0));
+      }
+    }
+    return heads;
+  };
+
   const sections: GroupNode[] = [];
+  const headed = new Set<Section>();
   for (const g of topGroups) {
-    const node = buildNode(g, 0);
+    let node = buildNode(g, 0);
+    // The first top-level group of a section opens it with the section's head office.
+    if (!headed.has(g.section)) {
+      headed.add(g.section);
+      const heads = sectionHeads(g.section);
+      if (heads.length > 0) {
+        node ??= { name: g.name, level: 1, entries: [], children: [] };
+        node.entries = [...heads, ...node.entries];
+      }
+    }
     if (node) sections.push(node);
   }
 
