@@ -6,7 +6,7 @@ import { requirePageSession } from "@/lib/auth-helpers";
 
 import { ProtokollList } from "./protokoll-list";
 
-export const metadata: Metadata = { title: "Protokoll" };
+export const metadata: Metadata = { title: "Änderungsprotokoll" };
 
 /** How many of the latest changes the page loads (and filters on the client). */
 const LIMIT = 300;
@@ -19,7 +19,7 @@ export default async function ProtokollPage() {
   return (
     <>
       <PageHeader
-        title="Protokoll"
+        title="Änderungsprotokoll"
         subtitle="Wer wann was geändert hat – an Personen, ihren Ämtern und Verteilern."
       />
       <PageBody>

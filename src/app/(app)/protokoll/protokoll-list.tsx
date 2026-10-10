@@ -2,18 +2,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { History, Search, SearchX, X } from "lucide-react";
+import { History, SearchX, X } from "lucide-react";
 
 import { AuditChanges } from "@/components/audit-changes";
 import { EmptyState } from "@/components/empty-state";
+import { focusSoon } from "@/components/field";
+import { SearchField } from "@/components/search-field";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import type { AuditLogRow } from "@/db/queries";
-import { auditFieldLabel } from "@/lib/audit";
+import { CREATED_LABEL, auditFieldLabel } from "@/lib/audit";
 import { formatDateTime, plural } from "@/lib/format";
 import { matchesQuery } from "@/lib/utils";
 
 const DELETED = "Eine Person wurde gelöscht";
+const SEARCH_ID = "protokoll-suche";
 
 /** Everything the search looks at: person, who, when and every changed field and value. */
 function searchText(e: AuditLogRow): string {
@@ -21,7 +23,7 @@ function searchText(e: AuditLogRow): string {
     e.person ? `${e.person.name} ${e.person.scout ?? ""}` : DELETED,
     e.actor,
     formatDateTime(e.at),
-    e.action === "created" ? "Person angelegt" : "",
+    e.action === "created" ? CREATED_LABEL : "",
     ...e.changes.flatMap((c) => [auditFieldLabel(c.field), c.from ?? "", c.to ?? ""]),
   ].join(" ");
 }
@@ -29,7 +31,7 @@ function searchText(e: AuditLogRow): string {
 /** One entry: when and who, the person (a link) and what changed. */
 function EntryRow({ entry }: { entry: AuditLogRow }) {
   return (
-    <li className="grid items-baseline gap-x-6 gap-y-1 px-4 py-3 sm:px-gutter md:grid-cols-[9.5rem_minmax(0,14rem)_minmax(0,1fr)]">
+    <li className="grid grid-cols-1 items-baseline gap-x-6 gap-y-1 px-4 py-3 sm:px-gutter md:grid-cols-[9.5rem_minmax(0,14rem)_minmax(0,1fr)]">
       <p className="text-caption text-ink-faint tabular-nums">
         {formatDateTime(entry.at)}
         <span className="md:block">
@@ -59,49 +61,63 @@ function EntryRow({ entry }: { entry: AuditLogRow }) {
 /** The latest changes, newest first, with a search over person, who and what. */
 export function ProtokollList({ entries, limit }: { entries: AuditLogRow[]; limit: number }) {
   const [query, setQuery] = useState("");
+  if (entries.length === 0)
+    return (
+      <div className="rounded-lg border border-line bg-surface">
+        <EmptyState
+          icon={History}
+          title="Noch keine Änderungen protokolliert."
+          description="Sobald jemand eine Person anlegt, ändert oder löscht, steht es hier."
+        />
+      </div>
+    );
+
   const q = query.trim();
   const shown = q ? entries.filter((e) => matchesQuery(searchText(e), q)) : entries;
-  const total =
-    entries.length >= limit
+  // Only the latest `limit` entries are loaded, so the search covers only those.
+  const capped = entries.length >= limit;
+  const status = q
+    ? `${shown.length} von ${capped ? `den letzten ${limit}` : entries.length} angezeigt`
+    : capped
       ? `Die letzten ${limit} Änderungen`
       : `${entries.length} ${plural(entries.length, "Änderung", "Änderungen")}`;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="relative w-full sm:w-72">
-          <Search
-            aria-hidden
-            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-faint"
-          />
-          <Input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Name, Feld oder Wert …"
-            aria-label="Protokoll durchsuchen"
-            className="pl-8"
-          />
-        </div>
+        <SearchField
+          id={SEARCH_ID}
+          label="Änderungsprotokoll durchsuchen"
+          placeholder="Name, Feld oder Wert …"
+          value={query}
+          onChange={setQuery}
+          className="sm:w-72"
+        />
         <p role="status" className="text-caption text-ink-soft tabular-nums sm:ml-auto">
-          {q ? `${shown.length} von ${entries.length} angezeigt` : total}
+          {status}
         </p>
       </div>
 
       <div className="overflow-clip rounded-lg border border-line bg-surface">
-        {entries.length === 0 ? (
-          <EmptyState
-            icon={History}
-            title="Noch keine Änderungen protokolliert."
-            description="Sobald jemand eine Person anlegt, ändert oder löscht, steht es hier."
-          />
-        ) : shown.length === 0 ? (
+        {shown.length === 0 ? (
           <EmptyState
             icon={SearchX}
             title="Keine Änderung gefunden."
-            description={`Nichts passt zu „${q}“.`}
+            description={
+              capped
+                ? `Nichts passt zu „${q}“ in den letzten ${limit} Änderungen. Ältere Änderungen stehen im Änderungsverlauf der Person.`
+                : `Nichts passt zu „${q}“.`
+            }
             action={
-              <Button variant="outline" onClick={() => setQuery("")}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setQuery("");
+                  // The button unmounts: keyboard users continue in the search field (a
+                  // tap must not open the phone keyboard).
+                  if (document.activeElement?.matches(":focus-visible")) focusSoon(SEARCH_ID);
+                }}
+              >
                 <X />
                 Suche leeren
               </Button>

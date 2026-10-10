@@ -21,12 +21,12 @@ bun run dev
 Änderungen an Personen werden in `audit_log` festgehalten: wer, wann, welches Feld von
 welchem zu welchem Wert — die eigenen Felder, die Ämter (aktiv und früher) und die von
 Hand gepflegten Verteiler. Zu sehen im „Änderungsverlauf" unten im Personen-Editor und
-auf der Seite „Protokoll" (die letzten 300 Änderungen). Nicht protokolliert werden
+auf der Seite „Änderungsprotokoll" (die letzten 300 Änderungen). Nicht protokolliert werden
 Stammdaten (Ämter, Stände, Gliederungen, Verteiler und ihre Regeln), Mitgliedschaften
 über Regeln und der Access-Import. Wird eine Person endgültig gelöscht, verschwindet ihr
 Verlauf mit ihr (Datenschutz); übrig bleibt nur „Eine Person wurde gelöscht" mit wer und
 wann. In den Backups (siehe unten) steht der alte Stand bis zum Ablauf der Retention.
-Eine automatische Löschfrist für das Protokoll gibt es nicht.
+Eine automatische Löschfrist für das Änderungsprotokoll gibt es nicht.
 
 ## Mail-Modul (optional)
 

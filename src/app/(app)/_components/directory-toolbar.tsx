@@ -1,9 +1,6 @@
 "use client";
 
-import { useRef } from "react";
-import { Search, X } from "lucide-react";
-
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/search-field";
 import {
   Select,
   SelectContent,
@@ -89,60 +86,6 @@ function GroupItems({ groups }: { groups: GroupRow[] }) {
   ));
 }
 
-/** Search field with a quiet clear button (Escape clears too). */
-function SearchField({
-  value,
-  onChange,
-  onBlur,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onBlur: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  return (
-    // Below xl the search takes its own row and the three filters share the next one.
-    <div className="relative w-full xl:w-72">
-      <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-faint" />
-      <Input
-        ref={inputRef}
-        id={SEARCH_ID}
-        type="search"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" && value) {
-            e.preventDefault();
-            onChange("");
-          }
-        }}
-        placeholder="Name, Amt, Ort, E-Mail, Telefon …"
-        aria-label="Personen durchsuchen"
-        // The native cancel glyph is replaced by the button below (Firefox has none).
-        className="pr-8 pl-8 [&::-webkit-search-cancel-button]:hidden"
-      />
-      {value ? (
-        <button
-          type="button"
-          onClick={() => {
-            onChange("");
-            // The button unmounts; clearing is usually followed by a new search.
-            inputRef.current?.focus();
-          }}
-          aria-label="Suche leeren"
-          title="Suche leeren"
-          // Already positioned, so the ::after tap band needs no TOUCH_HIT (whose
-          // `relative` would pull the button out of the field).
-          className="absolute top-1/2 right-1.5 grid size-5 -translate-y-1/2 place-items-center rounded-sm text-ink-faint transition-colors after:absolute after:-inset-2 hover:text-ink"
-        >
-          <X aria-hidden className="size-3.5" />
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
 export function DirectoryToolbar({
   query,
   onQueryChange,
@@ -168,7 +111,16 @@ export function DirectoryToolbar({
 }) {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-      <SearchField value={query} onChange={onQueryChange} onBlur={onQueryCommit} />
+      {/* Below xl the search takes its own row and the three filters share the next one. */}
+      <SearchField
+        id={SEARCH_ID}
+        label="Personen durchsuchen"
+        placeholder="Name, Amt, Ort, E-Mail, Telefon …"
+        value={query}
+        onChange={onQueryChange}
+        onBlur={onQueryCommit}
+        className="xl:w-72"
+      />
       <FilterSelect
         label="Nach Gliederung filtern"
         allLabel="Alle Gliederungen"

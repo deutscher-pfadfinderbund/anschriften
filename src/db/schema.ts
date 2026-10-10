@@ -262,9 +262,9 @@ export const mailLog = pgTable("mail_log", {
 
 /**
  * Change log: who changed what on a person, and when ("Änderungsverlauf" in the editor,
- * the "Protokoll" page). Scope: a person's own fields, its tenures (active and history)
- * and its MANUAL Verteiler memberships — master data and rule-based memberships are not
- * logged. The person mutations write it in the same transaction as the change
+ * the "Änderungsprotokoll" page). Scope: a person's own fields, its tenures (active and
+ * history) and its MANUAL Verteiler memberships — master data and rule-based memberships
+ * are not logged. The person mutations write it in the same transaction as the change
  * (src/db/audit.ts). `changes` holds display-ready German values (src/lib/audit.ts), so
  * an entry stays true when an Amt is renamed later. Privacy: the entries cascade with the
  * person; deleting one leaves a single anonymous 'deleted' entry (person_id NULL).

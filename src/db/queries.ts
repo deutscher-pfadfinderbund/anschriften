@@ -357,7 +357,7 @@ export async function listActiveOfficeHolders(): Promise<ActiveOfficeHolder[]> {
   }));
 }
 
-// --- change log (Änderungsverlauf, Protokoll) -----------------------------------------
+// --- change log (Änderungsverlauf, Änderungsprotokoll) -------------------------------
 
 /** One change-log entry: who changed what, and when (`at`, ISO). */
 export type AuditEntry = {
@@ -368,7 +368,7 @@ export type AuditEntry = {
   changes: AuditChange[];
 };
 
-/** A change-log entry for the Protokoll: with the person it is about (null: a deletion). */
+/** A change-log entry for the Änderungsprotokoll: with the person it is about (null: a deletion). */
 export type AuditLogRow = AuditEntry & {
   person: { id: number; name: string; scout: string | null } | null;
 };
@@ -391,7 +391,7 @@ export async function personAudit(personId: number): Promise<AuditEntry[]> {
   return rows.map((r) => ({ ...r, at: r.at.toISOString() }));
 }
 
-/** The latest `limit` changes across all persons, newest first (the Protokoll page). */
+/** The latest `limit` changes across all persons, newest first (the Änderungsprotokoll page). */
 export async function recentAudit(limit: number): Promise<AuditLogRow[]> {
   const rows = await db
     .select({

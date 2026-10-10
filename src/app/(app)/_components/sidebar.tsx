@@ -22,7 +22,7 @@ const MAIN_NAV: NavEntry[] = [
   { href: "/", label: "Verzeichnis", icon: BookOpen },
   { href: "/verteiler", label: "Verteiler", icon: Mails },
   { href: "/export", label: "PDF-Export", icon: FileDown },
-  { href: "/protokoll", label: "Protokoll", icon: History },
+  { href: "/protokoll", label: "Änderungsprotokoll", icon: History },
 ];
 
 const MASTER_NAV: NavEntry[] = [
