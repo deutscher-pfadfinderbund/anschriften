@@ -3,6 +3,7 @@
 import { and, eq, isNull, ne } from "drizzle-orm";
 
 import { db } from "@/db";
+import { audited, logDeletion, logPersonChange, personSnapshot } from "@/db/audit";
 import { assignments, distributionListMembers, persons } from "@/db/schema";
 import {
   dbFailure,
@@ -14,6 +15,7 @@ import {
   UserFacingError,
   type ActionResult,
 } from "@/lib/action-helpers";
+import type { AuditSnapshot } from "@/lib/audit";
 import { todayIso } from "@/lib/format";
 import { parsePersonInput, resolveTenureEnd, type FieldErrors, type PersonInput } from "@/lib/person-schema";
 
@@ -38,7 +40,8 @@ const FK_MESSAGES: Record<string, string> = {
  * Create or update a person plus its active tenures and manual list memberships in one
  * transaction. Concurrency: the form sends the `updatedAt` it was loaded with; the row is
  * locked (SELECT … FOR UPDATE) and the save refused if someone saved it in between, so
- * two editors never silently merge or overwrite each other's changes.
+ * two editors never silently merge or overwrite each other's changes. The change log gets
+ * the difference to the stored state (and an entry per former holder whose tenure ended).
  */
 export async function savePerson(raw: PersonInput): Promise<SaveResult> {
   return mutation(async (by) => {
@@ -56,8 +59,10 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
     try {
       const savedId = await db.transaction(async (tx) => {
         let personId: number;
+        let before: AuditSnapshot | null = null; // null: a new person
         if (id != null) {
           await lockPerson(tx, id, updatedAt);
+          before = await personSnapshot(tx, id);
           await tx.update(persons).set(fields).where(eq(persons.id, id));
           personId = id;
         } else {
@@ -85,16 +90,19 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
             today,
           });
           if (!resolved.ok) throw new UserFacingError(resolved.message);
-          const ended = await tx
-            .update(assignments)
-            .set({ endDate: resolved.endDate, endUnknown: resolved.endUnknown, updatedAt: new Date() })
-            .where(
-              and(eq(assignments.id, ep.assignmentId), isNull(assignments.endDate), ne(assignments.personId, personId)),
-            )
-            .returning({ id: assignments.id });
-          if (ended.length === 0) throw new StaleError(TENURE_CHANGED);
-          // Attribute the change on the former holder too, so their audit line reflects it.
-          await tx.update(persons).set(stamp(by)).where(eq(persons.id, target.personId));
+          // Logged on the former holder: their tenure ended.
+          await audited(tx, target.personId, by, async () => {
+            const ended = await tx
+              .update(assignments)
+              .set({ endDate: resolved.endDate, endUnknown: resolved.endUnknown, updatedAt: new Date() })
+              .where(
+                and(eq(assignments.id, ep.assignmentId), isNull(assignments.endDate), ne(assignments.personId, personId)),
+              )
+              .returning({ id: assignments.id });
+            if (ended.length === 0) throw new StaleError(TENURE_CHANGED);
+            // Attribute the change on the former holder too, so their "zuletzt geändert" reflects it.
+            await tx.update(persons).set(stamp(by)).where(eq(persons.id, target.personId));
+          });
         }
 
         // Delete + recreate only the ACTIVE tenures. Ended tenures (end_date set) are the
@@ -120,6 +128,7 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
         await tx.delete(distributionListMembers).where(eq(distributionListMembers.personId, personId));
         if (distributionListIds.length > 0)
           await tx.insert(distributionListMembers).values(distributionListIds.map((listId) => ({ listId, personId })));
+        await logPersonChange(tx, personId, by, before);
         return personId;
       });
       return { ok: true, id: savedId };
@@ -143,9 +152,12 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
 }
 
 export async function deletePerson(id: number): Promise<ActionResult> {
-  return mutation(async () => {
-    // Assignments and memberships cascade with the person.
-    await db.delete(persons).where(eq(persons.id, id));
+  return mutation(async (by) => {
+    await db.transaction(async (tx) => {
+      // Assignments, memberships and the person's change log cascade with the person.
+      const deleted = await tx.delete(persons).where(eq(persons.id, id)).returning({ id: persons.id });
+      if (deleted.length > 0) await logDeletion(tx, by);
+    });
     return { ok: true };
   });
 }

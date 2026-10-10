@@ -12,6 +12,7 @@ import {
   formatNameWithScout,
   phoneLabelOptions,
   scoutAddition,
+  tenureRange,
   todayIso,
 } from "./format";
 
@@ -165,6 +166,22 @@ describe("formatDate", () => {
   it("returns non-ISO input unchanged", () => {
     expect(formatDate("not-a-date")).toBe("not-a-date");
     expect(formatDate("24.06.2019")).toBe("24.06.2019");
+  });
+});
+
+describe("tenureRange", () => {
+  const t = (startDate: string | null, endDate: string | null, endUnknown = false) => ({ startDate, endDate, endUnknown });
+
+  it("words an active tenure as „seit …“, or nothing without a start", () => {
+    expect(tenureRange(t("2020-01-01", null))).toBe("seit 01.01.2020");
+    expect(tenureRange(t(null, null))).toBe("");
+  });
+
+  it("words an ended tenure as a range, „bis …“ or „Ende unbekannt“", () => {
+    expect(tenureRange(t("2015-01-01", "2019-12-31"))).toBe("01.01.2015 – 31.12.2019");
+    expect(tenureRange(t(null, "2019-12-31"))).toBe("bis 31.12.2019");
+    expect(tenureRange(t("2015-01-01", "2026-10-10", true))).toBe("01.01.2015 – Ende unbekannt");
+    expect(tenureRange(t(null, "2026-10-10", true))).toBe("Ende unbekannt");
   });
 });
 

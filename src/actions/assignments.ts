@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db, type Tx } from "@/db";
+import { audited } from "@/db/audit";
 import { assignments, persons } from "@/db/schema";
 import {
   dbFailure,
@@ -21,6 +22,7 @@ import { isValidDate, resolveTenureEnd, rowId } from "@/lib/person-schema";
 // editor) — are owned by `savePerson` (buffered in the form, written on Speichern).
 // These actions only manage rows that are ALREADY history: creating, editing and removing
 // past tenures as immediate, standalone writes, so a normal person save never touches them.
+// Each one is logged on the person (src/db/audit.ts).
 
 type HistoryResult =
   | {
@@ -32,14 +34,22 @@ type HistoryResult =
 
 /**
  * Lock the person, refuse when it changed since the editor loaded it (the same token
- * `savePerson` checks) and bump its audit fields. Returns the new token: the editor keeps
- * it, so a history action never makes another editor's save look like the current state.
+ * `savePerson` checks), run `work`, log what it changed and bump the person's
+ * `updated_at`/`updated_by`. Returns the new token: the editor keeps it, so a history
+ * action never makes another editor's save look like the current state.
  */
-async function bumpPerson(tx: Tx, personId: number, expected: string, by: string): Promise<string> {
+async function changePerson(
+  tx: Tx,
+  personId: number,
+  expected: string,
+  by: string,
+  work: () => Promise<unknown>,
+): Promise<string> {
   await lockPerson(tx, personId, expected);
-  const audit = stamp(by);
-  await tx.update(persons).set(audit).where(eq(persons.id, personId));
-  return audit.updatedAt.toISOString();
+  await audited(tx, personId, by, work);
+  const stamped = stamp(by);
+  await tx.update(persons).set(stamped).where(eq(persons.id, personId));
+  return stamped.updatedAt.toISOString();
 }
 
 /** The history row to edit or delete; refuses an active one (that belongs to the person form). */
@@ -103,18 +113,20 @@ export async function addHistoricalAssignment(raw: z.input<typeof addHistoricalS
     const resolved = resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
     if (!resolved.ok) return { ok: false, message: resolved.message };
 
-    return inHistoryTx(async (tx) => {
-      const next = await bumpPerson(tx, personId, updatedAt, by);
-      await tx.insert(assignments).values({
-        personId,
-        groupId,
-        officeId: officeId ?? null,
-        startDate,
-        endDate: resolved.endDate,
-        endUnknown: resolved.endUnknown,
-      });
-      return next;
-    }, MISSING_REFERENCE);
+    return inHistoryTx(
+      (tx) =>
+        changePerson(tx, personId, updatedAt, by, () =>
+          tx.insert(assignments).values({
+            personId,
+            groupId,
+            officeId: officeId ?? null,
+            startDate,
+            endDate: resolved.endDate,
+            endUnknown: resolved.endUnknown,
+          }),
+        ),
+      MISSING_REFERENCE,
+    );
   });
 }
 
@@ -141,19 +153,19 @@ export async function updateHistoricalAssignment(
         ? { ok: true as const, endDate: row.endDate, endUnknown: true }
         : resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
       if (!resolved.ok) throw new UserFacingError(resolved.message);
-      const next = await bumpPerson(tx, row.personId, updatedAt, by);
-      await tx
-        .update(assignments)
-        .set({
-          groupId,
-          officeId: officeId ?? null,
-          startDate,
-          endDate: resolved.endDate,
-          endUnknown: resolved.endUnknown,
-          updatedAt: new Date(),
-        })
-        .where(eq(assignments.id, assignmentId));
-      return next;
+      return changePerson(tx, row.personId, updatedAt, by, () =>
+        tx
+          .update(assignments)
+          .set({
+            groupId,
+            officeId: officeId ?? null,
+            startDate,
+            endDate: resolved.endDate,
+            endUnknown: resolved.endUnknown,
+            updatedAt: new Date(),
+          })
+          .where(eq(assignments.id, assignmentId)),
+      );
     }, MISSING_REFERENCE);
   });
 }
@@ -175,9 +187,9 @@ export async function deleteAssignment(raw: z.input<typeof deleteSchema>): Promi
 
     return inHistoryTx(async (tx) => {
       const row = await historyRow(tx, assignmentId, "Aktive Ämter werden über das Formular entfernt oder beendet.");
-      const next = await bumpPerson(tx, row.personId, updatedAt, by);
-      await tx.delete(assignments).where(eq(assignments.id, assignmentId));
-      return next;
+      return changePerson(tx, row.personId, updatedAt, by, () =>
+        tx.delete(assignments).where(eq(assignments.id, assignmentId)),
+      );
     }, deletedMeanwhile("Diese Person"));
   });
 }

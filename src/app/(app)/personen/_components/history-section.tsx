@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import type { HistoricalAssignment } from "@/db/queries";
 import { callAction } from "@/lib/call-action";
-import { formatDate, todayIso } from "@/lib/format";
+import { tenureRange, todayIso } from "@/lib/format";
 import { TOUCH_HIT, cn } from "@/lib/utils";
 
 import { EndDateChoice } from "./end-date";
@@ -34,14 +34,6 @@ import { GROUP_PICKER, NONE, OFFICE_PICKER, isEndChoiceReady, type EndChoice } f
 // they are already history, so there is nothing to buffer until Speichern. Each action
 // checks the editor's concurrency token and hands back the new one, and revalidates the
 // page, so the list follows at once.
-
-/** "01.01.2015 – 31.12.2019", "01.01.2015 – Ende unbekannt", "bis 31.12.2019", "Ende unbekannt". */
-function historyRange(h: HistoricalAssignment): string {
-  const from = formatDate(h.startDate);
-  const to = h.endUnknown ? "Ende unbekannt" : formatDate(h.endDate);
-  if (from) return `${from} – ${to}`;
-  return h.endUnknown ? to : `bis ${to}`;
-}
 
 type Draft = {
   /** Tenure being edited; null for a new one. */
@@ -135,7 +127,7 @@ export function HistorySection({
                       {h.groupName}
                       <span className="block text-caption text-ink-faint tabular-nums sm:inline">
                         <span className="max-sm:hidden"> · </span>
-                        {historyRange(h)}
+                        {tenureRange(h)}
                       </span>
                     </span>
                     {/* A mouse sees the actions on hover or focus within the row; touch screens
@@ -196,7 +188,7 @@ export function HistorySection({
         description={
           removing ? (
             <>
-              „{removing.officeName ?? "Ohne Amt"} · {removing.groupName} · {historyRange(removing)}“
+              „{removing.officeName ?? "Ohne Amt"} · {removing.groupName} · {tenureRange(removing)}“
               wird endgültig aus der Historie entfernt. Das lässt sich nicht rückgängig machen.
             </>
           ) : null

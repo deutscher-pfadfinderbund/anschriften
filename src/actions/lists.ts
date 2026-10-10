@@ -3,7 +3,8 @@
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "@/db";
+import { db, type Tx } from "@/db";
+import { logMemberships } from "@/db/audit";
 import { RULE_TABLES } from "@/db/list-rules";
 import { distributionListMembers, distributionLists, persons } from "@/db/schema";
 import {
@@ -38,18 +39,20 @@ const RELOAD = "Bitte lade die Seite neu.";
  * Attribute a change to a list's contents (members or rules) on the parent list, so
  * every mutation carries who/when.
  */
-async function touchList(listId: number, by: string): Promise<void> {
-  await db.update(distributionLists).set(stamp(by)).where(eq(distributionLists.id, listId));
+async function touchList(listId: number, by: string, q: Tx | typeof db = db): Promise<void> {
+  await q.update(distributionLists).set(stamp(by)).where(eq(distributionLists.id, listId));
 }
 
 /**
- * Bump the persons whose manual memberships changed. The person editor saves memberships
- * as part of the person, so an editor opened before this change then refuses to save
- * (its concurrency token is the person's `updatedAt`) instead of silently undoing it.
+ * Record a change to manual memberships on the persons concerned: bump them and log it.
+ * The person editor saves memberships as part of the person, so an editor opened before
+ * this change then refuses to save (its concurrency token is the person's `updatedAt`)
+ * instead of silently undoing it.
  */
-async function touchPersons(ids: number[], by: string): Promise<void> {
+async function touchMembers(tx: Tx, listId: number, ids: number[], by: string, added: boolean): Promise<void> {
   if (ids.length === 0) return;
-  await db.update(persons).set(stamp(by)).where(inArray(persons.id, ids));
+  await tx.update(persons).set(stamp(by)).where(inArray(persons.id, ids));
+  await logMemberships(tx, listId, ids, by, added);
 }
 
 const listSchema = z.object({
@@ -109,31 +112,35 @@ export async function addMembers(listId: number, personIds: number[]): Promise<A
     const ids = requested.filter((id) => !deceased.has(id));
     if (ids.length === 0)
       return { ok: false, message: "Verstorbene Personen können keinem Verteiler hinzugefügt werden." };
-    let inserted: { personId: number }[];
     try {
-      inserted = await db
-        .insert(distributionListMembers)
-        .values(ids.map((personId) => ({ listId, personId })))
-        .onConflictDoNothing()
-        .returning({ personId: distributionListMembers.personId });
+      await db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(distributionListMembers)
+          .values(ids.map((personId) => ({ listId, personId })))
+          .onConflictDoNothing()
+          .returning({ personId: distributionListMembers.personId });
+        await touchList(listId, by, tx);
+        // Only who was not on the list yet is a change.
+        await touchMembers(tx, listId, inserted.map((r) => r.personId), by, true);
+      });
     } catch (err) {
       // Race: the list or a person was deleted between page load and this call.
       return dbFailure(err, { fk: `Verteiler oder Person existiert nicht mehr. ${RELOAD}` });
     }
-    await touchList(listId, by);
-    await touchPersons(inserted.map((r) => r.personId), by);
     return { ok: true, added: ids.length, skippedDeceased: deceased.size };
   });
 }
 
 export async function removeMember(listId: number, personId: number): Promise<ActionResult> {
   return mutation(async (by) => {
-    const removed = await db
-      .delete(distributionListMembers)
-      .where(and(eq(distributionListMembers.listId, listId), eq(distributionListMembers.personId, personId)))
-      .returning({ personId: distributionListMembers.personId });
-    await touchList(listId, by);
-    await touchPersons(removed.map((r) => r.personId), by);
+    await db.transaction(async (tx) => {
+      const removed = await tx
+        .delete(distributionListMembers)
+        .where(and(eq(distributionListMembers.listId, listId), eq(distributionListMembers.personId, personId)))
+        .returning({ personId: distributionListMembers.personId });
+      await touchList(listId, by, tx);
+      await touchMembers(tx, listId, removed.map((r) => r.personId), by, false);
+    });
     return { ok: true };
   });
 }

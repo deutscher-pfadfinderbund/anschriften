@@ -85,6 +85,18 @@ export function formatDate(iso?: string | null): string {
   return `${m[3]}.${m[2]}.${m[1]}`;
 }
 
+/**
+ * A tenure's dates: "seit 01.01.2020" (active; "" without a start), "01.01.2015 – 31.12.2019",
+ * "01.01.2015 – Ende unbekannt", "bis 31.12.2019" or "Ende unbekannt" (ended).
+ */
+export function tenureRange(t: { startDate: string | null; endDate: string | null; endUnknown: boolean }): string {
+  const from = formatDate(t.startDate);
+  if (t.endDate == null && !t.endUnknown) return from ? `seit ${from}` : "";
+  const to = t.endUnknown ? "Ende unbekannt" : formatDate(t.endDate);
+  if (from) return `${from} – ${to}`;
+  return t.endUnknown ? to : `bis ${to}`;
+}
+
 /** Year part of an ISO date, or null. */
 export function birthYear(iso?: string | null): number | null {
   if (!iso) return null;

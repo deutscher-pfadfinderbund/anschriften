@@ -50,6 +50,13 @@
       "when": 1783699908947,
       "tag": "0006_mushy_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791619281701,
+      "tag": "0007_purple_hulk",
+      "breakpoints": true
     }
   ]
 }
