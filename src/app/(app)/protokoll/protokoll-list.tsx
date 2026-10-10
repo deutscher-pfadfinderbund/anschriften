@@ -10,20 +10,19 @@ import { focusSoon } from "@/components/field";
 import { SearchField } from "@/components/search-field";
 import { Button } from "@/components/ui/button";
 import type { AuditLogRow } from "@/db/queries";
-import { CREATED_LABEL, auditFieldLabel } from "@/lib/audit";
+import { ACTION_LABEL, auditFieldLabel } from "@/lib/audit";
 import { formatDateTime, plural } from "@/lib/format";
 import { matchesQuery } from "@/lib/utils";
 
-const DELETED = "Eine Person wurde gelöscht";
 const SEARCH_ID = "protokoll-suche";
 
 /** Everything the search looks at: person, who, when and every changed field and value. */
 function searchText(e: AuditLogRow): string {
   return [
-    e.person ? `${e.person.name} ${e.person.scout ?? ""}` : DELETED,
+    e.person ? `${e.person.name} ${e.person.scout ?? ""}` : "",
     e.actor,
     formatDateTime(e.at),
-    e.action === "created" ? CREATED_LABEL : "",
+    ACTION_LABEL[e.action] ?? "",
     ...e.changes.flatMap((c) => [auditFieldLabel(c.field), c.from ?? "", c.to ?? ""]),
   ].join(" ");
 }
@@ -50,7 +49,7 @@ function EntryRow({ entry }: { entry: AuditLogRow }) {
             {entry.person.scout ? <span className="font-normal text-ink-soft"> „{entry.person.scout}“</span> : null}
           </Link>
         ) : (
-          <span className="text-ink-soft">{DELETED}</span>
+          <span className="text-ink-soft">{ACTION_LABEL.deleted}</span>
         )}
       </p>
       <AuditChanges action={entry.action} changes={entry.changes} />

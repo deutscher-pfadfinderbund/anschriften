@@ -1,18 +1,9 @@
-import { CREATED_LABEL, auditFieldLabel, type AuditAction, type AuditChange } from "@/lib/audit";
+import { ACTION_LABEL, auditFieldLabel, type AuditAction, type AuditChange } from "@/lib/audit";
 
-/** The arrow between old and new value (read out as „neu:“). */
-function Arrow() {
-  return (
-    <>
-      <span aria-hidden className="text-ink-faint">
-        {" → "}
-      </span>
-      <span className="sr-only"> neu: </span>
-    </>
-  );
-}
-
-/** One changed field: „Ort: Münster → Köln“, or just „Ort: Münster“ in a new person's entry. */
+/**
+ * One changed field: „Ort: Münster → Köln“ (the arrow read out as „neu:“), or just
+ * „Ort: Münster“ in a new person's entry.
+ */
 function ChangeLine({ change, created }: { change: AuditChange; created: boolean }) {
   return (
     <li>
@@ -20,7 +11,10 @@ function ChangeLine({ change, created }: { change: AuditChange; created: boolean
       {created ? null : (
         <>
           <span className="text-ink-soft">{change.from ?? "—"}</span>
-          <Arrow />
+          <span aria-hidden className="text-ink-faint">
+            {" → "}
+          </span>
+          <span className="sr-only"> neu: </span>
         </>
       )}
       <span className="text-ink">{change.to ?? "—"}</span>
@@ -37,7 +31,7 @@ export function AuditChanges({ action, changes }: { action: AuditAction; changes
   const created = action === "created";
   return (
     <div className="text-ui">
-      {created ? <p className="font-medium text-ink">{CREATED_LABEL}</p> : null}
+      {created ? <p className="font-medium text-ink">{ACTION_LABEL.created}</p> : null}
       {changes.length > 0 ? (
         <ul className="break-words whitespace-pre-line">
           {changes.map((c, i) => (

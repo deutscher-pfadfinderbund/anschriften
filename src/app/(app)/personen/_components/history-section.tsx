@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import type { HistoricalAssignment } from "@/db/queries";
 import { callAction } from "@/lib/call-action";
-import { tenureRange, todayIso } from "@/lib/format";
+import { NO_OFFICE, tenureRange, todayIso } from "@/lib/format";
 import { TOUCH_HIT, cn } from "@/lib/utils";
 
 import { EndDateChoice } from "./end-date";
@@ -118,7 +118,7 @@ export function HistorySection({
           ) : (
             <ul className="mb-2.5 divide-y divide-line rounded-md border border-line">
               {historical.map((h) => {
-                const office = h.officeName ?? "Ohne Amt";
+                const office = h.officeName ?? NO_OFFICE;
                 return (
                   <li key={h.id} className="group/row flex items-center gap-2 px-2.5 py-1.5 text-ui">
                     <span className="min-w-0 flex-1 text-ink-soft">
@@ -188,7 +188,7 @@ export function HistorySection({
         description={
           removing ? (
             <>
-              „{removing.officeName ?? "Ohne Amt"} · {removing.groupName} · {tenureRange(removing)}“
+              „{removing.officeName ?? NO_OFFICE} · {removing.groupName} · {tenureRange(removing)}“
               wird endgültig aus der Historie entfernt. Das lässt sich nicht rückgängig machen.
             </>
           ) : null

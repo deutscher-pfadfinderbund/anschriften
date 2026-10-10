@@ -16,7 +16,7 @@
  */
 import { db } from "@/db";
 import { assignments, groups, offices, persons, ranks } from "@/db/schema";
-import { fold, formatDate, todayIso } from "@/lib/format";
+import { fold, formatDate, nullIfEmpty, todayIso } from "@/lib/format";
 import { byName, collateDe, compareFields } from "@/lib/name-order";
 import { RANK_UNRANKED } from "@/lib/rank";
 import { SECTIONS, type Section } from "@/lib/sections";
@@ -170,11 +170,6 @@ const PROFILE_SUBTITLE: Record<Profile, string | null> = {
 
 function joinNonEmpty(parts: (string | null | undefined)[], sep = " "): string {
   return parts.map((p) => (p ?? "").trim()).filter((p) => p.length > 0).join(sep);
-}
-
-function nullIfEmpty(value: string | null | undefined): string | null {
-  const v = (value ?? "").trim();
-  return v.length > 0 ? v : null;
 }
 
 /** Leadership offices whose label is implied by the (sub)group heading and thus suppressed. */

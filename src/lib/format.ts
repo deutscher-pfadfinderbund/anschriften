@@ -77,6 +77,9 @@ export function skippedNote(deceased: number, withoutEmail: number): string {
 /** "Amt suchen …" → "Amt suchen": accessible names read without the trailing ellipsis. */
 export const spoken = (s: string) => s.replace(/\s*…$/, "");
 
+/** The trimmed text, or null when there is none. */
+export const nullIfEmpty = (value?: string | null): string | null => value?.trim() || null;
+
 /** German date for display: "24.06.2019". Input is an ISO date string or null. */
 export function formatDate(iso?: string | null): string {
   if (!iso) return "";
@@ -84,6 +87,9 @@ export function formatDate(iso?: string | null): string {
   if (!m) return iso;
   return `${m[3]}.${m[2]}.${m[1]}`;
 }
+
+/** What a tenure without an Amt (a plain membership in a Gliederung) shows instead. */
+export const NO_OFFICE = "Ohne Amt";
 
 /**
  * A tenure's dates: "seit 01.01.2020" (active; "" without a start), "01.01.2015 – 31.12.2019",

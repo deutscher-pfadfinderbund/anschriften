@@ -4,12 +4,15 @@
 // so an entry stays true when an Amt is renamed later and the UI only prints it.
 // No DB, safe on the client; the DB side is src/db/audit.ts.
 
-import { canonicalPhoneLabel, formatDate, tenureRange } from "@/lib/format";
+import { NO_OFFICE, canonicalPhoneLabel, formatDate, nullIfEmpty, tenureRange } from "@/lib/format";
 
 export type AuditAction = "created" | "updated" | "deleted";
 
-/** What a new person's entry leads with (shown and searched). */
-export const CREATED_LABEL = "Person angelegt";
+/** What a new person's entry leads with and what a deletion's entry says (shown and searched). */
+export const ACTION_LABEL: Partial<Record<AuditAction, string>> = {
+  created: "Person angelegt",
+  deleted: "Eine Person wurde gelöscht",
+};
 
 /**
  * Every logged field with its German label, in display order: the person's own fields,
@@ -104,7 +107,6 @@ const EMPTY: AuditSnapshot = {
 
 type ScalarField = Exclude<AuditField, "assignment" | "history" | "list">;
 
-const text = (v: string | null) => v?.trim() || null;
 const date = (v: string | null) => formatDate(v) || null;
 
 /**
@@ -123,20 +125,20 @@ export function formatPhones(phones: AuditSnapshot["phones"]): string | null {
 /** The person's own fields as display strings, in AUDIT_FIELD_LABELS order. */
 function scalarValues(s: AuditSnapshot): Record<ScalarField, string | null> {
   return {
-    salutation: text(s.salutation),
-    title: text(s.title),
-    firstName: text(s.firstName),
-    lastName: text(s.lastName),
-    scoutName: text(s.scoutName),
-    rank: text(s.rank),
+    salutation: nullIfEmpty(s.salutation),
+    title: nullIfEmpty(s.title),
+    firstName: nullIfEmpty(s.firstName),
+    lastName: nullIfEmpty(s.lastName),
+    scoutName: nullIfEmpty(s.scoutName),
+    rank: nullIfEmpty(s.rank),
     birthDate: date(s.birthDate),
-    street: text(s.street),
-    addressExtra: text(s.addressExtra),
-    postalCode: text(s.postalCode),
-    city: text(s.city),
-    email: text(s.email),
+    street: nullIfEmpty(s.street),
+    addressExtra: nullIfEmpty(s.addressExtra),
+    postalCode: nullIfEmpty(s.postalCode),
+    city: nullIfEmpty(s.city),
+    email: nullIfEmpty(s.email),
     phones: formatPhones(s.phones),
-    notes: text(s.notes),
+    notes: nullIfEmpty(s.notes),
     doNotPrint: s.doNotPrint ? "ja" : "nein",
     deathDate: date(s.deathDate),
   };
@@ -144,7 +146,7 @@ function scalarValues(s: AuditSnapshot): Record<ScalarField, string | null> {
 
 /** "Bundeskanzler · Bundeskanzlei, seit 01.01.2020" — "Ohne Amt · …" for a plain membership. */
 function tenureLabel(t: AuditTenure): string {
-  const name = `${t.office ?? "Ohne Amt"} · ${t.group}`;
+  const name = `${t.office ?? NO_OFFICE} · ${t.group}`;
   const range = tenureRange(t);
   return range ? `${name}, ${range}` : name;
 }
