@@ -1,5 +1,6 @@
 "use client";
 
+import { FormError } from "@/components/field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,18 +11,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-/**
- * Shared confirmation dialog for destructive delete actions. When `blockedMessage`
- * is set the entry cannot be removed: its text replaces the description and the
- * confirm button is disabled.
- */
+/** Shared confirmation dialog for destructive delete actions. */
 export function ConfirmDeleteDialog({
   open,
   onOpenChange,
   title,
   description,
-  blockedMessage,
-  confirmLabel = "Löschen",
+  confirmLabel,
+  error,
   pending,
   onConfirm,
 }: {
@@ -29,24 +26,25 @@ export function ConfirmDeleteDialog({
   onOpenChange: (open: boolean) => void;
   title: string;
   description: React.ReactNode;
-  blockedMessage?: React.ReactNode;
-  confirmLabel?: string;
+  confirmLabel: string;
+  /** The refused deletion's message. */
+  error?: string | null;
   pending: boolean;
   onConfirm: () => void;
 }) {
-  const blocked = blockedMessage != null;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{blocked ? blockedMessage : description}</DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        <FormError>{error}</FormError>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Abbrechen
           </Button>
-          <Button variant="destructive" onClick={onConfirm} disabled={pending || blocked}>
+          <Button variant="destructive" onClick={onConfirm} disabled={pending}>
             {pending ? "Löschen …" : confirmLabel}
           </Button>
         </DialogFooter>

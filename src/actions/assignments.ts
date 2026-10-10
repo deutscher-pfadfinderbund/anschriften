@@ -1,260 +1,197 @@
 "use server";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "@/db";
-import type { ActiveHolder } from "@/db/queries";
+import { db, type Tx } from "@/db";
+import { logPersonChange, personSnapshot } from "@/db/audit";
 import { assignments, persons } from "@/db/schema";
 import {
+  dbFailure,
+  deletedMeanwhile,
   firstError,
-  isForeignKeyViolation,
-  revalidatePersonPaths,
-  todayIso,
-  type ActionResult,
+  lockPerson,
+  mutation,
+  stamp,
+  UserFacingError,
 } from "@/lib/action-helpers";
-import { actorName, requireSession } from "@/lib/auth-helpers";
-import { formatName } from "@/lib/format";
-import { resolveTenureEnd } from "@/lib/person-schema";
+import { todayIso } from "@/lib/format";
+import { isValidDate, resolveTenureEnd, rowId } from "@/lib/person-schema";
 
-// Office-history mutations (issue #22). Active tenures are owned by `savePerson`
-// (delete + recreate from the form); these actions manage the *history* — ending a
-// current office and creating/editing/removing past ones — as immediate, standalone
-// writes so a normal person save never touches historical rows.
+// Office-history mutations. Active tenures — including ending one ("Beenden" in the
+// editor) — are owned by `savePerson` (buffered in the form, written on Speichern).
+// These actions only manage rows that are ALREADY history: creating, editing and removing
+// past tenures as immediate, standalone writes, so a normal person save never touches them.
+// Each one is logged on the person (src/db/audit.ts).
+
+type HistoryResult =
+  | {
+      ok: true;
+      /** The person's new `updatedAt`: the editor's concurrency token from now on. */
+      updatedAt: string;
+    }
+  | { ok: false; message: string };
+
+/**
+ * Lock the person, refuse when it changed since the editor loaded it (the same token
+ * `savePerson` checks), run `work`, log what it changed and bump the person's
+ * `updated_at`/`updated_by`. Returns the new token: the editor keeps it, so a history
+ * action never makes another editor's save look like the current state.
+ */
+async function changePerson(
+  tx: Tx,
+  personId: number,
+  expected: string,
+  by: string,
+  work: () => Promise<unknown>,
+): Promise<string> {
+  await lockPerson(tx, personId, expected);
+  const before = await personSnapshot(tx, personId);
+  await work();
+  await logPersonChange(tx, personId, by, before);
+  const stamped = stamp(by);
+  await tx.update(persons).set(stamped).where(eq(persons.id, personId));
+  return stamped.updatedAt.toISOString();
+}
+
+/** The history row to edit or delete; refuses an active one (that belongs to the person form). */
+async function historyRow(tx: Tx, assignmentId: number, activeMessage: string) {
+  const [row] = await tx
+    .select({ personId: assignments.personId, endDate: assignments.endDate, endUnknown: assignments.endUnknown })
+    .from(assignments)
+    .where(eq(assignments.id, assignmentId))
+    .limit(1);
+  if (!row) throw new UserFacingError(deletedMeanwhile("Dieses frühere Amt"));
+  if (row.endDate == null) throw new UserFacingError(activeMessage);
+  return { ...row, endDate: row.endDate };
+}
+
+/**
+ * Run a history write in one transaction; `work` returns the person's new `updatedAt`.
+ * `missing` answers a reference (group, office or the person) deleted since page load.
+ */
+async function inHistoryTx(work: (tx: Tx) => Promise<string>, missing: string): Promise<HistoryResult> {
+  try {
+    return { ok: true, updatedAt: await db.transaction(work) };
+  } catch (err) {
+    return dbFailure(err, { fk: missing });
+  }
+}
+
+const MISSING_REFERENCE = "Gliederung oder Amt existiert nicht mehr. Bitte lade die Seite neu.";
 
 const dateField = z
   .string()
   .trim()
   .nullish()
-  .transform((v) => (v && v.length > 0 ? v : null));
+  .transform((v) => (v && v.length > 0 ? v : null))
+  .refine((v) => v == null || isValidDate(v), "Bitte ein gültiges Datum eingeben.");
 
-/** Bump the owning person's audit fields so the change is attributed and lists refresh. */
-async function touchPerson(personId: number, by: string): Promise<void> {
-  await db.update(persons).set({ updatedBy: by, updatedAt: new Date() }).where(eq(persons.id, personId));
-}
-
-// --- end an active tenure ("Amt beenden…") --------------------------------------
-
-const endSchema = z.object({
-  assignmentId: z.number().int().positive(),
-  // Either a concrete Bis-Datum or "Ende unbekannt" (endUnknown ⇒ end_date = today).
+/**
+ * What both dialogs send. A history entry is a *finished* tenure, so it always gets an
+ * end: the Bis-Datum or — with `endUnknown` — today as the documented upper bound.
+ */
+const tenureFields = {
+  /** The person's `updatedAt` as the editor holds it (concurrency token). */
+  updatedAt: z.string().max(40),
+  groupId: z.number().int().positive("Bitte eine Gliederung wählen."),
+  officeId: rowId.nullish(),
+  startDate: dateField,
   endDate: dateField,
   endUnknown: z.boolean().default(false),
-});
-
-/**
- * End a currently active tenure by setting its `end_date`; the row becomes history
- * and stops counting towards the table, PDF, distribution rules and mail recipients.
- * With `endUnknown` the end is recorded as unknown (end_date = today upper bound).
- */
-export async function endAssignment(raw: z.infer<typeof endSchema>): Promise<ActionResult> {
-  const session = await requireSession();
-  const parsed = endSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  const { assignmentId, endDate, endUnknown } = parsed.data;
-
-  const [row] = await db
-    .select({ personId: assignments.personId, startDate: assignments.startDate, endDate: assignments.endDate })
-    .from(assignments)
-    .where(eq(assignments.id, assignmentId))
-    .limit(1);
-  if (!row) return { ok: false, message: "Zuordnung nicht gefunden." };
-  if (row.endDate != null) return { ok: false, message: "Dieses Amt ist bereits beendet." };
-
-  const resolved = resolveTenureEnd({ startDate: row.startDate, endDate, endUnknown, today: todayIso() });
-  if (!resolved.ok) return { ok: false, message: resolved.message };
-
-  // Guard the update against a concurrent savePerson (delete+recreate of active
-  // rows): if the row vanished in between, report it instead of silently ending nothing.
-  const updated = await db
-    .update(assignments)
-    .set({ endDate: resolved.endDate, endUnknown: resolved.endUnknown, updatedAt: new Date() })
-    .where(and(eq(assignments.id, assignmentId), isNull(assignments.endDate)))
-    .returning({ id: assignments.id });
-  if (updated.length === 0)
-    return { ok: false, message: "Zuordnung wurde zwischenzeitlich geändert. Bitte Seite neu laden." };
-  await touchPerson(row.personId, actorName(session));
-  revalidatePersonPaths();
-  return { ok: true };
-}
-
-// --- active holders of an (office, group) combination ("Amtsinhaber-Warnung") ---
-
-/**
- * Active holders of a given office+group combination (issue #26). Drives the editor's
- * holder warning; session-guarded, on-demand (the form fetches per combination, no
- * polling). Returns every currently active tenure — the caller filters out the person
- * being edited so it never warns about themselves.
- */
-export async function getActiveHolders(officeId: number, groupId: number): Promise<ActiveHolder[]> {
-  await requireSession();
-  if (!Number.isInteger(officeId) || !Number.isInteger(groupId)) return [];
-  const rows = await db
-    .select({
-      assignmentId: assignments.id,
-      personId: persons.id,
-      firstName: persons.firstName,
-      lastName: persons.lastName,
-      scoutName: persons.scoutName,
-      startDate: assignments.startDate,
-    })
-    .from(assignments)
-    .innerJoin(persons, eq(persons.id, assignments.personId))
-    .where(
-      and(eq(assignments.officeId, officeId), eq(assignments.groupId, groupId), isNull(assignments.endDate)),
-    );
-  return rows.map((r) => ({
-    assignmentId: r.assignmentId,
-    personId: r.personId,
-    name: formatName(r),
-    startDate: r.startDate,
-  }));
-}
+};
 
 // --- create a past tenure ("Frühere Ämter" → hinzufügen) ------------------------
 
-const addHistoricalSchema = z.object({
-  personId: z.number().int().positive(),
-  groupId: z.number().int().positive("Bitte eine Gliederung wählen."),
-  officeId: z.number().int().positive().nullish(),
-  startDate: dateField,
-  // A historical entry is a *finished* tenure, so it always gets an end date: either the
-  // Bis-Datum or — with `endUnknown` — today as the documented upper bound. Without it the
-  // row would be active and could clash with the current office.
-  endDate: dateField,
-  endUnknown: z.boolean().default(false),
-});
+const addHistoricalSchema = z.object({ personId: rowId, ...tenureFields });
 
 /** Create an ended tenure for retroactive capture (e.g. an office held before the app existed). */
-export async function addHistoricalAssignment(
-  raw: z.infer<typeof addHistoricalSchema>,
-): Promise<ActionResult> {
-  const session = await requireSession();
-  const parsed = addHistoricalSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  const { personId, groupId, officeId, startDate, endDate, endUnknown } = parsed.data;
+export async function addHistoricalAssignment(raw: z.input<typeof addHistoricalSchema>): Promise<HistoryResult> {
+  return mutation(async (by) => {
+    const parsed = addHistoricalSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
+    const { personId, updatedAt, groupId, officeId, startDate, endDate, endUnknown } = parsed.data;
 
-  const resolved = resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
-  if (!resolved.ok) return { ok: false, message: resolved.message };
+    const resolved = resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
+    if (!resolved.ok) return { ok: false, message: resolved.message };
 
-  try {
-    await db.insert(assignments).values({
-      personId,
-      groupId,
-      officeId: officeId ?? null,
-      startDate,
-      endDate: resolved.endDate,
-      endUnknown: resolved.endUnknown,
-    });
-  } catch (err) {
-    // Race: the person, group or office was deleted between page load and this call.
-    if (isForeignKeyViolation(err))
-      return { ok: false, message: "Anschrift, Gliederung oder Amt existiert nicht mehr. Bitte Seite neu laden." };
-    throw err;
-  }
-  await touchPerson(personId, actorName(session));
-  revalidatePersonPaths();
-  return { ok: true };
+    return inHistoryTx(
+      (tx) =>
+        changePerson(tx, personId, updatedAt, by, () =>
+          tx.insert(assignments).values({
+            personId,
+            groupId,
+            officeId: officeId ?? null,
+            startDate,
+            endDate: resolved.endDate,
+            endUnknown: resolved.endUnknown,
+          }),
+        ),
+      MISSING_REFERENCE,
+    );
+  });
 }
 
 // --- edit a past tenure ---------------------------------------------------------
 
-const updateHistoricalSchema = z.object({
-  assignmentId: z.number().int().positive(),
-  groupId: z.number().int().positive("Bitte eine Gliederung wählen."),
-  officeId: z.number().int().positive().nullish(),
-  startDate: dateField,
-  endDate: dateField,
-  endUnknown: z.boolean().default(false),
-});
+const updateHistoricalSchema = z.object({ assignmentId: rowId, ...tenureFields });
 
 /** Edit an ended tenure. Refuses to touch an active row (that belongs to the person form). */
 export async function updateHistoricalAssignment(
-  raw: z.infer<typeof updateHistoricalSchema>,
-): Promise<ActionResult> {
-  const session = await requireSession();
-  const parsed = updateHistoricalSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
-  const { assignmentId, groupId, officeId, startDate, endDate, endUnknown } = parsed.data;
+  raw: z.input<typeof updateHistoricalSchema>,
+): Promise<HistoryResult> {
+  return mutation(async (by) => {
+    const parsed = updateHistoricalSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
+    const { assignmentId, updatedAt, groupId, officeId, startDate, endDate, endUnknown } = parsed.data;
 
-  const [row] = await db
-    .select({
-      personId: assignments.personId,
-      endDate: assignments.endDate,
-      endUnknown: assignments.endUnknown,
-    })
-    .from(assignments)
-    .where(eq(assignments.id, assignmentId))
-    .limit(1);
-  if (!row) return { ok: false, message: "Zuordnung nicht gefunden." };
-  if (row.endDate == null)
-    return { ok: false, message: "Ein aktives Amt wird über das Formular bearbeitet, nicht hier." };
-
-  // "Ende unbekannt" documents an upper bound (the recording date). If it was already
-  // unknown and the user does not supply a concrete Bis-Datum, keep the recorded bound —
-  // recomputing it would silently move the end forward to today on every edit, weakening
-  // the documented "was over by then at the latest". Only recompute when a date is given
-  // or the unknown flag is being set anew.
-  let resolvedEndDate: string;
-  let resolvedEndUnknown: boolean;
-  if (endUnknown && endDate == null && row.endUnknown) {
-    resolvedEndDate = row.endDate;
-    resolvedEndUnknown = true;
-  } else {
-    const resolved = resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
-    if (!resolved.ok) return { ok: false, message: resolved.message };
-    resolvedEndDate = resolved.endDate;
-    resolvedEndUnknown = resolved.endUnknown;
-  }
-
-  try {
-    await db
-      .update(assignments)
-      .set({
-        groupId,
-        officeId: officeId ?? null,
-        startDate,
-        endDate: resolvedEndDate,
-        endUnknown: resolvedEndUnknown,
-        updatedAt: new Date(),
-      })
-      .where(eq(assignments.id, assignmentId));
-  } catch (err) {
-    // Race: the group or office was deleted between page load and this call.
-    if (isForeignKeyViolation(err))
-      return { ok: false, message: "Gliederung oder Amt existiert nicht mehr. Bitte Seite neu laden." };
-    throw err;
-  }
-  await touchPerson(row.personId, actorName(session));
-  revalidatePersonPaths();
-  return { ok: true };
+    return inHistoryTx(async (tx) => {
+      const row = await historyRow(tx, assignmentId, "Ein aktives Amt wird über das Formular bearbeitet, nicht hier.");
+      // "Ende unbekannt" documents an upper bound (the recording date). When it stays unknown
+      // and still lies after the Von date, keep that bound: recomputing it would move the end
+      // forward to today on every edit, weakening "was over by then at the latest".
+      const keepBound = endUnknown && endDate == null && row.endUnknown && (startDate == null || startDate <= row.endDate);
+      const resolved = keepBound
+        ? { ok: true as const, endDate: row.endDate, endUnknown: true }
+        : resolveTenureEnd({ startDate, endDate, endUnknown, today: todayIso() });
+      if (!resolved.ok) throw new UserFacingError(resolved.message);
+      return changePerson(tx, row.personId, updatedAt, by, () =>
+        tx
+          .update(assignments)
+          .set({
+            groupId,
+            officeId: officeId ?? null,
+            startDate,
+            endDate: resolved.endDate,
+            endUnknown: resolved.endUnknown,
+            updatedAt: new Date(),
+          })
+          .where(eq(assignments.id, assignmentId)),
+      );
+    }, MISSING_REFERENCE);
+  });
 }
 
 // --- delete a tenure ("Eintrag löschen") ----------------------------------------
 
-const deleteSchema = z.object({ assignmentId: z.number().int().positive() });
+const deleteSchema = z.object({ assignmentId: rowId, updatedAt: tenureFields.updatedAt });
 
 /**
  * Hard-delete a HISTORY row ("Eintrag löschen" in Frühere Ämter). Active rows are
  * managed through the editor buffer + savePerson; refusing them here keeps a crafted
  * request from deleting a current office through the history action.
  */
-export async function deleteAssignment(raw: z.infer<typeof deleteSchema>): Promise<ActionResult> {
-  const session = await requireSession();
-  const parsed = deleteSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
+export async function deleteAssignment(raw: z.input<typeof deleteSchema>): Promise<HistoryResult> {
+  return mutation(async (by) => {
+    const parsed = deleteSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
+    const { assignmentId, updatedAt } = parsed.data;
 
-  const [row] = await db
-    .select({ personId: assignments.personId, endDate: assignments.endDate })
-    .from(assignments)
-    .where(eq(assignments.id, parsed.data.assignmentId))
-    .limit(1);
-  if (!row) return { ok: false, message: "Zuordnung nicht gefunden." };
-  if (row.endDate == null)
-    return { ok: false, message: "Aktive Ämter werden über das Formular entfernt oder beendet." };
-
-  await db.delete(assignments).where(eq(assignments.id, parsed.data.assignmentId));
-  await touchPerson(row.personId, actorName(session));
-  revalidatePersonPaths();
-  return { ok: true };
+    return inHistoryTx(async (tx) => {
+      const row = await historyRow(tx, assignmentId, "Aktive Ämter werden über das Formular entfernt oder beendet.");
+      return changePerson(tx, row.personId, updatedAt, by, () =>
+        tx.delete(assignments).where(eq(assignments.id, assignmentId)),
+      );
+    }, deletedMeanwhile("Diese Person"));
+  });
 }

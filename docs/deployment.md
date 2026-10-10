@@ -18,6 +18,17 @@ docker compose logs -f app    # Start: "migrations applied", dann Next-Server
 `DATABASE_URL` muss auf `db:5432` zeigen und in Benutzer/Passwort/DB mit dem
 `POSTGRES_*`-Block übereinstimmen. Sonderzeichen im Passwort in der URL prozentkodieren.
 
+**Pflicht-Variablen:** `DATABASE_URL`, `BETTER_AUTH_SECRET` (mind. 32 Zeichen),
+`BETTER_AUTH_URL`, `KEYCLOAK_ISSUER`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`.
+Fehlt eine davon, startet der Container nicht: `docker compose logs app` zeigt eine
+Zeile `FATAL: missing or invalid configuration: …` mit allen fehlenden Namen.
+
+**Healthcheck:** Der Container prüft `/api/auth/ok` (better-auth). Er wird erst
+„healthy", wenn der Next-Server läuft und die Anmeldung initialisiert ist — ein `unhealthy`
+nach dem Start heißt: Server nicht hochgekommen, `docker compose logs app` prüfen. Die
+Datenbank prüft dieser Endpunkt nicht; ist sie beim Start nicht erreichbar, bricht schon
+die Migration ab und der Container startet gar nicht erst.
+
 **Update auf eine neue Version:**
 
 ```bash
@@ -26,6 +37,20 @@ docker compose pull && docker compose up -d
 
 Migrationen werden beim App-Start automatisch angewendet (per Advisory-Lock
 serialisiert, damit parallele Starts nicht kollidieren).
+
+**Einmalig beim Update auf die Version mit „aktiv = ohne Ende-Datum":** Ein Amt mit
+Ende-Datum gilt jetzt überall als beendet, auch im PDF; ein Ende in der Zukunft lässt
+sich nicht mehr speichern. Vor dem Update prüfen, ob es solche Einträge gibt:
+
+```bash
+docker compose exec -T db psql -U anschriften -d anschriften \
+  -c "select id, person_id, end_date from assignments where end_date > current_date;"
+```
+
+Jede Zeile wäre nach dem Update aus dem PDF verschwunden. Sollen diese Ämter weiter
+aktiv sein, das Ende entfernen
+(`update assignments set end_date = null, end_unknown = false where end_date > current_date;`)
+und das Amt zum tatsächlichen Ende in der App beenden.
 
 ## 2. Rollback
 
@@ -92,6 +117,11 @@ docker compose up -d app
 
 ## 5. Import der Alt-Datenbank (finaler .mdb-Import gegen die Prod-DB)
 
+> **Einmaliger Cutover-Schritt.** Der Import läuft genau einmal gegen die leere Prod-DB.
+> **Nach dem Go-live nicht erneut ausführen:** er setzt Personendaten, Zuordnungen und
+> Verteiler-Mitgliedschaften auf den Stand der `.mdb` zurück und überschreibt damit alles,
+> was die Kanzlei inzwischen in der App gepflegt hat.
+
 Das Laufzeit-Image enthält **weder bun noch mdbtools noch `import-mdb.ts`** — der Import
 läuft daher aus einem Einmal-Container, der sich ins interne Compose-Netz hängt und die
 DB unter `db:5432` erreicht (der Host-Port bleibt zu). Das Repo wird eingehängt, die
@@ -115,7 +145,7 @@ docker run --rm -it \
 #    …&& bun scripts/import-mdb.ts adressen.mdb
 ```
 
-**Schutz vor Datenverlust:** Ein erneuter Import löscht die Zuordnungen (Amtszeiten)
+**Schutz vor Datenverlust (nur für Wiederholungen *vor* dem Go-live):** Ein erneuter Import löscht die Zuordnungen (Amtszeiten)
 der betroffenen Personen und legt sie neu an — die `.mdb` kennt nur Person/Gruppe/Amt,
 nicht die von Hand gepflegten Amtszeiten (`start_date`/`end_date`/„Ende unbekannt",
 Issues #22/#26). Sind solche Daten schon vorhanden, **bricht der Import ab**. Nur wenn

@@ -4,23 +4,21 @@ import { notFound } from "next/navigation";
 
 import {
   getPersonForEdit,
-  listDistributionListSummaries,
+  listDistributionListNames,
+  listActiveOfficeHolders,
   listGroups,
   listOffices,
   listRanks,
+  personAudit,
 } from "@/db/queries";
 import { requirePageSession } from "@/lib/auth-helpers";
 import { formatName } from "@/lib/format";
+import { parseId } from "@/lib/ids";
 
 import { PersonForm } from "../_components/person-form";
 
 // Memoized per request so generateMetadata and the page share one round-trip.
 const loadPerson = cache(getPersonForEdit);
-
-function parseId(raw: string): number | null {
-  const id = Number(raw);
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
 
 export async function generateMetadata({
   params,
@@ -32,7 +30,7 @@ export async function generateMetadata({
   const { id } = await params;
   const personId = parseId(id);
   const person = personId != null ? await loadPerson(personId) : null;
-  return { title: person ? formatName(person) : "Anschrift bearbeiten" };
+  return { title: person ? formatName(person) : "Seite nicht gefunden" };
 }
 
 export default async function EditPersonPage({
@@ -40,29 +38,31 @@ export default async function EditPersonPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  // Authoritative gate: the layout is not re-rendered on RSC navigations.
   await requirePageSession();
   const { id } = await params;
   const personId = parseId(id);
   if (personId == null) notFound();
 
-  const [person, groups, offices, ranks, distributionLists] = await Promise.all([
+  const [person, groups, offices, ranks, distributionLists, activeHolders, changeLog] = await Promise.all([
     loadPerson(personId),
     listGroups(),
     listOffices(),
     listRanks(),
-    listDistributionListSummaries(),
+    listDistributionListNames(),
+    listActiveOfficeHolders(),
+    personAudit(personId),
   ]);
   if (!person) notFound();
 
   return (
     <PersonForm
-      mode="edit"
       person={person}
       groups={groups}
       offices={offices}
       ranks={ranks}
       distributionLists={distributionLists}
+      activeHolders={activeHolders}
+      changeLog={changeLog}
     />
   );
 }

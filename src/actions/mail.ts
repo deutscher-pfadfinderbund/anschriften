@@ -1,23 +1,40 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { effectiveMemberIds, personEmailsByIds } from "@/db/queries";
-import { firstError } from "@/lib/action-helpers";
-import { actorName, requireSession } from "@/lib/auth-helpers";
-import { isMailEnabled, normalizeRecipients, sendListMail } from "@/lib/mail";
+import { SESSION_EXPIRED, firstError, getActionSession, revalidateApp } from "@/lib/action-helpers";
+import { actorName } from "@/lib/auth-helpers";
+import { collectEmails } from "@/lib/export";
+import { BODY_MAX, SUBJECT_MAX } from "@/lib/limits";
+import { isMailEnabled, mailFailureMessage, sendListMail } from "@/lib/mail";
+import { rowId } from "@/lib/person-schema";
 
 export type SendMailResult =
-  | { ok: true; recipientCount: number; chunks: number }
-  | { ok: false; message: string };
+  | {
+      ok: true;
+      /** Recipients the mail server accepted (refused addresses are not included). */
+      recipientCount: number;
+      chunks: number;
+      /** Addresses the mail server refused while accepting the rest. */
+      refused: number;
+    }
+  | {
+      ok: false;
+      message: string;
+      /**
+       * Recipients who already got the mail before the failure. When > 0 the client must
+       * not offer the same send again, or those recipients get it twice.
+       */
+      sent?: number;
+    };
 
 const composeSchema = z.object({
   subject: z
     .string()
     .trim()
     .min(1, "Betreff ist erforderlich.")
-    .max(200, "Betreff ist zu lang (max. 200 Zeichen).")
+    .max(SUBJECT_MAX, `Betreff ist zu lang (max. ${SUBJECT_MAX} Zeichen).`)
     // A newline in the subject would end the SMTP header and let the rest of the
     // value inject arbitrary headers (Bcc:, …) — classic header injection.
     .refine((s) => !/[\r\n]/.test(s), "Der Betreff darf keine Zeilenumbrüche enthalten."),
@@ -25,21 +42,23 @@ const composeSchema = z.object({
     .string()
     .trim()
     .min(1, "Nachricht ist erforderlich.")
-    .max(50000, "Nachricht ist zu lang (max. 50.000 Zeichen)."),
+    .max(BODY_MAX, `Nachricht ist zu lang (max. ${BODY_MAX.toLocaleString("de-DE")} Zeichen).`),
   // A send targets either a whole list (effective set) or an explicit selection.
-  listId: z.number().int().positive().nullish(),
-  personIds: z.array(z.number().int().positive()).nullish(),
+  listId: rowId.nullish(),
+  personIds: z.array(rowId).nullish(),
 });
 
-export type SendMailInput = z.infer<typeof composeSchema>;
+type SendMailInput = z.infer<typeof composeSchema>;
 
 /**
  * Send a plaintext mailing to a whole distribution list or a table selection.
  * The recipient set is ALWAYS recomputed server-side (effective membership for a
- * list, the selection as-is otherwise) — the client-supplied list is never trusted.
+ * list, the living persons of the selection otherwise) — the client-supplied list is never
+ * trusted.
  */
 export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
-  const session = await requireSession();
+  const session = await getActionSession();
+  if (!session) return SESSION_EXPIRED;
   // Defense in depth: the UI hides the buttons when the module is off, but the
   // action re-checks so a stale client or a direct call still cannot send.
   if (!isMailEnabled()) return { ok: false, message: "Das Mail-Modul ist nicht aktiv." };
@@ -50,18 +69,20 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
 
   let emails: (string | null)[];
   if (listId != null) {
-    // Effective members (manual ∪ rule, deceased excluded from the rule half).
+    // Effective members (manual ∪ rules, living persons only).
     const ids = await effectiveMemberIds(listId);
     emails = await personEmailsByIds(ids);
   } else if (personIds && personIds.length > 0) {
-    // Explicit selection: send to exactly the chosen persons (deceased kept).
+    // Explicit selection: the chosen persons (the query drops deceased ones).
     emails = await personEmailsByIds([...new Set(personIds)]);
   } else {
     return { ok: false, message: "Kein Verteiler und keine Auswahl angegeben." };
   }
 
-  const { recipients } = normalizeRecipients(emails);
-  if (recipients.length === 0) return { ok: false, message: "Keine Empfänger mit E-Mail-Adresse." };
+  // Same rule as the compose preview and the clipboard copy (collectEmails), so the
+  // count the user confirmed is the count that goes out.
+  const { recipients } = collectEmails(emails);
+  if (recipients.length === 0) return { ok: false, message: "Keine Empfänger mit gültiger E-Mail-Adresse." };
 
   const result = await sendListMail({
     subject,
@@ -72,8 +93,13 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
   });
 
   // Refresh the "Zuletzt versendet" card regardless of outcome (failures are logged too).
-  revalidatePath("/verteiler");
+  revalidateApp();
 
-  if (!result.ok) return { ok: false, message: `E-Mail-Versand fehlgeschlagen: ${result.error}` };
-  return { ok: true, recipientCount: result.recipientCount, chunks: result.chunks };
+  if (!result.ok) return { ok: false, message: mailFailureMessage(result), sent: result.sent };
+  return {
+    ok: true,
+    recipientCount: result.recipientCount - result.refused,
+    chunks: result.chunks,
+    refused: result.refused,
+  };
 }

@@ -1,17 +1,18 @@
 // CSV export route (issue #4). GET /api/export/csv?listId=… OR ?ids=1,2,3
-// Runs on the Node runtime and is never cached. Session is required (401 otherwise);
-// we resolve it inline rather than via the throwing requireSession() helper, so an
-// unauthenticated request gets a clean 401 instead of a 500.
+// Runs on the Node runtime and is never cached. This session check is the gate (the proxy
+// skips /api): without a valid session the answer is a clean 401, which the client download
+// helper turns into "Sitzung abgelaufen" instead of saving an error page as .csv.
 import { getListName, personsForCsvByIds, personsForCsvByList } from "@/db/queries";
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/auth-helpers";
 import { asciiSlug, buildCsv, CSV_BOM, type CsvPerson } from "@/lib/export";
+import { todayIso } from "@/lib/format";
+import { parseId } from "@/lib/ids";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) {
+  if (!(await getSession(request.headers))) {
     return new Response("Nicht angemeldet.", { status: 401 });
   }
 
@@ -23,22 +24,15 @@ export async function GET(request: Request): Promise<Response> {
   let baseName: string;
 
   if (listIdRaw != null) {
-    const listId = Number(listIdRaw);
-    if (!Number.isInteger(listId) || listId <= 0) {
+    const listId = parseId(listIdRaw);
+    if (listId == null) {
       return new Response("Ungültige Verteiler-ID.", { status: 400 });
     }
     const [name, data] = await Promise.all([getListName(listId), personsForCsvByList(listId)]);
     rows = data;
     baseName = name ? asciiSlug(name) : `verteiler-${listId}`;
   } else if (idsRaw != null) {
-    const ids = [
-      ...new Set(
-        idsRaw
-          .split(",")
-          .map((s) => Number(s.trim()))
-          .filter((n) => Number.isInteger(n) && n > 0),
-      ),
-    ];
+    const ids = [...new Set(idsRaw.split(",").map(parseId).filter((id) => id != null))];
     if (ids.length === 0) {
       return new Response("Keine gültigen IDs übergeben.", { status: 400 });
     }
@@ -56,15 +50,14 @@ export async function GET(request: Request): Promise<Response> {
   // a byte-level check (first bytes EF BB BF).
   const body = CSV_BOM + buildCsv(rows);
 
-  const date = new Date().toISOString().slice(0, 10);
-  const filename = `anschriften-${baseName}-${date}.csv`;
+  const filename = `anschriften-${baseName}-${todayIso()}.csv`;
 
   return new Response(body, {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      // filename is already ASCII (slugged); filename* is added for RFC 5987 completeness.
-      "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      // ASCII only (the list name is slugged), so the plain form is enough.
+      "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control": "no-store",
     },
   });

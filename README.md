@@ -16,6 +16,18 @@ bunx drizzle-kit migrate                  # Schema anwenden
 bun run dev
 ```
 
+## Änderungsprotokoll
+
+Änderungen an Personen werden in `audit_log` festgehalten: wer, wann, welches Feld von
+welchem zu welchem Wert — die eigenen Felder, die Ämter (aktiv und früher) und die von
+Hand gepflegten Verteiler. Zu sehen im „Änderungsverlauf" unten im Personen-Editor und
+auf der Seite „Änderungsprotokoll" (die letzten 300 Änderungen). Nicht protokolliert werden
+Stammdaten (Ämter, Stände, Gliederungen, Verteiler und ihre Regeln), Mitgliedschaften
+über Regeln und der Access-Import. Wird eine Person endgültig gelöscht, verschwindet ihr
+Verlauf mit ihr (Datenschutz); übrig bleibt nur „Eine Person wurde gelöscht" mit wer und
+wann. In den Backups (siehe unten) steht der alte Stand bis zum Ablauf der Retention.
+Eine automatische Löschfrist für das Änderungsprotokoll gibt es nicht.
+
 ## Mail-Modul (optional)
 
 Die Kanzlei kann Rundmails an einen Verteiler oder eine Tabellen-Auswahl direkt
@@ -31,6 +43,11 @@ Postmark, Brevo …) ist nur eine `.env`-Änderung.
   (`MAIL_BCC_CHUNK_SIZE`, Default 50), `To:` = `MAIL_FROM`. Plaintext, keine
   Anhänge. Jede Sendung wird in `mail_log` protokolliert (Betreff, Datum,
   Empfängerzahl, Status) und im Verteiler unter „Zuletzt versendet" angezeigt.
+  Bricht ein Versand nach einigen Chunks ab, nennen Meldung und Log, wie viele
+  Empfänger die Mail schon erhalten haben — dann nicht noch einmal an alle senden.
+- **Verschlüsselung:** Mit `SMTP_USER` wird STARTTLS erzwungen (Zugangsdaten gehen
+  nie im Klartext raus); Relays ohne Anmeldung (Mailpit, interne Server) gehen auch
+  ohne TLS.
 - **Lokal testen (ohne echten Provider):** [Mailpit](https://mailpit.axllent.org/)
   aus `compose.dev.yml` starten und die Dev-Env auf den SMTP-Sink zeigen lassen:
 

@@ -7,10 +7,15 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { XIcon } from "lucide-react"
 
-function Dialog({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+/** `open` of a controlled <Dialog>, for its panel; undefined when uncontrolled. */
+const DialogOpenContext = React.createContext<boolean | undefined>(undefined)
+
+function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  return (
+    <DialogOpenContext value={props.open}>
+      <DialogPrimitive.Root data-slot="dialog" {...props} />
+    </DialogOpenContext>
+  )
 }
 
 function DialogTrigger({
@@ -39,7 +44,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-scrim duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -47,49 +52,96 @@ function DialogOverlay({
   )
 }
 
-function DialogContent({
-  className,
-  children,
-  showCloseButton = true,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  showCloseButton?: boolean
-}) {
+/**
+ * Radix only returns focus to a <DialogTrigger>, but almost every dialog here is
+ * opened from state. So the panel remembers what had focus when it opened and
+ * goes back there on close. If that element is gone (e.g. the deleted row) or
+ * never had focus (Safari does not focus a clicked button), Radix's own handler
+ * gets its turn and focuses the <DialogTrigger>, if there is one; failing both,
+ * focus lands on the page's main landmark (#inhalt).
+ */
+function focusOpener(opener: Element | null): boolean {
+  if (!(opener instanceof HTMLElement) || opener === document.body || !opener.isConnected) {
+    return false
+  }
+  opener.focus()
+  return document.activeElement === opener
+}
+
+const SIDES = {
+  // Sized against the viewport (dvw/dvh), never `100%`, which follows a page that scrolls
+  // sideways; max-h keeps a tall dialog's buttons reachable on a phone.
+  center:
+    "top-1/2 left-1/2 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100dvw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 ring-1 ring-line-strong sm:max-w-sm data-open:zoom-in-95 data-closed:zoom-out-95",
+  // A full-height drawer (the mobile navigation); its content scrolls itself.
+  left: "top-0 left-0 flex h-dvh w-72 max-w-[85vw] flex-col overflow-hidden border-r border-line bg-surface-2 data-open:slide-in-from-left data-closed:slide-out-to-left",
+}
+
+type PanelProps = React.ComponentProps<typeof DialogPrimitive.Content> & { side?: keyof typeof SIDES }
+
+function DialogPanel({ className, children, onCloseAutoFocus, side = "center", ...props }: PanelProps) {
+  // Mounted fresh on every open (the portal's Presence unmounts it when
+  // closed), and captured during render — before an `autoFocus` field inside
+  // the dialog has moved focus away from the opener.
+  const [opener] = React.useState(() =>
+    typeof document === "undefined" ? null : document.activeElement
+  )
+  // While it fades out, the panel shows what it showed while open: callers may derive
+  // `open` and the content from one state, which empties the moment closing starts.
+  const open = React.useContext(DialogOpenContext)
+  const [shown, setShown] = React.useState(children)
+  if (open && shown !== children) setShown(children)
+
+  return (
+    <DialogPrimitive.Content
+      data-slot="dialog-content"
+      onCloseAutoFocus={(event) => {
+        onCloseAutoFocus?.(event)
+        if (event.defaultPrevented) return
+        if (focusOpener(opener)) {
+          event.preventDefault() // skip Radix's trigger focus
+          return
+        }
+        // Not prevented, so Radix's handler runs next and focuses the trigger,
+        // if any. The microtask runs after it: only if nothing took focus.
+        queueMicrotask(() => {
+          if (document.activeElement === document.body) {
+            document.getElementById("inhalt")?.focus()
+          }
+        })
+      }}
+      className={cn(
+        "fixed z-50 text-body text-popover-foreground shadow-lg duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        SIDES[side],
+        className
+      )}
+      {...props}
+    >
+      {open === false ? shown : children}
+      <DialogPrimitive.Close data-slot="dialog-close" asChild>
+        {/* The icon sizes grow to a 44px tap target on touch devices; pulling
+            the anchor into the corner keeps the glyph optically where it sits
+            with a mouse (8px + half of 28px === 0px + half of 44px). Same
+            `pointer-coarse` key as TOUCH_TARGET in button.tsx. */}
+        <Button
+          variant="ghost"
+          className="absolute top-2 right-2 text-ink-faint pointer-coarse:top-0 pointer-coarse:right-0"
+          size="icon-sm"
+        >
+          <XIcon />
+          <span className="sr-only">Schließen</span>
+        </Button>
+      </DialogPrimitive.Close>
+    </DialogPrimitive.Content>
+  )
+}
+
+/** Overlay plus panel. DialogPanel is its own component so it mounts fresh per opening. */
+function DialogContent(props: PanelProps) {
   return (
     <DialogPortal>
       <DialogOverlay />
-      <DialogPrimitive.Content
-        data-slot="dialog-content"
-        className={cn(
-          // Sized against the viewport (dvw/dvh), not `100%`: a fixed element's
-          // percentage resolves against the initial containing block, which the
-          // browser widens to the document's overflow width — so on a page that
-          // scrolls sideways the dialog grew with it and got clipped on both
-          // edges. max-h keeps a tall dialog's buttons reachable on a phone.
-          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100dvw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          className
-        )}
-        {...props}
-      >
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            {/* The icon sizes grow to a 44px tap target on touch devices; pulling
-                the anchor into the corner keeps the glyph optically where it sits
-                with a mouse (8px + half of 28px === 0px + half of 44px). Same
-                `pointer-coarse` key as TOUCH_TARGET in button.tsx. */}
-            <Button
-              variant="ghost"
-              className="absolute top-2 right-2 pointer-coarse:top-0 pointer-coarse:right-0"
-              size="icon-sm"
-            >
-              <XIcon
-              />
-              <span className="sr-only">Schließen</span>
-            </Button>
-          </DialogPrimitive.Close>
-        )}
-      </DialogPrimitive.Content>
+      <DialogPanel {...props} />
     </DialogPortal>
   )
 }
@@ -104,29 +156,17 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-function DialogFooter({
-  className,
-  showCloseButton = false,
-  children,
-  ...props
-}: React.ComponentProps<"div"> & {
-  showCloseButton?: boolean
-}) {
+function DialogFooter({ className, children, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-line bg-muted/50 p-4 sm:flex-row sm:items-center sm:justify-end",
         className
       )}
       {...props}
     >
       {children}
-      {showCloseButton && (
-        <DialogPrimitive.Close asChild>
-          <Button variant="outline">Schließen</Button>
-        </DialogPrimitive.Close>
-      )}
     </div>
   )
 }
@@ -139,7 +179,7 @@ function DialogTitle({
     <DialogPrimitive.Title
       data-slot="dialog-title"
       className={cn(
-        "text-base leading-none font-medium",
+        "pr-6 font-display text-panel font-semibold text-ink",
         className
       )}
       {...props}
@@ -155,7 +195,7 @@ function DialogDescription({
     <DialogPrimitive.Description
       data-slot="dialog-description"
       className={cn(
-        "text-sm text-muted-foreground *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-foreground",
+        "text-ui text-ink-soft *:[a]:underline *:[a]:underline-offset-3 *:[a]:hover:text-ink",
         className
       )}
       {...props}
@@ -170,8 +210,6 @@ export {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogOverlay,
-  DialogPortal,
   DialogTitle,
   DialogTrigger,
 }

@@ -1,15 +1,9 @@
 // Pure duplicate-person matching for the "Ähnliche Einträge"-Hinweis in the create
 // form. No DB, no side effects — safe on the client and fully unit-testable.
 
-import { fold } from "./format";
+import { fold, type PersonName } from "./format";
 
-export type PersonNameParts = {
-  firstName?: string | null;
-  lastName?: string | null;
-  scoutName?: string | null;
-};
-
-export type PersonCandidate = PersonNameParts & { id: number };
+export type PersonCandidate = PersonName & { id: number };
 
 /** How many hints to show at most — a soft cap so the callout stays quiet. */
 export const MAX_SIMILAR = 5;
@@ -31,7 +25,7 @@ function foldOrEmpty(value?: string | null): string {
  * the result is capped at `limit` candidates (in candidate order).
  */
 export function findSimilarPersons<C extends PersonCandidate>(
-  input: PersonNameParts,
+  input: PersonName,
   candidates: C[],
   limit: number = MAX_SIMILAR,
 ): C[] {

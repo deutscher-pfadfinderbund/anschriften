@@ -1,8 +1,8 @@
 // PDF export route handler (issue #5). GET /api/export/pdf?profile=…&birthdays=1&ranks=1&memorial=0
-// Runs on the Node runtime (spawns the Typst CLI) and is never cached. Session is
-// required (401 otherwise) — the proxy only guards pages, not /api routes, and this
-// endpoint serves the complete confidential directory.
-import { auth } from "@/lib/auth";
+// Runs on the Node runtime (spawns the Typst CLI) and is never cached. This session check is
+// the gate (401 otherwise): the proxy skips /api, so an expired session reaches us and gets a
+// 401 the download helper recognises — this endpoint serves the confidential directory.
+import { getSession } from "@/lib/auth-helpers";
 import { buildData, isProfile, type BuildOptions } from "@/pdf/build-data";
 import { compilePdf } from "@/pdf/compile";
 
@@ -10,8 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
-  const session = await auth.api.getSession({ headers: request.headers });
-  if (!session) {
+  if (!(await getSession(request.headers))) {
     return new Response("Nicht angemeldet.", { status: 401 });
   }
 

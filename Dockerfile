@@ -54,9 +54,7 @@ FROM node:24-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
-    HOSTNAME=0.0.0.0 \
-    TYPST_FONT_PATHS=/app/src/pdf/fonts \
-    PDF_ASSETS_DIR=/app/src/pdf
+    HOSTNAME=0.0.0.0
 
 # Pinned Typst CLI used by the PDF export route.
 COPY --from=typst /usr/local/bin/typst /usr/local/bin/typst
@@ -74,7 +72,7 @@ COPY --from=build --chown=node:node /app/scripts/migrate.mjs ./scripts/migrate.m
 COPY --from=build --chown=node:node /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
 
 # PDF template, fonts and letterhead. compile.ts resolves these relative to
-# process.cwd() (= /app) unless PDF_ASSETS_DIR overrides the base directory.
+# process.cwd() (= /app) and passes the fonts to Typst explicitly.
 COPY --from=build --chown=node:node /app/src/pdf/templates ./src/pdf/templates
 COPY --from=build --chown=node:node /app/src/pdf/fonts ./src/pdf/fonts
 COPY --from=build --chown=node:node /app/src/pdf/assets ./src/pdf/assets
@@ -82,10 +80,12 @@ COPY --from=build --chown=node:node /app/src/pdf/assets ./src/pdf/assets
 USER node
 EXPOSE 3000
 
-# Healthy as long as the server answers; redirects/404 still mean the process is up.
-# Uses Node's global fetch, so no extra packages (wget/curl) are needed in the image.
+# Probes better-auth's own /api/auth/ok: it only answers 200 once the server is up and the
+# auth handler has initialised, so a broken start turns unhealthy instead of serving the
+# static login page. It does not query the database (migrate.mjs already needs it to start).
+# Uses Node's global fetch — no wget/curl in the image.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/auth/ok').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # Apply migrations, then start the server. `exec` hands PID 1 to node so it
 # receives SIGTERM directly (graceful shutdown); the `&&` still aborts startup

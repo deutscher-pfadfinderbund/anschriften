@@ -1,12 +1,12 @@
-import { asc, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { cache } from "react";
 
 import { db } from "@/db";
+import { listsUsingRuleTarget, loadRules, type ListRef, type LoadedRule } from "@/db/list-rules";
 import {
   assignments,
-  distributionListGroupRules,
+  auditLog,
   distributionListMembers,
-  distributionListOfficeRules,
-  distributionListRankRules,
   distributionLists,
   groups,
   mailLog,
@@ -14,66 +14,147 @@ import {
   persons,
   ranks,
 } from "@/db/schema";
-import {
-  computeEffectiveMembership,
-  type MemberOrigin,
-} from "@/lib/effective-members";
+import type { AuditAction, AuditChange } from "@/lib/audit";
+import { computeEffectiveMembership, type MemberOrigin } from "@/lib/effective-members";
 import type { CsvPerson } from "@/lib/export";
+import { formatFullName, type PersonName } from "@/lib/format";
+import { byName, sortByDirectoryName } from "@/lib/name-order";
+import { RULE_KINDS, type RuleKind, type RuleRef } from "@/lib/rule-kinds";
+import type { Section } from "@/lib/sections";
 
-export type PhoneEntry = { label: string; number: string };
+export type { ListRef } from "@/db/list-rules";
 
-export type PersonAssignment = {
+// Read side of the app. Every page loads through these functions; mutations live in
+// src/actions/*. Sorting by name happens in TS with German collation: the DB cluster's
+// C collation would put umlauts after Z.
+
+// --- effective Verteiler membership (manual ∪ rules) ---------------------------------
+
+/**
+ * Rules and rule refs in display order: by kind (Amt, Stand, Gliederung), then the
+ * target's own order (office rank, Stand order, Gliederung sort key), then name.
+ */
+function byRuleOrder(a: Omit<LoadedRule, "listId">, b: Omit<LoadedRule, "listId">): number {
+  return (
+    RULE_KINDS.indexOf(a.kind) - RULE_KINDS.indexOf(b.kind) ||
+    a.sort - b.sort ||
+    byName(a, b)
+  );
+}
+
+/** Resolver from a member's `via` (kind + id) to named refs, in display order. */
+function viaResolver(rules: LoadedRule[]): (via: MemberOrigin["via"]) => RuleRef[] {
+  const byKey = new Map(rules.map((r) => [`${r.kind}:${r.targetId}`, r]));
+  return (via) =>
+    via
+      .map((v) => byKey.get(`${v.kind}:${v.id}`)!)
+      .sort(byRuleOrder)
+      .map((r) => ({ kind: r.kind, id: r.targetId, name: r.name }));
+}
+
+/**
+ * THE loader for effective membership: reads every input once and computes membership
+ * for all lists (~600 persons — trivial). Used by the directory filter, the Verteiler
+ * page, the CSV export and the mail recipients, so all of them agree. Also returns the
+ * resolved rules for naming `via` refs.
+ */
+async function loadEffectiveMembership(): Promise<{
+  membership: Map<number, Map<number, MemberOrigin>>;
+  rules: LoadedRule[];
+}> {
+  const [manualMembers, rules, activeAssignments, people] = await Promise.all([
+    db
+      .select({ listId: distributionListMembers.listId, personId: distributionListMembers.personId })
+      .from(distributionListMembers),
+    loadRules(),
+    // Only active tenures can match a rule; ended ones (history) never do.
+    db
+      .select({
+        personId: assignments.personId,
+        groupId: assignments.groupId,
+        officeId: assignments.officeId,
+        endDate: assignments.endDate,
+      })
+      .from(assignments)
+      .where(isNull(assignments.endDate)),
+    db.select({ id: persons.id, rankId: persons.rankId, deathDate: persons.deathDate }).from(persons),
+  ]);
+  const membership = computeEffectiveMembership({
+    manualMembers,
+    rules,
+    assignments: activeAssignments,
+    persons: people,
+  });
+  return { membership, rules };
+}
+
+/** Effective-member person ids of one list (manual ∪ rules, living only). */
+export async function effectiveMemberIds(listId: number): Promise<number[]> {
+  const { membership } = await loadEffectiveMembership();
+  return [...(membership.get(listId)?.keys() ?? [])];
+}
+
+// --- directory ("/") ------------------------------------------------------------------
+
+type PhoneEntry = { label: string; number: string };
+
+/** An active assignment as the directory shows it (Ämter badges, Gliederung filter). */
+type PersonAssignment = {
   id: number;
   groupId: number;
   groupName: string;
-  section: string;
   officeId: number | null;
   officeName: string | null;
 };
 
+/** One directory row — only what the table renders, filters and searches. */
 export type PersonListRow = {
   id: number;
-  salutation: string | null;
-  title: string | null;
   firstName: string | null;
   lastName: string | null;
   scoutName: string | null;
   rankName: string | null;
   birthDate: string | null;
   deathDate: string | null;
+  /** Searched, not shown. */
+  street: string | null;
   city: string | null;
-  postalCode: string | null;
   email: string | null;
   phones: PhoneEntry[];
   doNotPrint: boolean;
   assignments: PersonAssignment[];
-  /** Lists this person is an effective member of (manual ∪ office rule) — for the table filter. */
+  /** Lists this person is an effective member of (manual ∪ rules) — for the table filter. */
   effectiveListIds: number[];
 };
 
-export type GroupRow = {
-  id: number;
-  name: string;
-  parentId: number | null;
-  section: string;
-  kind: string | null;
-  sortKey: number;
-};
-
-export type OfficeRow = { id: number; name: string; rank: number };
-export type RankRow = { id: number; name: string; sortOrder: number };
-
-/** All persons with their assignments (group + office) and rank — one shot for the table. */
+/**
+ * All persons with their active assignments and rank — one shot for the table, in
+ * directory order (like the Verteiler members).
+ */
 export async function listPersons(): Promise<PersonListRow[]> {
-  const [rows, membership] = await Promise.all([
+  const [rows, { membership }] = await Promise.all([
     db.query.persons.findMany({
+      columns: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        scoutName: true,
+        birthDate: true,
+        deathDate: true,
+        street: true,
+        city: true,
+        email: true,
+        phones: true,
+        doNotPrint: true,
+      },
       with: {
-        rank: true,
+        rank: { columns: { name: true } },
         // Only active tenures (end_date IS NULL) drive the Ämter badges and the
         // Amt/Gliederung filters; ended offices live in the editor's history section.
         assignments: {
+          columns: { id: true, groupId: true, officeId: true },
           where: (a, { isNull }) => isNull(a.endDate),
-          with: { group: true, office: true },
+          with: { group: { columns: { name: true } }, office: { columns: { name: true } } },
         },
       },
     }),
@@ -90,32 +171,21 @@ export async function listPersons(): Promise<PersonListRow[]> {
     }
   }
 
-  return rows.map((p) => ({
-    id: p.id,
-    salutation: p.salutation,
-    title: p.title,
-    firstName: p.firstName,
-    lastName: p.lastName,
-    scoutName: p.scoutName,
-    rankName: p.rank?.name ?? null,
-    birthDate: p.birthDate,
-    deathDate: p.deathDate,
-    city: p.city,
-    postalCode: p.postalCode,
-    email: p.email,
-    phones: (p.phones as PhoneEntry[]) ?? [],
-    doNotPrint: p.doNotPrint,
-    assignments: p.assignments.map((a) => ({
-      id: a.id,
-      groupId: a.groupId,
-      groupName: a.group.name,
-      section: a.group.section,
-      officeId: a.officeId,
-      officeName: a.office?.name ?? null,
+  return sortByDirectoryName(
+    rows.map(({ rank, assignments: tenures, ...p }) => ({
+      ...p,
+      rankName: rank?.name ?? null,
+      assignments: tenures.map(({ group, office, ...a }) => ({
+        ...a,
+        groupName: group.name,
+        officeName: office?.name ?? null,
+      })),
+      effectiveListIds: listIdsByPerson.get(p.id) ?? [],
     })),
-    effectiveListIds: listIdsByPerson.get(p.id) ?? [],
-  }));
+  );
 }
+
+// --- person editor --------------------------------------------------------------------
 
 export type PersonEditData = {
   id: number;
@@ -135,7 +205,8 @@ export type PersonEditData = {
   phones: PhoneEntry[];
   notes: string | null;
   doNotPrint: boolean;
-  updatedAt: string | null;
+  /** ISO timestamp of the last change — sent back on save for the concurrency check. */
+  updatedAt: string;
   updatedBy: string | null;
   /** Active tenures (end_date IS NULL) — the editable "Ämter & Gliederung" rows. */
   assignments: {
@@ -146,14 +217,14 @@ export type PersonEditData = {
   }[];
   /** Ended tenures (end_date set) — rendered read-only-ish in the "Frühere Ämter" section. */
   historicalAssignments: HistoricalAssignment[];
+  /** Lists this person was added to by hand (the editable checkboxes). */
   distributionListIds: number[];
   /**
-   * Lists this person belongs to automatically because a rule matches them — via a
-   * held office, their Stand or a Gliederung they are active in (living only). Each
-   * `reasons` entry is already human-labelled ("Amt: …", "Stand: …", "Gliederung: …").
-   * Rendered as a locked, ticked checkbox with an "automatisch enthalten"-hint.
+   * Lists this person belongs to automatically because a rule matches them — via a held
+   * office, their Stand or a Gliederung they are active in (living only). Rendered as a
+   * locked, ticked checkbox naming the rules.
    */
-  ruleMemberships: { listId: number; reasons: string[] }[];
+  ruleMemberships: { listId: number; via: RuleRef[] }[];
 };
 
 /** One ended office tenure for the editor's "Frühere Ämter" section. */
@@ -169,21 +240,9 @@ export type HistoricalAssignment = {
   endUnknown: boolean;
 };
 
-/**
- * Active holder of a given (office, group) combination — for the "Amtsinhaber-Warnung"
- * in the person editor (issue #26). Lives here (not in the "use server" action module)
- * so both the server action and the client form import it as a plain type.
- */
-export type ActiveHolder = {
-  assignmentId: number;
-  personId: number;
-  name: string;
-  startDate: string | null;
-};
-
 /** One person shaped for the editor, or null if not found. */
 export async function getPersonForEdit(id: number): Promise<PersonEditData | null> {
-  const [p, ruleRows, rankRuleRows, groupRuleRows] = await Promise.all([
+  const [p, rules] = await Promise.all([
     db.query.persons.findFirst({
       where: eq(persons.id, id),
       with: {
@@ -191,30 +250,7 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
         distributionListMembers: true,
       },
     }),
-    db
-      .select({
-        listId: distributionListOfficeRules.listId,
-        officeId: distributionListOfficeRules.officeId,
-        officeName: offices.name,
-      })
-      .from(distributionListOfficeRules)
-      .innerJoin(offices, eq(offices.id, distributionListOfficeRules.officeId)),
-    db
-      .select({
-        listId: distributionListRankRules.listId,
-        rankId: distributionListRankRules.rankId,
-        rankName: ranks.name,
-      })
-      .from(distributionListRankRules)
-      .innerJoin(ranks, eq(ranks.id, distributionListRankRules.rankId)),
-    db
-      .select({
-        listId: distributionListGroupRules.listId,
-        groupId: distributionListGroupRules.groupId,
-        groupName: groups.name,
-      })
-      .from(distributionListGroupRules)
-      .innerJoin(groups, eq(groups.id, distributionListGroupRules.groupId)),
+    loadRules(),
   ]);
   if (!p) return null;
 
@@ -234,38 +270,18 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
       endUnknown: a.endUnknown,
     }));
 
-  // Which lists this person is auto-included in. Same union/dedupe semantics as
-  // everywhere else (incl. the deceased and ended-tenure exclusions) via
-  // computeEffectiveMembership, fed with just this person's assignments.
+  // Membership of this one person: the same computation as `loadEffectiveMembership`,
+  // fed with only their own rows.
   const membership = computeEffectiveMembership({
-    manualMembers: [],
-    officeRules: ruleRows.map((r) => ({ listId: r.listId, officeId: r.officeId })),
-    rankRules: rankRuleRows.map((r) => ({ listId: r.listId, rankId: r.rankId })),
-    groupRules: groupRuleRows.map((r) => ({ listId: r.listId, groupId: r.groupId })),
-    officeAssignments: p.assignments
-      .filter((a): a is typeof a & { officeId: number } => a.officeId != null)
-      .map((a) => ({ personId: p.id, officeId: a.officeId, endDate: a.endDate })),
-    groupAssignments: p.assignments.map((a) => ({
-      personId: p.id,
-      groupId: a.groupId,
-      endDate: a.endDate,
-    })),
-    personRanks: p.rankId != null ? [{ personId: p.id, rankId: p.rankId }] : [],
-    deceasedPersonIds: p.deathDate ? [p.id] : [],
+    manualMembers: p.distributionListMembers,
+    rules,
+    assignments: p.assignments,
+    persons: [p],
   });
-  const officeNameById = new Map(ruleRows.map((r) => [r.officeId, r.officeName]));
-  const rankNameById = new Map(rankRuleRows.map((r) => [r.rankId, r.rankName]));
-  const groupNameById = new Map(groupRuleRows.map((r) => [r.groupId, r.groupName]));
-  const ruleMemberships = [...membership.entries()].flatMap(([listId, members]) => {
+  const viaRefs = viaResolver(rules);
+  const ruleMemberships = [...membership].flatMap(([listId, members]) => {
     const origin = members.get(p.id);
-    if (!origin) return [];
-    const reasons = [
-      ...origin.viaOfficeIds.map((id) => `Amt: ${officeNameById.get(id)!}`),
-      ...origin.viaRankIds.map((id) => `Stand: ${rankNameById.get(id)!}`),
-      ...origin.viaGroupIds.map((id) => `Gliederung: ${groupNameById.get(id)!}`),
-    ];
-    if (reasons.length === 0) return [];
-    return [{ listId, reasons }];
+    return origin && origin.via.length > 0 ? [{ listId, via: viaRefs(origin.via) }] : [];
   });
 
   return {
@@ -283,10 +299,10 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
     postalCode: p.postalCode,
     city: p.city,
     email: p.email,
-    phones: (p.phones as PhoneEntry[]) ?? [],
+    phones: p.phones,
     notes: p.notes,
     doNotPrint: p.doNotPrint,
-    updatedAt: p.updatedAt ? p.updatedAt.toISOString() : null,
+    updatedAt: p.updatedAt.toISOString(),
     updatedBy: p.updatedBy,
     assignments: activeAssignments.map((a) => ({
       id: a.id,
@@ -300,8 +316,116 @@ export async function getPersonForEdit(id: number): Promise<PersonEditData | nul
   };
 }
 
-export async function listGroups(): Promise<GroupRow[]> {
+/** Active holder of an office in a Gliederung — for the editor's "Amtsinhaber-Warnung" (issue #26). */
+export type ActiveHolder = {
+  assignmentId: number;
+  personId: number;
+  /** "Vorname Nachname" — the warning uses it in running text. */
+  name: string;
+  startDate: string | null;
+};
+
+export type ActiveOfficeHolder = ActiveHolder & { officeId: number; groupId: number };
+
+/**
+ * Every active office tenure with its holder's name — preloaded by the person pages so
+ * the holder warning is a plain lookup. savePerson re-checks each "end previous tenure"
+ * order inside its transaction, so a stale preload can never end the wrong tenure.
+ */
+export async function listActiveOfficeHolders(): Promise<ActiveOfficeHolder[]> {
   const rows = await db
+    .select({
+      assignmentId: assignments.id,
+      officeId: assignments.officeId,
+      groupId: assignments.groupId,
+      startDate: assignments.startDate,
+      personId: persons.id,
+      firstName: persons.firstName,
+      lastName: persons.lastName,
+      scoutName: persons.scoutName,
+    })
+    .from(assignments)
+    .innerJoin(persons, eq(persons.id, assignments.personId))
+    .where(and(isNull(assignments.endDate), isNotNull(assignments.officeId)));
+  return rows.map((r) => ({
+    assignmentId: r.assignmentId,
+    officeId: r.officeId!,
+    groupId: r.groupId,
+    personId: r.personId,
+    name: formatFullName(r),
+    startDate: r.startDate,
+  }));
+}
+
+// --- change log (Änderungsverlauf, Änderungsprotokoll) -------------------------------
+
+/** One change-log entry: who changed what, and when (`at`, ISO). */
+export type AuditEntry = {
+  id: number;
+  at: string;
+  actor: string;
+  action: AuditAction;
+  changes: AuditChange[];
+};
+
+/** A change-log entry for the Änderungsprotokoll: with the person it is about (null: a deletion). */
+export type AuditLogRow = AuditEntry & { person: (PersonName & { id: number }) | null };
+
+const auditColumns = {
+  id: auditLog.id,
+  at: auditLog.at,
+  actor: auditLog.actor,
+  action: auditLog.action,
+  changes: auditLog.changes,
+};
+
+/** One person's change log, newest first (the editor's "Änderungsverlauf"). */
+export async function personAudit(personId: number): Promise<AuditEntry[]> {
+  const rows = await db
+    .select(auditColumns)
+    .from(auditLog)
+    .where(eq(auditLog.personId, personId))
+    .orderBy(desc(auditLog.at), desc(auditLog.id));
+  return rows.map((r) => ({ ...r, at: r.at.toISOString() }));
+}
+
+/** The latest `limit` changes across all persons, newest first (the Änderungsprotokoll page). */
+export async function recentAudit(limit: number): Promise<AuditLogRow[]> {
+  const rows = await db
+    .select({
+      ...auditColumns,
+      personId: auditLog.personId,
+      firstName: persons.firstName,
+      lastName: persons.lastName,
+      scoutName: persons.scoutName,
+    })
+    .from(auditLog)
+    .leftJoin(persons, eq(persons.id, auditLog.personId))
+    .orderBy(desc(auditLog.at), desc(auditLog.id))
+    .limit(limit);
+  return rows.map(({ personId, firstName, lastName, scoutName, at, ...r }) => ({
+    ...r,
+    at: at.toISOString(),
+    person: personId == null ? null : { id: personId, firstName, lastName, scoutName },
+  }));
+}
+
+// --- master data: Gliederungen, Ämter, Stände -----------------------------------------
+
+export type GroupRow = {
+  id: number;
+  name: string;
+  parentId: number | null;
+  section: Section;
+  kind: string | null;
+  sortKey: number;
+};
+
+export type OfficeRow = { id: number; name: string; rank: number };
+export type RankRow = { id: number; name: string; sortOrder: number };
+
+export async function listGroups(): Promise<GroupRow[]> {
+  return db
     .select({
       id: groups.id,
       name: groups.name,
@@ -312,7 +436,6 @@ export async function listGroups(): Promise<GroupRow[]> {
     })
     .from(groups)
     .orderBy(asc(groups.sortKey), asc(groups.name));
-  return rows;
 }
 
 export async function listOffices(): Promise<OfficeRow[]> {
@@ -329,55 +452,83 @@ export async function listRanks(): Promise<RankRow[]> {
     .orderBy(asc(ranks.sortOrder), asc(ranks.name));
 }
 
-/** assignment + child counts per group, keyed by group id — for the delete guard. */
-export async function groupUsage(): Promise<
-  Map<number, { assignments: number; children: number }>
-> {
-  const assignmentCounts = await db
-    .select({ groupId: assignments.groupId, n: count() })
-    .from(assignments)
-    .groupBy(assignments.groupId);
-  const childCounts = await db
-    .select({ parentId: groups.parentId, n: count() })
-    .from(groups)
-    .groupBy(groups.parentId);
-
-  const map = new Map<number, { assignments: number; children: number }>();
-  for (const r of assignmentCounts) {
-    map.set(r.groupId, { assignments: Number(r.n), children: 0 });
-  }
-  for (const r of childCounts) {
-    if (r.parentId == null) continue;
-    const e = map.get(r.parentId) ?? { assignments: 0, children: 0 };
-    e.children = Number(r.n);
-    map.set(r.parentId, e);
-  }
-  return map;
+/** Which lists each office is an automatic member of (chips on the Ämter page). */
+export function officeListRules(): Promise<Map<number, ListRef[]>> {
+  return listsUsingRuleTarget("office");
 }
 
-/** assignment count per office id — for the delete guard. */
-export async function officeUsage(): Promise<Map<number, number>> {
-  const rows = await db
-    .select({ officeId: assignments.officeId, n: count() })
-    .from(assignments)
-    .groupBy(assignments.officeId);
-  const map = new Map<number, number>();
-  for (const r of rows) if (r.officeId != null) map.set(r.officeId, Number(r.n));
-  return map;
+// Delete guards. Each returns, per id, the German reason the row cannot be deleted
+// (absent = deletable). The delete action and the page's up-front check both use them,
+// so the dialog blocks exactly what the server refuses. The checks matter: a rule's
+// foreign key cascades, so deleting a ruled Amt/Stand/Gliederung would silently drop the
+// rule and change who gets future mailings.
+
+function ruleBlocker(subject: string, lists: ListRef[]): string {
+  const names = lists.map((l) => `„${l.listName}“`).join(", ");
+  return `${subject} wird noch als Regel ${lists.length === 1 ? "im Verteiler" : "in den Verteilern"} ${names} verwendet. Entferne dort zuerst die Regel.`;
 }
 
-/** person count per rank id — for the delete guard. */
-export async function rankUsage(): Promise<Map<number, number>> {
-  const rows = await db
-    .select({ rankId: persons.rankId, n: count() })
-    .from(persons)
-    .groupBy(persons.rankId);
-  const map = new Map<number, number>();
-  for (const r of rows) if (r.rankId != null) map.set(r.rankId, Number(r.n));
-  return map;
+export async function officeDeleteBlockers(): Promise<Map<number, string>> {
+  const [used, ruleLists] = await Promise.all([
+    db
+      .select({ id: assignments.officeId, n: count() })
+      .from(assignments)
+      .where(isNotNull(assignments.officeId))
+      .groupBy(assignments.officeId),
+    listsUsingRuleTarget("office"),
+  ]);
+  const out = new Map<number, string>();
+  for (const [id, lists] of ruleLists) out.set(id, ruleBlocker("Dieses Amt", lists));
+  for (const r of used)
+    out.set(
+      r.id!,
+      "Dieses Amt ist noch Personen zugeordnet (auch frühere Ämter zählen) und kann nicht gelöscht werden.",
+    );
+  return out;
 }
 
-// --- distribution lists (M4 + office rules M-issue16) ---
+export async function rankDeleteBlockers(): Promise<Map<number, string>> {
+  const [used, ruleLists] = await Promise.all([
+    db
+      .select({ id: persons.rankId, n: count() })
+      .from(persons)
+      .where(isNotNull(persons.rankId))
+      .groupBy(persons.rankId),
+    listsUsingRuleTarget("rank"),
+  ]);
+  const out = new Map<number, string>();
+  for (const [id, lists] of ruleLists) out.set(id, ruleBlocker("Dieser Stand", lists));
+  for (const r of used)
+    out.set(r.id!, "Dieser Stand ist noch Personen zugeordnet und kann nicht gelöscht werden.");
+  return out;
+}
+
+export async function groupDeleteBlockers(): Promise<Map<number, string>> {
+  const [used, children, ruleLists] = await Promise.all([
+    db
+      .select({ id: assignments.groupId, n: count() })
+      .from(assignments)
+      .groupBy(assignments.groupId),
+    db
+      .select({ id: groups.parentId, n: count() })
+      .from(groups)
+      .where(isNotNull(groups.parentId))
+      .groupBy(groups.parentId),
+    listsUsingRuleTarget("group"),
+  ]);
+  const out = new Map<number, string>();
+  for (const [id, lists] of ruleLists) out.set(id, ruleBlocker("Diese Gliederung", lists));
+  for (const r of used)
+    out.set(
+      r.id,
+      "Diese Gliederung ist noch Personen zugeordnet (auch frühere Ämter zählen) und kann nicht gelöscht werden.",
+    );
+  for (const r of children)
+    out.set(r.id!, "Diese Gliederung hat noch Untergliederungen und kann nicht gelöscht werden.");
+  return out;
+}
+
+// --- Verteiler ------------------------------------------------------------------------
 
 export type ListMemberRow = {
   personId: number;
@@ -385,341 +536,85 @@ export type ListMemberRow = {
   lastName: string | null;
   scoutName: string | null;
   email: string | null;
-  /** The member's senior office (lowest office rank across their assignments), or null. */
+  /** The member's senior office (lowest office rank across their active tenures), or null. */
   mainOffice: string | null;
   /** True if added by hand (has a removable membership); false if only via a rule. */
   manual: boolean;
-  /** Offices (rules) through which this person is auto-included, for the "über Amt: …" chip. */
-  viaOffices: { id: number; name: string }[];
-  /** Stände (rules) through which this person is auto-included, for the "über Stand: …" chip. */
-  viaRanks: { id: number; name: string }[];
-  /** Gliederungen (rules) through which this person is auto-included, for the "über Gliederung: …" chip. */
-  viaGroups: { id: number; name: string }[];
+  /** The rules through which this person is auto-included, in display order. */
+  via: RuleRef[];
 };
-
-export type OfficeRuleRow = { officeId: number; officeName: string };
-export type RankRuleRow = { rankId: number; rankName: string };
-export type GroupRuleRow = { groupId: number; groupName: string };
 
 export type DistributionListWithMembers = {
   id: number;
   name: string;
   description: string | null;
-  officeRules: OfficeRuleRow[];
-  rankRules: RankRuleRow[];
-  groupRules: GroupRuleRow[];
+  /** The list's rules per kind, each in the target's own order. */
+  rules: Record<RuleKind, { id: number; name: string }[]>;
   members: ListMemberRow[];
 };
 
-/** Sort members like the directory: by last name, else scout name. */
-function memberSortKey(m: ListMemberRow): string {
-  return (m.lastName || m.scoutName || "").toLowerCase();
-}
-
-/** Resolve rule-target ids to `{ id, name }` refs, sorted by name (German collation). */
-function ruleRefs(
-  ids: number[],
-  nameById: Map<number, string>,
-): { id: number; name: string }[] {
-  return ids
-    .map((id) => ({ id, name: nameById.get(id) ?? "" }))
-    .sort((a, b) => a.name.localeCompare(b.name, "de"));
-}
-
-/**
- * Load the raw membership inputs and compute effective membership for every list.
- * Reused by the table filter and the CSV export; the pure union/dedupe logic lives
- * in `@/lib/effective-members`.
- */
-async function loadEffectiveMembership(): Promise<Map<number, Map<number, MemberOrigin>>> {
-  const [manualMembers, ruleRows, rankRuleRows, groupRuleRows, assignmentRows, personRankRows, deceasedRows] =
-    await Promise.all([
-      db
-        .select({
-          listId: distributionListMembers.listId,
-          personId: distributionListMembers.personId,
-        })
-        .from(distributionListMembers),
-      db
-        .select({
-          listId: distributionListOfficeRules.listId,
-          officeId: distributionListOfficeRules.officeId,
-        })
-        .from(distributionListOfficeRules),
-      db
-        .select({
-          listId: distributionListRankRules.listId,
-          rankId: distributionListRankRules.rankId,
-        })
-        .from(distributionListRankRules),
-      db
-        .select({
-          listId: distributionListGroupRules.listId,
-          groupId: distributionListGroupRules.groupId,
-        })
-        .from(distributionListGroupRules),
-      // All assignments (with or without office): office rules use the office half,
-      // group rules use the group half. Ended tenures are filtered in the pure logic.
-      db
-        .select({
-          personId: assignments.personId,
-          groupId: assignments.groupId,
-          officeId: assignments.officeId,
-          endDate: assignments.endDate,
-        })
-        .from(assignments),
-      db
-        .select({ personId: persons.id, rankId: persons.rankId })
-        .from(persons)
-        .where(isNotNull(persons.rankId)),
-      db.select({ id: persons.id }).from(persons).where(isNotNull(persons.deathDate)),
-    ]);
-
-  return computeEffectiveMembership({
-    manualMembers,
-    officeRules: ruleRows,
-    rankRules: rankRuleRows,
-    groupRules: groupRuleRows,
-    // Pass end_date through; computeEffectiveMembership drops ended tenures so only
-    // current office holders / active group members are rule-based members (issue #22).
-    officeAssignments: assignmentRows
-      .filter((a) => a.officeId != null)
-      .map((a) => ({ personId: a.personId, officeId: a.officeId!, endDate: a.endDate })),
-    groupAssignments: assignmentRows.map((a) => ({
-      personId: a.personId,
-      groupId: a.groupId,
-      endDate: a.endDate,
-    })),
-    personRanks: personRankRows.map((r) => ({ personId: r.personId, rankId: r.rankId! })),
-    deceasedPersonIds: deceasedRows.map((r) => r.id),
-  });
-}
-
-/** Every distribution list with its office/rank/group rules and effective members — one shot for /verteiler. */
+/** Every distribution list with its rules and effective members — one shot for /verteiler. */
 export async function listDistributionLists(): Promise<DistributionListWithMembers[]> {
-  const [lists, ruleRows, rankRuleRows, groupRuleRows, personRows, manualMembers] = await Promise.all([
+  const [lists, { membership, rules }, people, activeOffices] = await Promise.all([
     db
-      .select({
-        id: distributionLists.id,
-        name: distributionLists.name,
-        description: distributionLists.description,
-      })
-      .from(distributionLists)
-      .orderBy(asc(distributionLists.name)),
+      .select({ id: distributionLists.id, name: distributionLists.name, description: distributionLists.description })
+      .from(distributionLists),
+    loadEffectiveMembership(),
+    // Already in directory order, so members sort by their position here.
+    listPersonOptions(),
     db
-      .select({
-        listId: distributionListOfficeRules.listId,
-        officeId: distributionListOfficeRules.officeId,
-        officeName: offices.name,
-        officeRank: offices.rank,
-      })
-      .from(distributionListOfficeRules)
-      .innerJoin(offices, eq(offices.id, distributionListOfficeRules.officeId)),
-    db
-      .select({
-        listId: distributionListRankRules.listId,
-        rankId: distributionListRankRules.rankId,
-        rankName: ranks.name,
-        rankSort: ranks.sortOrder,
-      })
-      .from(distributionListRankRules)
-      .innerJoin(ranks, eq(ranks.id, distributionListRankRules.rankId)),
-    db
-      .select({
-        listId: distributionListGroupRules.listId,
-        groupId: distributionListGroupRules.groupId,
-        groupName: groups.name,
-        groupSort: groups.sortKey,
-      })
-      .from(distributionListGroupRules)
-      .innerJoin(groups, eq(groups.id, distributionListGroupRules.groupId)),
-    db.query.persons.findMany({ with: { assignments: { with: { office: true } } } }),
-    db
-      .select({
-        listId: distributionListMembers.listId,
-        personId: distributionListMembers.personId,
-      })
-      .from(distributionListMembers),
+      .select({ personId: assignments.personId, name: offices.name, rank: offices.rank })
+      .from(assignments)
+      .innerJoin(offices, eq(offices.id, assignments.officeId))
+      .where(isNull(assignments.endDate)),
   ]);
 
-  const personById = new Map(personRows.map((p) => [p.id, p]));
-  const officeNameById = new Map(ruleRows.map((r) => [r.officeId, r.officeName]));
-  const rankNameById = new Map(rankRuleRows.map((r) => [r.rankId, r.rankName]));
-  const groupNameById = new Map(groupRuleRows.map((r) => [r.groupId, r.groupName]));
-
-  const officeAssignments: { personId: number; officeId: number; endDate: string | null }[] = [];
-  const groupAssignments: { personId: number; groupId: number; endDate: string | null }[] = [];
-  const personRanks: { personId: number; rankId: number }[] = [];
-  const deceasedPersonIds: number[] = [];
-  for (const p of personRows) {
-    if (p.deathDate) deceasedPersonIds.push(p.id);
-    if (p.rankId != null) personRanks.push({ personId: p.id, rankId: p.rankId });
-    for (const a of p.assignments) {
-      groupAssignments.push({ personId: p.id, groupId: a.groupId, endDate: a.endDate });
-      if (a.officeId != null)
-        officeAssignments.push({ personId: p.id, officeId: a.officeId, endDate: a.endDate });
-    }
+  const personById = new Map(people.map((p) => [p.id, p]));
+  const position = new Map(people.map((p, i) => [p.id, i]));
+  // The senior *active* office per person (ended tenures never count as a main office).
+  const mainOffice = new Map<number, { name: string; rank: number }>();
+  for (const o of activeOffices) {
+    const current = mainOffice.get(o.personId);
+    if (!current || o.rank < current.rank) mainOffice.set(o.personId, o);
   }
 
-  const membership = computeEffectiveMembership({
-    manualMembers,
-    officeRules: ruleRows.map((r) => ({ listId: r.listId, officeId: r.officeId })),
-    rankRules: rankRuleRows.map((r) => ({ listId: r.listId, rankId: r.rankId })),
-    groupRules: groupRuleRows.map((r) => ({ listId: r.listId, groupId: r.groupId })),
-    officeAssignments,
-    groupAssignments,
-    personRanks,
-    deceasedPersonIds,
-  });
-
-  // Office rules per list, ordered by office rank then name (PDF-style office ordering).
-  const officeRulesByList = new Map<number, OfficeRuleRow[]>();
-  for (const r of [...ruleRows].sort(
-    (a, b) => a.officeRank - b.officeRank || a.officeName.localeCompare(b.officeName, "de"),
-  )) {
-    const arr = officeRulesByList.get(r.listId) ?? [];
-    arr.push({ officeId: r.officeId, officeName: r.officeName });
-    officeRulesByList.set(r.listId, arr);
-  }
-  // Rank rules per list, ordered by the Stand's sort order then name.
-  const rankRulesByList = new Map<number, RankRuleRow[]>();
-  for (const r of [...rankRuleRows].sort(
-    (a, b) => a.rankSort - b.rankSort || a.rankName.localeCompare(b.rankName, "de"),
-  )) {
-    const arr = rankRulesByList.get(r.listId) ?? [];
-    arr.push({ rankId: r.rankId, rankName: r.rankName });
-    rankRulesByList.set(r.listId, arr);
-  }
-  // Group rules per list, ordered by the group's sort key then name.
-  const groupRulesByList = new Map<number, GroupRuleRow[]>();
-  for (const r of [...groupRuleRows].sort(
-    (a, b) => a.groupSort - b.groupSort || a.groupName.localeCompare(b.groupName, "de"),
-  )) {
-    const arr = groupRulesByList.get(r.listId) ?? [];
-    arr.push({ groupId: r.groupId, groupName: r.groupName });
-    groupRulesByList.set(r.listId, arr);
+  const rulesByList = new Map<number, Record<RuleKind, { id: number; name: string }[]>>();
+  for (const r of [...rules].sort(byRuleOrder)) {
+    let perKind = rulesByList.get(r.listId);
+    if (!perKind) rulesByList.set(r.listId, (perKind = { office: [], rank: [], group: [] }));
+    perKind[r.kind].push({ id: r.targetId, name: r.name });
   }
 
-  return lists.map((dl) => {
-    const memberMap = membership.get(dl.id) ?? new Map<number, MemberOrigin>();
-    const members: ListMemberRow[] = [...memberMap.entries()].map(([personId, origin]) => {
+  const viaRefs = viaResolver(rules);
+  return lists.sort(byName).map((dl) => {
+    const members: ListMemberRow[] = [...(membership.get(dl.id) ?? [])].map(([personId, origin]) => {
       const p = personById.get(personId)!;
-      // The member's senior office = lowest-ranked *active* office (ended tenures
-      // must not surface as someone's current main office).
-      const withOffice = p.assignments
-        .filter((a) => a.office && a.endDate == null)
-        .sort((a, b) => (a.office!.rank ?? 999) - (b.office!.rank ?? 999));
-      const viaOffices = ruleRefs(origin.viaOfficeIds, officeNameById);
-      const viaRanks = ruleRefs(origin.viaRankIds, rankNameById);
-      const viaGroups = ruleRefs(origin.viaGroupIds, groupNameById);
       return {
         personId,
         firstName: p.firstName,
         lastName: p.lastName,
         scoutName: p.scoutName,
         email: p.email,
-        mainOffice: withOffice[0]?.office?.name ?? null,
+        mainOffice: mainOffice.get(personId)?.name ?? null,
         manual: origin.manual,
-        viaOffices,
-        viaRanks,
-        viaGroups,
+        via: viaRefs(origin.via),
       };
     });
-    members.sort((a, b) => memberSortKey(a).localeCompare(memberSortKey(b), "de"));
+    members.sort((a, b) => position.get(a.personId)! - position.get(b.personId)!);
     return {
-      id: dl.id,
-      name: dl.name,
-      description: dl.description,
-      officeRules: officeRulesByList.get(dl.id) ?? [],
-      rankRules: rankRulesByList.get(dl.id) ?? [],
-      groupRules: groupRulesByList.get(dl.id) ?? [],
+      ...dl,
+      rules: rulesByList.get(dl.id) ?? { office: [], rank: [], group: [] },
       members,
     };
   });
 }
 
-export type OfficeListRule = { listId: number; listName: string };
-
-/**
- * Which distribution lists each office is an automatic member of (read-only display
- * on the Ämter page). Keyed by office id.
- */
-export async function officeListRules(): Promise<Map<number, OfficeListRule[]>> {
+/** Names of all distribution lists, for pickers (the editor's checkboxes, "Zu Verteiler hinzufügen"). */
+export async function listDistributionListNames(): Promise<{ id: number; name: string }[]> {
   const rows = await db
-    .select({
-      officeId: distributionListOfficeRules.officeId,
-      listId: distributionListOfficeRules.listId,
-      listName: distributionLists.name,
-    })
-    .from(distributionListOfficeRules)
-    .innerJoin(distributionLists, eq(distributionLists.id, distributionListOfficeRules.listId))
-    .orderBy(asc(distributionLists.name));
-  const map = new Map<number, OfficeListRule[]>();
-  for (const r of rows) {
-    const arr = map.get(r.officeId) ?? [];
-    arr.push({ listId: r.listId, listName: r.listName });
-    map.set(r.officeId, arr);
-  }
-  return map;
-}
-
-export type DistributionListSummary = {
-  id: number;
-  name: string;
-  description: string | null;
-  memberCount: number;
-};
-
-/** Lightweight list of all distribution lists with member counts (editor + table dialog). */
-export async function listDistributionListSummaries(): Promise<DistributionListSummary[]> {
-  const rows = await db
-    .select({
-      id: distributionLists.id,
-      name: distributionLists.name,
-      description: distributionLists.description,
-      memberCount: count(distributionListMembers.personId),
-    })
-    .from(distributionLists)
-    .leftJoin(distributionListMembers, eq(distributionListMembers.listId, distributionLists.id))
-    .groupBy(distributionLists.id)
-    .orderBy(asc(distributionLists.name));
-  return rows.map((r) => ({ ...r, memberCount: Number(r.memberCount) }));
-}
-
-export type PersonOption = {
-  id: number;
-  firstName: string | null;
-  lastName: string | null;
-  scoutName: string | null;
-  email: string | null;
-};
-
-/** German collation on last name → first name → scout name (nulls sort last). */
-function byGermanName(
-  a: { lastName: string | null; firstName: string | null; scoutName: string | null },
-  b: { lastName: string | null; firstName: string | null; scoutName: string | null },
-): number {
-  return (
-    (a.lastName ?? "").localeCompare(b.lastName ?? "", "de") ||
-    (a.firstName ?? "").localeCompare(b.firstName ?? "", "de") ||
-    (a.scoutName ?? "").localeCompare(b.scoutName ?? "", "de")
-  );
-}
-
-/** Minimal person list for the "add members" combobox. */
-export async function listPersonOptions(): Promise<PersonOption[]> {
-  const rows = await db
-    .select({
-      id: persons.id,
-      firstName: persons.firstName,
-      lastName: persons.lastName,
-      scoutName: persons.scoutName,
-      email: persons.email,
-    })
-    .from(persons);
-  // Sort in TS with German collation: the DB cluster's C-collation sorts umlauts after Z
-  // and uppercase before lowercase, which does not match the directory's German order.
-  return rows.sort(byGermanName);
+    .select({ id: distributionLists.id, name: distributionLists.name })
+    .from(distributionLists);
+  return rows.sort(byName);
 }
 
 /** Name of a single distribution list (for the CSV download filename), or null. */
@@ -731,6 +626,36 @@ export async function getListName(id: number): Promise<string | null> {
     .limit(1);
   return row?.name ?? null;
 }
+
+export type PersonOption = {
+  id: number;
+  firstName: string | null;
+  lastName: string | null;
+  scoutName: string | null;
+  email: string | null;
+  /** Set for deceased persons: the duplicate hint keeps them, the member picker drops them. */
+  deathDate: string | null;
+};
+
+/**
+ * Minimal person list in directory order: the "add members" picker, the duplicate-person
+ * hint and the Verteiler members. Memoized per request (the Verteiler page needs it twice).
+ */
+export const listPersonOptions = cache(async (): Promise<PersonOption[]> => {
+  const rows = await db
+    .select({
+      id: persons.id,
+      firstName: persons.firstName,
+      lastName: persons.lastName,
+      scoutName: persons.scoutName,
+      email: persons.email,
+      deathDate: persons.deathDate,
+    })
+    .from(persons);
+  return sortByDirectoryName(rows);
+});
+
+// --- CSV export -----------------------------------------------------------------------
 
 const csvColumns = {
   salutation: persons.salutation,
@@ -747,44 +672,32 @@ const csvColumns = {
 
 /** CSV export rows for a whole distribution list (effective members), ordered like the directory. */
 export async function personsForCsvByList(listId: number): Promise<CsvPerson[]> {
-  const membership = await loadEffectiveMembership();
-  const members = membership.get(listId);
-  if (!members || members.size === 0) return [];
-  // Reuse the by-ids query so effective (manual ∪ rule, deduped) members are exported.
-  return personsForCsvByIds([...members.keys()]);
+  return personsForCsvByIds(await effectiveMemberIds(listId));
 }
 
-/** CSV export rows for an explicit selection of person ids, ordered like the directory. */
+/**
+ * CSV export rows for an explicit selection of person ids, ordered like the directory.
+ * Exactly the chosen persons, deceased included: unlike a mailing, a CSV is also a plain
+ * data export of what was picked.
+ */
 export async function personsForCsvByIds(ids: number[]): Promise<CsvPerson[]> {
   if (ids.length === 0) return [];
-  const rows = await db.select(csvColumns).from(persons).where(inArray(persons.id, ids));
-  // Sort in TS with German collation (see listPersonOptions): the DB cluster's
-  // C-collation would place umlauts after Z, so the CSV must not rely on SQL order.
-  return rows.sort(byGermanName);
+  return sortByDirectoryName(await db.select(csvColumns).from(persons).where(inArray(persons.id, ids)));
 }
 
-// --- mail module (issue #19) ---
+// --- mail module (issue #19) ----------------------------------------------------------
 
 /**
- * Effective-member person ids for a list: manual members ∪ living persons matched by
- * any rule (held office, Stand or Gliederung), deduplicated. Same set the Verteiler
- * detail and CSV export show — reuses `loadEffectiveMembership` so the mail recipients
- * cannot drift from the UI.
- */
-export async function effectiveMemberIds(listId: number): Promise<number[]> {
-  const membership = await loadEffectiveMembership();
-  const members = membership.get(listId);
-  return members ? [...members.keys()] : [];
-}
-
-/**
- * Raw (nullable, unfiltered) e-mails for a set of person ids — the input to
- * `normalizeRecipients`. Deceased/do-not-print are NOT filtered here: for a
- * hand-picked selection the caller sends to exactly whom they chose.
+ * Raw (nullable, unvalidated) e-mails of the LIVING persons among `ids` — the input to
+ * `collectEmails` (src/lib/export.ts). Deceased persons never get mail, even when a stale
+ * selection still holds them.
  */
 export async function personEmailsByIds(ids: number[]): Promise<(string | null)[]> {
   if (ids.length === 0) return [];
-  const rows = await db.select({ email: persons.email }).from(persons).where(inArray(persons.id, ids));
+  const rows = await db
+    .select({ email: persons.email })
+    .from(persons)
+    .where(and(inArray(persons.id, ids), isNull(persons.deathDate)));
   return rows.map((r) => r.email);
 }
 

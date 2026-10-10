@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 
 import {
-  listDistributionListSummaries,
+  listDistributionListNames,
+  listActiveOfficeHolders,
   listGroups,
   listOffices,
   listPersonOptions,
@@ -11,27 +12,27 @@ import { requirePageSession } from "@/lib/auth-helpers";
 
 import { PersonForm } from "../_components/person-form";
 
-export const metadata: Metadata = { title: "Neue Anschrift" };
+export const metadata: Metadata = { title: "Neue Person" };
 
 export default async function NewPersonPage() {
-  // Authoritative gate: the layout is not re-rendered on RSC navigations.
   await requirePageSession();
-  const [groups, offices, ranks, distributionLists, existingPersons] = await Promise.all([
+  const [groups, offices, ranks, distributionLists, existingPersons, activeHolders] = await Promise.all([
     listGroups(),
     listOffices(),
     listRanks(),
-    listDistributionListSummaries(),
+    listDistributionListNames(),
     // Lightweight name list for the non-blocking duplicate-person hint.
     listPersonOptions(),
+    listActiveOfficeHolders(),
   ]);
 
   return (
     <PersonForm
-      mode="create"
       groups={groups}
       offices={offices}
       ranks={ranks}
       distributionLists={distributionLists}
+      activeHolders={activeHolders}
       existingPersons={existingPersons}
     />
   );

@@ -7,7 +7,7 @@
  * and the alphabetical name register. `buildProfileData` is a pure function over plain data;
  * `buildData` is the thin async wrapper that loads the rows from Postgres.
  *
- * Fidelity notes vs. the legacy LaTeX/Java generator (see PR text):
+ * Fidelity notes vs. the legacy LaTeX/Java generator:
  *  - Register sort key is Fahrtenname else Vorname (as the confidential text and IndexWorker.java
  *    specify), umlauts folded ae/oe/ue.
  *  - Section order in `komplett` follows `sort_key`; the old template hard-coded Mädchenbund
@@ -16,28 +16,23 @@
  */
 import { db } from "@/db";
 import { assignments, groups, offices, persons, ranks } from "@/db/schema";
+import { fold, formatDate, nullIfEmpty, todayIso } from "@/lib/format";
+import { byName, collateDe, compareFields } from "@/lib/name-order";
 import { RANK_UNRANKED } from "@/lib/rank";
+import { SECTIONS, type Section } from "@/lib/sections";
 
 // ---------------------------------------------------------------------------------------
 //  Types
 // ---------------------------------------------------------------------------------------
 
-export type Section =
-  | "bund"
-  | "jungenbund"
-  | "maedchenbund"
-  | "orden_st_georg"
-  | "orden_st_christophorus"
-  | "bundesgilde";
-
-export type Profile =
+type Profile =
   | "komplett"
   | "nurBundesaemter"
   | "nurBundesgilde"
   | "nurOrdenStGeorg"
   | "nurOrdenStChristophorus";
 
-export const PROFILES: Profile[] = [
+const PROFILES: Profile[] = [
   "komplett",
   "nurBundesaemter",
   "nurBundesgilde",
@@ -88,12 +83,12 @@ export interface DataRank {
   id: number;
   name: string;
 }
-export interface DataAssignment {
+interface DataAssignment {
   id: number;
   personId: number;
   groupId: number;
   officeId: number | null;
-  /** Amtszeit end (issue #22): NULL = active, set = ended. Only active rows are printed. */
+  /** Amtszeit end: NULL = active, set = ended — the one rule app-wide. Only active rows are printed. */
   endDate: string | null;
 }
 export interface RawData {
@@ -128,7 +123,7 @@ export interface GroupNode {
   children: GroupNode[];
 }
 
-export interface RegisterEntry {
+interface RegisterEntry {
   label: string;
   lead: string; // bold lead token (Fahrtenname, / Vorname)
   rest: string; // remaining line incl. group/office breadcrumb
@@ -150,15 +145,8 @@ export interface ProfileData {
 //  Profile configuration
 // ---------------------------------------------------------------------------------------
 
-const PROFILE_SECTIONS: Record<Profile, Section[]> = {
-  komplett: [
-    "bund",
-    "jungenbund",
-    "maedchenbund",
-    "orden_st_georg",
-    "orden_st_christophorus",
-    "bundesgilde",
-  ],
+const PROFILE_SECTIONS: Record<Profile, readonly Section[]> = {
+  komplett: SECTIONS,
   nurBundesaemter: ["bund", "jungenbund", "maedchenbund"],
   nurBundesgilde: ["bundesgilde"],
   nurOrdenStGeorg: ["orden_st_georg"],
@@ -177,77 +165,11 @@ const PROFILE_SUBTITLE: Record<Profile, string | null> = {
 //  Small pure helpers (exported for tests where useful)
 // ---------------------------------------------------------------------------------------
 
-/**
- * Canonical German collation key (DIN 5007-2, phone-book): compose first so decomposed
- * umlauts (combining diacritics) fold too, map ä→ae, ö→oe, ü→ue, ß→ss, strip any remaining
- * accents and lower-case. Identical rule to `fold` in src/lib/format.ts, so the on-screen
- * persons table and the printed register/memorial sort the same way.
- */
-export function normalizeSortKey(value: string): string {
-  return value
-    .normalize("NFC")
-    .replace(/ä/g, "ae")
-    .replace(/ö/g, "oe")
-    .replace(/ü/g, "ue")
-    .replace(/Ä/g, "Ae")
-    .replace(/Ö/g, "Oe")
-    .replace(/Ü/g, "Ue")
-    .replace(/ß/g, "ss")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim();
-}
+// Sort keys use `fold` from src/lib/format.ts (DIN 5007-2 phone-book: ä→ae, ß→ss, accents
+// stripped, lower-cased) — the same collation as the on-screen persons table.
 
 function joinNonEmpty(parts: (string | null | undefined)[], sep = " "): string {
   return parts.map((p) => (p ?? "").trim()).filter((p) => p.length > 0).join(sep);
-}
-
-/**
- * Compare two already-normalized multi-field sort keys field by field with the German
- * collation. Fields must be compared on their own — concatenating them into one string with a
- * separator lets the separator take part in the comparison. Under the de collation `" " < "#"`,
- * so `"habicht ii#marcel"` would sort before `"habicht#hans-juergen"` and the register would
- * print the numbered Fahrtenname „Habicht II" ahead of „Habicht" (issue #8).
- */
-function compareSortKeys(a: string[], b: string[]): number {
-  for (let i = 0; i < a.length; i += 1) {
-    const cmp = (a[i] ?? "").localeCompare(b[i] ?? "", "de");
-    if (cmp !== 0) return cmp;
-  }
-  return 0;
-}
-
-function nullIfEmpty(value: string | null | undefined): string | null {
-  const v = (value ?? "").trim();
-  return v.length > 0 ? v : null;
-}
-
-/** "1990-02-01" -> "01.02.1990"; anything unparseable -> null. */
-export function formatDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return null;
-  return `${m[3]}.${m[2]}.${m[1]}`;
-}
-
-/**
- * The calendar date of `now` in Europe/Berlin (issue #16). The server runs in UTC, so a plain
- * `getDate()` stamps an export made at 23:30 CEST with the previous day. Returned as both the
- * printed `dd.MM.yyyy` "Stand" and an ISO `yyyy-MM-dd` used as the active-assignment cutoff (#6).
- */
-function berlinToday(now: Date): { display: string; iso: string } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Berlin",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(now);
-  const get = (type: string) => parts.find((p) => p.type === type)!.value;
-  const yyyy = get("year");
-  const mm = get("month");
-  const dd = get("day");
-  return { display: `${dd}.${mm}.${yyyy}`, iso: `${yyyy}-${mm}-${dd}` };
 }
 
 /** Leadership offices whose label is implied by the (sub)group heading and thus suppressed. */
@@ -278,7 +200,8 @@ export function buildProfileData(
   today: Date = new Date(),
 ): ProfileData {
   const includedSections = new Set<Section>(PROFILE_SECTIONS[profile]);
-  const { display: dateDisplay, iso: todayIso } = berlinToday(today);
+  // The printed "Stand" is the calendar date in Europe/Berlin (the server runs in UTC).
+  const dateDisplay = formatDate(todayIso(today));
 
   const personById = new Map(raw.persons.map((p) => [p.id, p]));
   const groupById = new Map(raw.groups.map((g) => [g.id, g]));
@@ -292,14 +215,11 @@ export function buildProfileData(
     childrenByParent.get(key)!.push(g);
   }
 
-  // Amtszeiten (issue #22): the printed directory only ever shows currently held
-  // offices. Filter to active tenures once, here, and feed every downstream consumer
-  // (group tree, register, confidential cover) from this single array. A tenure counts as
-  // active while it has no end date OR ends today or later (issue #6): a future "Amtszeit
-  // bis" must not empty a group from the current booklet.
-  const activeAssignments = raw.assignments.filter(
-    (a) => a.endDate == null || a.endDate.slice(0, 10) >= todayIso,
-  );
+  // Amtszeiten: the printed directory only ever shows currently held offices. Active means
+  // `endDate == null` — the same rule as the table, editor, Verteiler rules and mail (future
+  // Bis dates are rejected on input, so an ended tenure is always in the past). Filter once,
+  // here, and feed every downstream consumer (group tree, register, cover) from this array.
+  const activeAssignments = raw.assignments.filter((a) => a.endDate == null);
 
   // assignments per group, filtered to printable + living persons
   const assignmentsByGroup = new Map<number, DataAssignment[]>();
@@ -315,7 +235,7 @@ export function buildProfileData(
   }
 
   const groupSort = (a: DataGroup, b: DataGroup) =>
-    a.sortKey - b.sortKey || normalizeSortKey(a.name).localeCompare(normalizeSortKey(b.name), "de");
+    a.sortKey - b.sortKey || fold(a.name).localeCompare(fold(b.name), "de");
 
   const detailFor = (p: DataPerson): string | null => {
     const parts: string[] = [];
@@ -332,8 +252,7 @@ export function buildProfileData(
   // Build one entry for a person's presence in a group (offices already collapsed).
   const makeEntry = (p: DataPerson, officeNames: string[], depth: number): Entry => {
     // Below the top level a leader office is implied by the (sub)group heading and dropped —
-    // but only that office, keeping any co-held non-leader offices (issue #7); previously a
-    // single leader office suppressed the whole list.
+    // but only that office, keeping any co-held non-leader offices (issue #7).
     let office: string | null = null;
     if (officeNames.length > 0) {
       const kept = officeNames.filter((n) => depth === 0 || !isLeaderOffice(n));
@@ -354,7 +273,7 @@ export function buildProfileData(
       city: nullIfEmpty(joinNonEmpty([p.postalCode, p.city])),
       phones: entryPhones(p),
       email: nullIfEmpty(p.email),
-      birth: options.withBirthdays ? formatDate(p.birthDate) : null,
+      birth: options.withBirthdays ? formatDate(p.birthDate) || null : null,
     };
   };
 
@@ -371,16 +290,16 @@ export function buildProfileData(
     }
     const rows = [...byPerson.entries()].map(([personId, offs]) => {
       const p = personById.get(personId)!;
-      const sortedOffs = [...offs].sort((x, y) => x.rank - y.rank || x.name.localeCompare(y.name, "de"));
+      const sortedOffs = [...offs].sort((x, y) => x.rank - y.rank || byName(x, y));
       const minRank = sortedOffs.length > 0 ? sortedOffs[0].rank : RANK_UNRANKED;
-      const sortName = normalizeSortKey(joinNonEmpty([p.scoutName || p.lastName || p.firstName]));
+      const sortName = fold(joinNonEmpty([p.scoutName || p.lastName || p.firstName]));
       return { p, officeNames: sortedOffs.map((o) => o.name), minRank, sortName };
     });
     rows.sort(
       (a, b) =>
         a.minRank - b.minRank ||
         a.sortName.localeCompare(b.sortName, "de") ||
-        normalizeSortKey(a.p.lastName ?? "").localeCompare(normalizeSortKey(b.p.lastName ?? ""), "de"),
+        fold(a.p.lastName ?? "").localeCompare(fold(b.p.lastName ?? ""), "de"),
     );
     return rows.map((r) => makeEntry(r.p, r.officeNames, depth));
   };
@@ -416,7 +335,6 @@ export function buildProfileData(
 
   // ---- name register (only persons that were actually printed / anchored) ----
   const register = buildRegister(
-    raw,
     includedSections,
     personById,
     groupById,
@@ -441,16 +359,14 @@ export function buildProfileData(
         return g != null && includedSections.has(g.section);
       }),
     );
-    // Nachname, then Vorname — compared as SEPARATE fields (see `compareSortKeys`), exactly
-    // like the register. Joining them into one string lets the separator take part in the
-    // comparison, which reorders multi-word surnames („Meyer auf der Heide" ahead of „Meyer")
-    // and numbered names („Habicht II" ahead of „Habicht") against the register. Keys are
-    // normalized once per person (decorate–sort–undecorate) instead of inside the comparator.
+    // Nachname, then Vorname — compared as separate fields (see `compareFields`), exactly
+    // like the register, so „Meyer" precedes „Meyer auf der Heide". Keys are folded once
+    // per person, not inside the comparator.
     const decorated = inScope.map((p) => ({
       p,
-      key: [normalizeSortKey(p.lastName ?? ""), normalizeSortKey(p.firstName ?? "")],
+      key: [fold(p.lastName ?? ""), fold(p.firstName ?? "")],
     }));
-    decorated.sort((a, b) => compareSortKeys(a.key, b.key));
+    decorated.sort((a, b) => compareFields(a.key, b.key));
     for (const { p } of decorated) {
       const base = personDisplayName(p);
       const scout = nullIfEmpty(p.scoutName);
@@ -479,7 +395,6 @@ export function buildProfileData(
 // ---------------------------------------------------------------------------------------
 
 function buildRegister(
-  raw: RawData,
   includedSections: Set<Section>,
   personById: Map<number, DataPerson>,
   groupById: Map<number, DataGroup>,
@@ -526,12 +441,12 @@ function buildRegister(
     }
 
     // Primary field (Fahrtenname else Vorname else Nachname) first, then the tiebreakers —
-    // compared separately, see `compareSortKeys`.
-    const key = [scout || first || last, first, last].map(normalizeSortKey);
+    // compared separately, see `compareFields`.
+    const key = [scout || first || last, first, last].map((k) => fold(k));
     rows.push({ key, entry: { label: `p${pid}`, lead, rest } });
   }
 
-  rows.sort((a, b) => compareSortKeys(a.key, b.key));
+  rows.sort((a, b) => compareFields(a.key, b.key));
   return rows.map((r) => r.entry);
 }
 
@@ -566,7 +481,7 @@ function registerBreadcrumb(
   const groupIds = [...officesByGroup.keys()].sort((x, y) => {
     const gx = groupById.get(x)!;
     const gy = groupById.get(y)!;
-    return depthOf(x) - depthOf(y) || gx.sortKey - gy.sortKey || gx.name.localeCompare(gy.name, "de");
+    return depthOf(x) - depthOf(y) || gx.sortKey - gy.sortKey || byName(gx, gy);
   });
 
   // Dedup group and office names across the WHOLE entry (issue #3), not just within a single
@@ -588,7 +503,7 @@ function registerBreadcrumb(
       .get(gid)!
       .map((id) => officeById.get(id))
       .filter((o): o is DataOffice => o != null)
-      .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, "de"));
+      .sort((a, b) => a.rank - b.rank || byName(a, b));
     for (const o of offs) {
       if (seenOffices.has(o.name)) continue;
       seenOffices.add(o.name);
@@ -640,7 +555,7 @@ function buildKanzlei(
   // before "Kanzlerin des Bundes" (the shorter string wins as a prefix). Order is presentation
   // only — both entries are always printed — so the stable, data-independent rule is preferred
   // over hard-coding a precedence between the two offices.
-  result.sort((a, b) => a.office.localeCompare(b.office, "de"));
+  result.sort((a, b) => collateDe(a.office, b.office));
   return result.map((r) => r.entry);
 }
 
@@ -679,7 +594,7 @@ export async function buildData(profile: Profile, options: BuildOptions): Promis
       id: g.id,
       name: g.name,
       parentId: g.parentId,
-      section: g.section as Section,
+      section: g.section,
       sortKey: g.sortKey,
     })),
     offices: officeRows.map((o) => ({ id: o.id, name: o.name, rank: o.rank })),

@@ -1,305 +1,245 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { Building2, Plus } from "lucide-react";
 
-import { createGroup, deleteGroup, updateGroup } from "@/actions/groups";
-import { Combobox, type ComboOption } from "@/components/combobox";
-import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { deleteGroup, saveGroup } from "@/actions/groups";
+import type { ComboOption } from "@/components/combobox";
 import { EmptyState } from "@/components/empty-state";
-import { FormLabel } from "@/components/form-label";
-import { MonoBadge } from "@/components/mono-badge";
-import { PageHeader } from "@/components/page-header";
+import { ComboField, Field, fieldAria } from "@/components/field";
+import { PageBody, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { GroupRow } from "@/db/queries";
-import { SECTION_LABELS, SECTION_ORDER } from "@/lib/format";
-import { orderGroups } from "@/lib/groups";
-import { HOVER_REVEAL, cn } from "@/lib/utils";
+import { descendantIds, orderGroups } from "@/lib/groups";
+import { isDuplicateName, nextOrder, orderError, parseOrder } from "@/lib/master-data";
+import { SECTIONS, SECTION_LABELS, type Section } from "@/lib/sections";
 
-export type GroupUsage = Record<number, { assignments: number; children: number }>;
+import { EntryDialog, EntryField, EntryList, EntryRow, useEntryDialog } from "../_components/master-data-ui";
 
 const PARENT_NONE = "none";
 
-type FormState = {
-  id: number | null;
+type Draft = {
+  /** The group being edited, null when creating. */
+  group: GroupRow | null;
   name: string;
-  section: string;
   kind: string;
-  sortKey: string;
+  order: string;
   parentId: number | null;
+  /** Only decisive for a top-level group: a child always takes its parent's Bereich. */
+  section: Section;
+  /** The groups when the dialog opened: a just-created group must not count as taken. */
+  taken: GroupRow[];
 };
-
-function emptyForm(): FormState {
-  return { id: null, name: "", section: "bund", kind: "", sortKey: "0", parentId: null };
-}
-
-/** Ids of a group's descendants (client-side, from the full list) — invalid parents. */
-function descendantIds(groups: GroupRow[], id: number): Set<number> {
-  const children = new Map<number, number[]>();
-  for (const g of groups) {
-    if (g.parentId == null) continue;
-    if (!children.has(g.parentId)) children.set(g.parentId, []);
-    children.get(g.parentId)!.push(g.id);
-  }
-  const out = new Set<number>();
-  const stack = [...(children.get(id) ?? [])];
-  while (stack.length) {
-    const cur = stack.pop()!;
-    out.add(cur);
-    for (const c of children.get(cur) ?? []) stack.push(c);
-  }
-  return out;
-}
 
 export function GliederungenManager({
   groups,
-  usage,
+  blockers,
 }: {
   groups: GroupRow[];
-  usage: GroupUsage;
+  /** Per group id: why it cannot be deleted (absent = deletable), same rule as the action. */
+  blockers: Record<number, string>;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const ordered = useMemo(() => orderGroups(groups), [groups]);
+  const ordered = orderGroups(groups);
+  const dialog = useEntryDialog<Draft>({
+    group: null,
+    name: "",
+    kind: "",
+    order: "",
+    parentId: null,
+    section: "bund",
+    taken: [],
+  });
+  const { draft } = dialog;
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState<FormState>(emptyForm);
-  const [deleteTarget, setDeleteTarget] = useState<GroupRow | null>(null);
+  const editId = draft.group?.id ?? null;
+  // A group cannot move below itself or its own subtree (the action refuses cycles).
+  const forbidden = editId != null ? descendantIds(groups, editId).add(editId) : new Set<number>();
+  const parentOptions: ComboOption[] = [
+    { value: PARENT_NONE, label: "keine (oberste Ebene)" },
+    ...ordered
+      .filter(({ group }) => !forbidden.has(group.id))
+      .map(({ group, depth }) => ({ value: String(group.id), label: group.name, depth })),
+  ];
 
-  const parentOptions: ComboOption[] = useMemo(() => {
-    const forbidden = form.id != null ? descendantIds(groups, form.id) : new Set<number>();
-    if (form.id != null) forbidden.add(form.id);
-    return [
-      { value: PARENT_NONE, label: "— keine (oberste Ebene) —" },
-      ...orderGroups(groups)
-        .filter(({ group }) => !forbidden.has(group.id))
-        .map(({ group, depth }) => ({ value: String(group.id), label: group.name, depth })),
-    ];
-  }, [groups, form.id]);
+  const parent = draft.parentId != null ? groups.find((g) => g.id === draft.parentId) : undefined;
+  const hasChildren = editId != null && groups.some((g) => g.parentId === editId);
+  const sectionHint = hasChildren ? "Gilt auch für alle Untergliederungen." : undefined;
+  const nameTaken = isDuplicateName(draft.name, draft.taken, editId);
+  const orderErr = orderError(draft.order);
 
-  function openCreate() {
-    setForm(emptyForm());
-    setFormOpen(true);
+  function openDialog(group: GroupRow | null) {
+    dialog.show(
+      group
+        ? {
+            group,
+            name: group.name,
+            kind: group.kind ?? "",
+            order: String(group.sortKey),
+            parentId: group.parentId,
+            section: group.section,
+            taken: groups,
+          }
+        : {
+            group: null,
+            name: "",
+            kind: "",
+            order: String(nextOrder(groups.map((g) => g.sortKey))),
+            parentId: null,
+            section: "bund",
+            taken: groups,
+          },
+    );
   }
-  function openEdit(g: GroupRow) {
-    setForm({
-      id: g.id,
-      name: g.name,
-      section: g.section,
-      kind: g.kind ?? "",
-      sortKey: String(g.sortKey),
-      parentId: g.parentId,
-    });
-    setFormOpen(true);
-  }
 
-  function submitForm() {
+  function submit() {
+    const { group, name, kind, parentId } = draft;
     const payload = {
-      name: form.name,
-      section: form.section as (typeof SECTION_ORDER)[number],
-      kind: form.kind.trim() ? form.kind.trim() : null,
-      sortKey: Number(form.sortKey) || 0,
-      parentId: form.parentId,
+      name,
+      kind,
+      sortKey: parseOrder(draft.order) ?? 0,
+      parentId,
+      // For a child the action takes the parent's Bereich anyway; send the one shown.
+      section: parent?.section ?? draft.section,
     };
-    startTransition(async () => {
-      const res = form.id != null ? await updateGroup(form.id, payload) : await createGroup(payload);
-      if (!res.ok) {
-        toast.error(res.message);
-        return;
-      }
-      toast.success(form.id != null ? "Gliederung gespeichert." : "Gliederung angelegt.");
-      setFormOpen(false);
-      router.refresh();
-    });
+    dialog.run(
+      () => saveGroup(group?.id ?? null, payload),
+      group ? "Gliederung gespeichert." : "Gliederung angelegt.",
+    );
   }
 
   function confirmDelete() {
-    if (!deleteTarget) return;
-    startTransition(async () => {
-      const res = await deleteGroup(deleteTarget.id);
-      if (!res.ok) {
-        toast.error(res.message);
-        setDeleteTarget(null);
-        return;
-      }
-      toast.success("Gliederung gelöscht.");
-      setDeleteTarget(null);
-      router.refresh();
-    });
+    const { group } = draft;
+    if (!group) return;
+    dialog.run(() => deleteGroup(group.id), "Gliederung gelöscht.");
   }
-
-  const targetUsage = deleteTarget ? usage[deleteTarget.id] : undefined;
-  const targetBlocked =
-    !!targetUsage && (targetUsage.assignments > 0 || targetUsage.children > 0);
 
   return (
     <>
       <PageHeader
         title="Gliederungen"
-        subtitle="Quelle aller Gliederungs-Dropdowns · Sortierschlüssel steuert die Reihenfolge im PDF"
+        subtitle="Grundlage für Personen, Verteiler und den PDF-Druck"
         actions={
-          <Button onClick={openCreate}>
-            <Plus className="size-4" />
-            Neu
+          <Button onClick={() => openDialog(null)}>
+            <Plus aria-hidden />
+            Neue Gliederung
           </Button>
         }
       />
-      <div className="px-6 pt-[18px] pb-10">
-        <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-sm">
-          {ordered.length === 0 ? (
-            <EmptyState
-              icon={Building2}
-              title="Noch keine Gliederungen angelegt."
-              description="Lege über „Neu“ die erste Gliederung an — sie steht danach in allen Gliederungs-Auswahlfeldern zur Verfügung."
-            />
-          ) : (
-            <ul className="py-1.5">
-              {ordered.map(({ group, depth }) => (
-                <li key={group.id} className="group/row hover:bg-sel">
-                  {/* max-w keeps name and labels in one readable band instead of
-                      stretching them to opposite ends of a wide viewport. Below `sm`
-                      the row wraps and Art/Bereich move to a second line, so the
-                      Gliederungs-Name is readable in full instead of „Gau F…“. */}
-                  <div
-                    className="flex max-w-3xl flex-wrap items-center gap-2 px-[18px] py-1.5 text-[13.5px] sm:flex-nowrap"
-                    style={{ paddingLeft: `${18 + depth * 16}px` }}
-                  >
-                    <MonoBadge>{group.sortKey}</MonoBadge>
-                    {/* flex-1 below sm (fills the line and wraps the text),
-                        the original shrink-and-truncate from sm: up. */}
-                    <span className="min-w-0 flex-1 text-ink sm:flex-initial sm:truncate">{group.name}</span>
-                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-faint max-sm:order-last max-sm:w-full">
-                      {group.kind ? (
-                        <>
-                          <span>{group.kind}</span>
-                          <span aria-hidden className="text-line-strong">
-                            ·
-                          </span>
-                        </>
-                      ) : null}
-                      <span>{SECTION_LABELS[group.section] ?? group.section}</span>
-                    </span>
-                    <span className={cn("flex shrink-0 items-center gap-0.5", HOVER_REVEAL)}>
-                      <Button variant="ghost" size="icon-xs" aria-label="Bearbeiten" onClick={() => openEdit(group)}>
-                        <Pencil className="size-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-label="Löschen"
-                        className="text-ink-faint hover:text-crit"
-                        onClick={() => setDeleteTarget(group)}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      {/* Create / edit dialog */}
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{form.id != null ? "Gliederung bearbeiten" : "Neue Gliederung"}</DialogTitle>
-            <DialogDescription>Name, Ebene und Sortierschlüssel der Gliederung.</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            <div>
-              <FormLabel htmlFor="g-name">Name</FormLabel>
-              <Input id="g-name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <FormLabel htmlFor="g-section">Bereich</FormLabel>
-                <Select value={form.section} onValueChange={(v) => setForm((f) => ({ ...f, section: v }))}>
-                  <SelectTrigger id="g-section" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SECTION_ORDER.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {SECTION_LABELS[s]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <FormLabel htmlFor="g-sort">Sortierschlüssel</FormLabel>
-                <Input
-                  id="g-sort"
-                  type="number"
-                  min={0}
-                  value={form.sortKey}
-                  onChange={(e) => setForm((f) => ({ ...f, sortKey: e.target.value }))}
-                  className="tabular-nums"
-                />
-              </div>
-            </div>
-            <div>
-              <FormLabel htmlFor="g-kind">Art (Gau, Stamm, Konvent …)</FormLabel>
-              <Input id="g-kind" value={form.kind} onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value }))} placeholder="optional" />
-            </div>
-            <div>
-              <FormLabel>Übergeordnete Gliederung</FormLabel>
-              <Combobox
-                options={parentOptions}
-                value={form.parentId != null ? String(form.parentId) : PARENT_NONE}
-                onChange={(v) => setForm((f) => ({ ...f, parentId: v === PARENT_NONE ? null : Number(v) }))}
-                placeholder="— keine (oberste Ebene) —"
-                searchPlaceholder="Gliederung suchen …"
-                aria-label="Übergeordnete Gliederung"
+      <PageBody>
+        <EntryList
+          title="Aufbau des Bundes"
+          description="Die Zahl links ist die Reihenfolge im PDF: kleiner = weiter oben. Untergliederungen sind eingerückt. Zum Bearbeiten auf eine Gliederung klicken."
+          emptyState={
+            ordered.length === 0 ? (
+              <EmptyState
+                icon={Building2}
+                title="Noch keine Gliederungen angelegt."
+                description="Lege mit „Neue Gliederung“ die erste Gliederung an. Sie steht danach bei Personen, Verteilern und im PDF zur Verfügung."
               />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={isPending}>
-              Abbrechen
-            </Button>
-            <Button onClick={submitForm} disabled={isPending}>
-              {isPending ? "Speichern …" : "Speichern"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            ) : null
+          }
+        >
+          {ordered.map(({ group, depth }) => (
+            <EntryRow
+              key={group.id}
+              order={group.sortKey}
+              orderLabel="Reihenfolge im PDF"
+              name={group.name}
+              depth={depth}
+              // The Bereich belongs to the whole branch, so only its top row names it.
+              meta={[group.kind, depth === 0 ? SECTION_LABELS[group.section] : null]
+                .filter(Boolean)
+                .join(" · ")}
+              onOpen={() => openDialog(group)}
+            />
+          ))}
+        </EntryList>
+      </PageBody>
 
-      {/* Delete dialog */}
-      <ConfirmDeleteDialog
-        open={deleteTarget != null}
-        onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="Gliederung löschen?"
-        description={`„${deleteTarget?.name}“ wird gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.`}
-        blockedMessage={
-          targetBlocked
-            ? "Diese Gliederung kann nicht gelöscht werden, solange ihr Untergliederungen oder Personen zugeordnet sind."
+      <EntryDialog
+        state={dialog}
+        title={draft.group ? "Gliederung bearbeiten" : "Neue Gliederung"}
+        description="Gliederungen stehen bei Personen, Verteilern und im PDF zur Auswahl."
+        className="sm:max-w-md"
+        canSave={draft.name.trim() !== "" && !nameTaken && orderErr == null}
+        onSubmit={submit}
+        deletion={
+          draft.group
+            ? {
+                title: "Gliederung löschen?",
+                description: `„${draft.group.name}“ wird gelöscht. Das lässt sich nicht rückgängig machen.`,
+                blockedReason: blockers[draft.group.id],
+                onConfirm: confirmDelete,
+              }
             : undefined
         }
-        pending={isPending}
-        onConfirm={confirmDelete}
-      />
+      >
+        <EntryField
+          id="group-name"
+          label="Name"
+          value={draft.name}
+          onValueChange={(name) => dialog.edit({ name })}
+          error={nameTaken ? "Eine Gliederung mit diesem Namen gibt es schon." : null}
+        />
+        <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+          <EntryField
+            id="group-kind"
+            label="Art"
+            value={draft.kind}
+            onValueChange={(kind) => dialog.edit({ kind })}
+            placeholder="z. B. Gau, Horte, Konvent"
+            hint="Optional."
+          />
+          <EntryField
+            id="group-order"
+            label="Reihenfolge im PDF"
+            numeric
+            value={draft.order}
+            onValueChange={(order) => dialog.edit({ order })}
+            hint="Kleiner = weiter oben."
+            error={orderErr}
+          />
+        </div>
+        <ComboField
+          label="Übergeordnete Gliederung"
+          id="group-parent"
+          options={parentOptions}
+          value={draft.parentId != null ? String(draft.parentId) : PARENT_NONE}
+          onChange={(v) => {
+            const parentId = v === PARENT_NONE ? null : Number(v);
+            // Keep the inherited Bereich when the parent is cleared again.
+            const inherited = groups.find((g) => g.id === parentId)?.section;
+            dialog.edit({ parentId, section: inherited ?? draft.section });
+          }}
+          searchPlaceholder="Gliederung suchen …"
+        />
+        {parent ? (
+          // A child always takes its parent's Bereich (saveGroup enforces it): say so
+          // instead of showing a locked select.
+          <div>
+            <p className="eyebrow mb-1.5">Bereich</p>
+            <p className="text-body text-ink">
+              {SECTION_LABELS[parent.section]}
+              <span className="text-caption text-ink-faint"> · von „{parent.name}“ übernommen</span>
+            </p>
+          </div>
+        ) : (
+          <Field label="Bereich" id="group-section" hint={sectionHint}>
+            <Select value={draft.section} onValueChange={(v) => dialog.edit({ section: v as Section })}>
+              <SelectTrigger {...fieldAria("group-section", undefined, sectionHint)} className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SECTIONS.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {SECTION_LABELS[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
+      </EntryDialog>
     </>
   );
 }

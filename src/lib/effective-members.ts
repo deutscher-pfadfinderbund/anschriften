@@ -2,155 +2,107 @@
 // No DB, no React — imported by the query layer and unit-tested with fictional data.
 //
 // Effective members of a list = manual members (distribution_list_members)
-// ∪ persons *actively* holding an office the list has a rule for
-// ∪ persons carrying a Stand (rank) the list has a rule for
-// ∪ persons *actively* assigned to a Gliederung (group) the list has a rule for.
-// The set is deduplicated (a person included several ways appears once); deceased
-// persons and ended office/group tenures (end_date set) are excluded from every
-// *rule-based* half — a deceased person kept manually still counts.
+// ∪ persons matched by one of the list's rules (src/lib/rule-kinds.ts):
+//   - office: persons *actively* holding the Amt,
+//   - rank:   persons carrying the Stand,
+//   - group:  persons *actively* assigned to the Gliederung (with or without an Amt).
+// The set is deduplicated (a person included several ways appears once). Deceased
+// persons are excluded from EVERY half, manual memberships included — no mailing, BCC
+// copy or serial letter may reach them. Ended tenures (end_date set) never match a rule.
+
+import type { RuleKind } from "@/lib/rule-kinds";
 
 /** A manual membership row: person `personId` was added to list `listId` by hand. */
-export type ManualMembership = { listId: number; personId: number };
+type ManualMembership = { listId: number; personId: number };
 
-/** An office rule: list `listId` automatically contains the holder(s) of `officeId`. */
-export type OfficeRuleInput = { listId: number; officeId: number };
-
-/** A rank rule: list `listId` automatically contains everyone carrying Stand `rankId`. */
-export type RankRuleInput = { listId: number; rankId: number };
-
-/** A group rule: list `listId` automatically contains everyone active in Gliederung `groupId`. */
-export type GroupRuleInput = { listId: number; groupId: number };
+/** A rule: list `listId` automatically contains whoever matches Amt/Stand/Gliederung `targetId`. */
+export type MembershipRule = { listId: number; kind: RuleKind; targetId: number };
 
 /**
- * A person's office assignment (only assignments that actually carry an office).
- * `endDate` is the Amtszeit end (issue #22): NULL = currently active, set = ended.
- * Required (not optional) so every DB caller must supply it — a forgotten field
- * would otherwise silently leak past office holders into the mail recipients.
+ * Any assignment row, active or ended. `endDate` NULL = currently active (issue #22);
+ * only active rows match office/group rules. `officeId` NULL = membership without an Amt.
  */
-export type OfficeAssignment = { personId: number; officeId: number; endDate: string | null };
+export type MembershipAssignment = {
+  personId: number;
+  groupId: number;
+  officeId: number | null;
+  endDate: string | null;
+};
+
+/** Every person: the Stand drives rank rules, the death date excludes them entirely. */
+type MembershipPerson = { id: number; rankId: number | null; deathDate: string | null };
 
 /**
- * A person's group assignment (any assignment, with or without an office). Drives the
- * group rules. `endDate` NULL = currently active, set = ended tenure (excluded).
+ * All inputs are required on purpose: a forgotten field would silently change who gets
+ * mail. Callers load them through the one loader in src/db/queries.ts.
  */
-export type GroupAssignment = { personId: number; groupId: number; endDate: string | null };
-
-/** A person's Stand. Unlike offices/groups a rank has no tenure — it is a plain property. */
-export type PersonRank = { personId: number; rankId: number };
+export type EffectiveMembershipInput = {
+  manualMembers: ManualMembership[];
+  rules: MembershipRule[];
+  assignments: MembershipAssignment[];
+  persons: MembershipPerson[];
+};
 
 /**
  * Why a person is an effective member of a list.
  * - `manual`: they were added by hand (has a removable membership row).
- * - `viaOfficeIds`: office ids (rules) through which they are included, deduplicated.
- * - `viaRankIds`: rank ids (rules) through which they are included, deduplicated.
- * - `viaGroupIds`: group ids (rules) through which they are included, deduplicated.
- * A person can be included several ways at once.
+ * - `via`: the rules (kind + target id) through which they are included, deduplicated,
+ *   in rule order. A person can be included several ways at once.
  */
-export type MemberOrigin = {
-  manual: boolean;
-  viaOfficeIds: number[];
-  viaRankIds: number[];
-  viaGroupIds: number[];
-};
-
-export type EffectiveMembershipInput = {
-  manualMembers: ManualMembership[];
-  officeRules: OfficeRuleInput[];
-  rankRules?: RankRuleInput[];
-  groupRules?: GroupRuleInput[];
-  officeAssignments: OfficeAssignment[];
-  groupAssignments?: GroupAssignment[];
-  personRanks?: PersonRank[];
-  /** Persons excluded from the rule-based half (death_date set). */
-  deceasedPersonIds?: Iterable<number>;
-};
+export type MemberOrigin = { manual: boolean; via: { kind: RuleKind; id: number }[] };
 
 /**
  * Compute effective membership for every list.
  * Returns a map `listId -> (personId -> origin)`; the inner map's keys are the
- * deduplicated effective members. A list with no member (no manual member and no
+ * deduplicated effective members. A list with no member (no living manual member and no
  * rule with a living, active match) has no entry — callers merge with the full list
  * of lists as needed.
  */
 export function computeEffectiveMembership(
   input: EffectiveMembershipInput,
 ): Map<number, Map<number, MemberOrigin>> {
-  const deceased = new Set(input.deceasedPersonIds ?? []);
+  const deceased = new Set(input.persons.filter((p) => p.deathDate != null).map((p) => p.id));
 
-  // office id -> person ids currently holding it (living only, deduped).
-  const holdersByOffice = new Map<number, Set<number>>();
-  for (const a of input.officeAssignments) {
+  // kind -> target id -> living persons currently matching it (deduped).
+  const matches: Record<RuleKind, Map<number, Set<number>>> = {
+    office: new Map(),
+    rank: new Map(),
+    group: new Map(),
+  };
+  const match = (kind: RuleKind, targetId: number, personId: number) => {
+    if (deceased.has(personId)) return;
+    let set = matches[kind].get(targetId);
+    if (!set) matches[kind].set(targetId, (set = new Set()));
+    set.add(personId);
+  };
+  for (const p of input.persons) {
+    if (p.rankId != null) match("rank", p.rankId, p.id);
+  }
+  for (const a of input.assignments) {
     if (a.endDate != null) continue; // ended tenure (history) never confers membership
-    if (deceased.has(a.personId)) continue;
-    let set = holdersByOffice.get(a.officeId);
-    if (!set) holdersByOffice.set(a.officeId, (set = new Set()));
-    set.add(a.personId);
-  }
-
-  // group id -> person ids currently active in it (living only, deduped).
-  const membersByGroup = new Map<number, Set<number>>();
-  for (const a of input.groupAssignments ?? []) {
-    if (a.endDate != null) continue;
-    if (deceased.has(a.personId)) continue;
-    let set = membersByGroup.get(a.groupId);
-    if (!set) membersByGroup.set(a.groupId, (set = new Set()));
-    set.add(a.personId);
-  }
-
-  // rank id -> person ids carrying it (living only, deduped).
-  const personsByRank = new Map<number, Set<number>>();
-  for (const pr of input.personRanks ?? []) {
-    if (deceased.has(pr.personId)) continue;
-    let set = personsByRank.get(pr.rankId);
-    if (!set) personsByRank.set(pr.rankId, (set = new Set()));
-    set.add(pr.personId);
+    match("group", a.groupId, a.personId);
+    if (a.officeId != null) match("office", a.officeId, a.personId);
   }
 
   const result = new Map<number, Map<number, MemberOrigin>>();
-  const listMembers = (listId: number): Map<number, MemberOrigin> => {
-    let m = result.get(listId);
-    if (!m) result.set(listId, (m = new Map()));
-    return m;
-  };
-  const memberOrigin = (listId: number, personId: number): MemberOrigin => {
-    const members = listMembers(listId);
-    let o = members.get(personId);
-    if (!o)
-      members.set(
-        personId,
-        (o = { manual: false, viaOfficeIds: [], viaRankIds: [], viaGroupIds: [] }),
-      );
-    return o;
+  const originOf = (listId: number, personId: number): MemberOrigin => {
+    let members = result.get(listId);
+    if (!members) result.set(listId, (members = new Map()));
+    let origin = members.get(personId);
+    if (!origin) members.set(personId, (origin = { manual: false, via: [] }));
+    return origin;
   };
 
   for (const m of input.manualMembers) {
-    memberOrigin(m.listId, m.personId).manual = true;
+    if (deceased.has(m.personId)) continue;
+    originOf(m.listId, m.personId).manual = true;
   }
 
-  for (const rule of input.officeRules) {
-    const holders = holdersByOffice.get(rule.officeId);
-    if (!holders) continue;
-    for (const personId of holders) {
-      const origin = memberOrigin(rule.listId, personId);
-      if (!origin.viaOfficeIds.includes(rule.officeId)) origin.viaOfficeIds.push(rule.officeId);
-    }
-  }
-
-  for (const rule of input.rankRules ?? []) {
-    const holders = personsByRank.get(rule.rankId);
-    if (!holders) continue;
-    for (const personId of holders) {
-      const origin = memberOrigin(rule.listId, personId);
-      if (!origin.viaRankIds.includes(rule.rankId)) origin.viaRankIds.push(rule.rankId);
-    }
-  }
-
-  for (const rule of input.groupRules ?? []) {
-    const holders = membersByGroup.get(rule.groupId);
-    if (!holders) continue;
-    for (const personId of holders) {
-      const origin = memberOrigin(rule.listId, personId);
-      if (!origin.viaGroupIds.includes(rule.groupId)) origin.viaGroupIds.push(rule.groupId);
+  for (const rule of input.rules) {
+    for (const personId of matches[rule.kind].get(rule.targetId) ?? []) {
+      const origin = originOf(rule.listId, personId);
+      if (!origin.via.some((v) => v.kind === rule.kind && v.id === rule.targetId))
+        origin.via.push({ kind: rule.kind, id: rule.targetId });
     }
   }
 

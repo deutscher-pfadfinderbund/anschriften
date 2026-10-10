@@ -1,19 +1,33 @@
-// Applies the checked-in SQL migrations from ./drizzle at container start.
-// Fails closed on the two situations deployment (M6) has to survive:
-//   - DATABASE_URL missing  -> clear error, exit 1 (the server cannot run without it).
+// Applies the checked-in SQL migrations from ./drizzle at container start, and is the
+// container's fail-closed startup gate (the server only starts when this exits 0):
+//   - Required configuration missing -> ONE clear FATAL line naming every missing or
+//     invalid variable, exit 1. better-auth initialises lazily, so without this check a
+//     container with an empty secret or no Keycloak settings would boot "healthy" and
+//     only fail at the first login.
 //   - Migrations journal gone -> exit 1. The runtime image bakes in ./drizzle; a missing
-//                                journal means a broken image (COPY dropped drizzle/) or a
-//                                lost mount — booting anyway would leave every page 500ing
-//                                against an empty schema. Never skip silently.
+//     journal means a broken image (COPY dropped drizzle/) or a lost mount — booting
+//     anyway would leave every page 500ing against an empty schema. Never skip silently.
 import { existsSync, readFileSync } from "node:fs";
 
-const url = process.env.DATABASE_URL;
-if (!url) {
+const REQUIRED = [
+  "DATABASE_URL",
+  "BETTER_AUTH_SECRET",
+  "BETTER_AUTH_URL",
+  "KEYCLOAK_ISSUER",
+  "KEYCLOAK_CLIENT_ID",
+  "KEYCLOAK_CLIENT_SECRET",
+];
+const problems = REQUIRED.filter((name) => !process.env[name]?.trim());
+const secret = process.env.BETTER_AUTH_SECRET?.trim() ?? "";
+if (secret && secret.length < 32) problems.push("BETTER_AUTH_SECRET (must be at least 32 characters)");
+if (problems.length > 0) {
   console.error(
-    "FATAL: DATABASE_URL is not set — cannot apply migrations. Set it in the environment (.env).",
+    `FATAL: missing or invalid configuration: ${problems.join(", ")} — see .env.example. Aborting.`,
   );
   process.exit(1);
 }
+
+const url = process.env.DATABASE_URL;
 
 const journalPath = "./drizzle/meta/_journal.json";
 if (!existsSync(journalPath)) {

@@ -7,7 +7,8 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { fold } from "@/lib/format";
+import { spoken } from "@/lib/format";
+import { matchesQuery } from "@/lib/utils";
 
 export type MultiOption = {
   /** Stable numeric id. */
@@ -21,7 +22,8 @@ export type MultiOption = {
 /**
  * Searchable, checkbox-style multi-select built on the cmdk Command primitives.
  * Stays open on select (unlike the single Combobox) and shows a checkmark for
- * chosen rows. Filtering is umlaut-insensitive and matches label + hint.
+ * chosen rows. Filtering is umlaut-insensitive, matches label + hint, and every
+ * typed word must match.
  */
 export function MultiSelectList({
   options,
@@ -29,22 +31,20 @@ export function MultiSelectList({
   onToggle,
   searchPlaceholder = "Suchen …",
   emptyText = "Nichts gefunden.",
-  className,
 }: {
   options: MultiOption[];
   selected: Set<number>;
   onToggle: (value: number) => void;
   searchPlaceholder?: string;
   emptyText?: string;
-  className?: string;
 }) {
   return (
     <Command
-      className={className}
-      filter={(itemValue, search) => (fold(itemValue).includes(fold(search)) ? 1 : 0)}
+      label={spoken(searchPlaceholder)}
+      filter={(itemValue, search) => (matchesQuery(itemValue, search) ? 1 : 0)}
     >
       <CommandInput placeholder={searchPlaceholder} />
-      <CommandList className="max-h-[320px]">
+      <CommandList label="Treffer" className="max-h-[320px]">
         <CommandEmpty>{emptyText}</CommandEmpty>
         {options.map((o) => (
           <CommandItem

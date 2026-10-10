@@ -6,8 +6,14 @@ import {
   canonicalPhoneLabel,
   fold,
   formatDate,
+  formatDateTime,
+  formatFullName,
   formatName,
+  formatNameWithScout,
   phoneLabelOptions,
+  scoutAddition,
+  tenureRange,
+  todayIso,
 } from "./format";
 
 // All test data below is fictitious.
@@ -74,6 +80,77 @@ describe("formatName", () => {
   });
 });
 
+describe("formatFullName", () => {
+  it("reads „Vorname Nachname“ for running text", () => {
+    expect(formatFullName({ firstName: " Hannes ", lastName: "Hoffmann", scoutName: "Falke" })).toBe("Hannes Hoffmann");
+    expect(formatFullName({ lastName: "Hoffmann" })).toBe("Hoffmann");
+    expect(formatFullName({ firstName: "Hannes", lastName: " " })).toBe("Hannes");
+  });
+
+  it("falls back to the scout name, then a dash", () => {
+    expect(formatFullName({ lastName: null, scoutName: "Falke" })).toBe("Falke");
+    expect(formatFullName({})).toBe("—");
+  });
+});
+
+describe("scoutAddition / formatNameWithScout", () => {
+  it("adds the scout name in German quotes next to a real name", () => {
+    const p = { lastName: "Specht", firstName: "Holger", scoutName: "Falke" };
+    expect(scoutAddition(p)).toBe("Falke");
+    expect(formatNameWithScout(p)).toBe("Specht, Holger „Falke“");
+    expect(formatNameWithScout({ firstName: "Holger", scoutName: " Falke " })).toBe("Holger „Falke“");
+  });
+
+  it("never shows the scout name twice when it is the only name", () => {
+    const p = { lastName: " ", firstName: null, scoutName: "Falke" };
+    expect(scoutAddition(p)).toBeNull();
+    expect(formatNameWithScout(p)).toBe("Falke");
+  });
+
+  it("is the plain name without a scout name", () => {
+    expect(scoutAddition({ lastName: "Specht", scoutName: "  " })).toBeNull();
+    expect(formatNameWithScout({ lastName: "Specht", firstName: "Holger" })).toBe("Specht, Holger");
+    expect(formatNameWithScout({})).toBe("—");
+  });
+});
+
+describe("todayIso (Europe/Berlin)", () => {
+  it("returns the Berlin calendar date during the day", () => {
+    expect(todayIso(new Date("2026-10-09T10:00:00Z"))).toBe("2026-10-09");
+  });
+
+  it("switches to the next day at Berlin midnight in summer time (UTC+2)", () => {
+    expect(todayIso(new Date("2026-10-09T21:59:59Z"))).toBe("2026-10-09"); // 23:59:59 CEST
+    expect(todayIso(new Date("2026-10-09T22:00:00Z"))).toBe("2026-10-10"); // 00:00 CEST
+  });
+
+  it("switches to the next day at Berlin midnight in winter time (UTC+1)", () => {
+    expect(todayIso(new Date("2026-01-09T22:59:59Z"))).toBe("2026-01-09"); // 23:59:59 CET
+    expect(todayIso(new Date("2026-01-09T23:00:00Z"))).toBe("2026-01-10"); // 00:00 CET
+  });
+
+  it("rolls over month and year boundaries", () => {
+    expect(todayIso(new Date("2026-12-31T23:30:00Z"))).toBe("2027-01-01");
+  });
+});
+
+describe("formatDateTime (Europe/Berlin)", () => {
+  it("renders German date and time in summer time, independent of the runner's zone", () => {
+    expect(formatDateTime(new Date("2026-10-09T16:49:00Z"))).toBe("09.10.2026, 18:49");
+    expect(formatDateTime("2026-10-09T22:30:00Z")).toBe("10.10.2026, 00:30");
+  });
+
+  it("renders German date and time in winter time", () => {
+    expect(formatDateTime(new Date("2026-01-09T16:49:00Z"))).toBe("09.01.2026, 17:49");
+  });
+
+  it("returns an empty string for missing or invalid input", () => {
+    expect(formatDateTime(null)).toBe("");
+    expect(formatDateTime("")).toBe("");
+    expect(formatDateTime("kein Datum")).toBe("");
+  });
+});
+
 describe("formatDate", () => {
   it("reformats an ISO date to dd.MM.yyyy", () => {
     expect(formatDate("2019-06-24")).toBe("24.06.2019");
@@ -89,6 +166,22 @@ describe("formatDate", () => {
   it("returns non-ISO input unchanged", () => {
     expect(formatDate("not-a-date")).toBe("not-a-date");
     expect(formatDate("24.06.2019")).toBe("24.06.2019");
+  });
+});
+
+describe("tenureRange", () => {
+  const t = (startDate: string | null, endDate: string | null, endUnknown = false) => ({ startDate, endDate, endUnknown });
+
+  it("words an active tenure as „seit …“, or nothing without a start", () => {
+    expect(tenureRange(t("2020-01-01", null))).toBe("seit 01.01.2020");
+    expect(tenureRange(t(null, null))).toBe("");
+  });
+
+  it("words an ended tenure as a range, „bis …“ or „Ende unbekannt“", () => {
+    expect(tenureRange(t("2015-01-01", "2019-12-31"))).toBe("01.01.2015 – 31.12.2019");
+    expect(tenureRange(t(null, "2019-12-31"))).toBe("bis 31.12.2019");
+    expect(tenureRange(t("2015-01-01", "2026-10-10", true))).toBe("01.01.2015 – Ende unbekannt");
+    expect(tenureRange(t(null, "2026-10-10", true))).toBe("Ende unbekannt");
   });
 });
 

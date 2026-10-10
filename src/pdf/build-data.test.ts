@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildProfileData,
-  formatDate,
-  normalizeSortKey,
   type BuildOptions,
   type DataGroup,
   type DataOffice,
@@ -80,22 +78,6 @@ function findNode(nodes: GroupNode[], name: string): GroupNode | undefined {
   }
   return undefined;
 }
-
-describe("normalizeSortKey", () => {
-  it("folds umlauts ae/oe/ue and lower-cases", () => {
-    expect(normalizeSortKey("Öhmann")).toBe("oehmann");
-    expect(normalizeSortKey("Bär")).toBe("baer");
-    expect(normalizeSortKey("Groß")).toBe("gross");
-  });
-});
-
-describe("formatDate", () => {
-  it("reformats ISO to dd.MM.yyyy and rejects garbage", () => {
-    expect(formatDate("1990-02-01")).toBe("01.02.1990");
-    expect(formatDate(null)).toBeNull();
-    expect(formatDate("not-a-date")).toBeNull();
-  });
-});
 
 describe("profile filtering", () => {
   const raw: RawData = {
@@ -527,22 +509,23 @@ describe("options: ranks, birthdays, cover", () => {
   });
 });
 
-describe("issue #4 — normalizeSortKey collation", () => {
-  it("collates ae-folded (DIN 5007-2) and NFC-normalizes decomposed umlauts", () => {
-    const names = ["Zeder", "Öhmann", "Aal", "Müller", "Muhs", "Munz"];
-    const sorted = [...names].sort((a, b) =>
-      normalizeSortKey(a).localeCompare(normalizeSortKey(b), "de"),
+describe("printed date (Stand)", () => {
+  const raw: RawData = { ranks: RANKS, offices: OFFICES, groups: GROUPS, persons: [], assignments: [] };
+
+  it("uses the calendar date in Europe/Berlin, not UTC, just after midnight", () => {
+    // 22:30 UTC on 9 Oct (summer time) is 00:30 on 10 Oct in Berlin.
+    expect(buildProfileData(raw, "komplett", NO_OPTIONS, new Date("2026-10-09T22:30:00Z")).date).toBe(
+      "10.10.2026",
     );
-    // Müller -> "mueller" sorts before Muhs/Munz because 'e' < 'h' < 'n'.
-    expect(sorted).toEqual(["Aal", "Müller", "Muhs", "Munz", "Öhmann", "Zeder"]);
-    // "Öhmann" as O + combining diaeresis (U+0308) folds like the precomposed form.
-    expect(normalizeSortKey("Öhmann")).toBe("oehmann");
-    expect(normalizeSortKey("Öhmann")).toBe(normalizeSortKey("Öhmann"));
+    // 23:30 UTC on 9 Jan (winter time) is 00:30 on 10 Jan in Berlin.
+    expect(buildProfileData(raw, "komplett", NO_OPTIONS, new Date("2026-01-09T23:30:00Z")).date).toBe(
+      "10.01.2026",
+    );
   });
 });
 
-describe("issue #6 — a future Amtszeit-bis keeps an officer in print", () => {
-  it("treats an assignment ending today or later as still active", () => {
+describe("active tenure — only rows without an end date are printed", () => {
+  it("drops an assignment with any end date, even a (legacy) future one", () => {
     const raw: RawData = {
       ranks: RANKS,
       offices: OFFICES,
@@ -550,19 +533,21 @@ describe("issue #6 — a future Amtszeit-bis keeps an officer in print", () => {
       persons: [
         person({ id: 1, firstName: "Future", lastName: "Voll" }),
         person({ id: 2, firstName: "Past", lastName: "Gone" }),
+        person({ id: 3, firstName: "Still", lastName: "Active" }),
       ],
       assignments: [
-        { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: "2030-01-01" }, // future -> active
+        { id: 1, personId: 1, groupId: 1, officeId: 1, endDate: "2030-01-01" }, // future -> ended
         { id: 2, personId: 2, groupId: 1, officeId: 2, endDate: "2020-01-01" }, // past -> ended
+        { id: 3, personId: 3, groupId: 1, officeId: 3, endDate: null }, // active
       ],
     };
     const data = buildProfileData(raw, "komplett", NO_OPTIONS, new Date(2026, 6, 4));
     const names = findNode(data.sections, "Bundesführung")!.entries.map((e) => e.name);
-    expect(names).toEqual(["Future Voll"]);
-    expect(data.register.map((r) => r.rest.trim())).toEqual(["Voll, Bundesvogt"]);
+    expect(names).toEqual(["Still Active"]);
+    expect(data.register.map((r) => r.lead)).toEqual(["Still"]);
   });
 
-  it("keeps an assignment active exactly on its end date (boundary)", () => {
+  it("drops an assignment that ends today (the default of „Amt beenden“)", () => {
     const raw: RawData = {
       ranks: RANKS,
       offices: OFFICES,
@@ -571,7 +556,8 @@ describe("issue #6 — a future Amtszeit-bis keeps an officer in print", () => {
       assignments: [{ id: 1, personId: 1, groupId: 1, officeId: 1, endDate: "2026-07-04" }],
     };
     const data = buildProfileData(raw, "komplett", NO_OPTIONS, new Date(2026, 6, 4));
-    expect(findNode(data.sections, "Bundesführung")).toBeDefined();
+    expect(findNode(data.sections, "Bundesführung")).toBeUndefined();
+    expect(data.register).toEqual([]);
   });
 });
 
