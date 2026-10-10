@@ -1,14 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { memo } from "react";
 
 import { MailLink } from "@/components/mail-link";
+import { PersonLink } from "@/components/person-link";
 import { Tag } from "@/components/tag";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { PersonListRow } from "@/db/queries";
-import { birthYear, formatDate, formatName, formatNameWithScout, scoutAddition } from "@/lib/format";
+import { birthYear, formatDate, formatNameWithScout } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // One person in the directory, twice: a table row (md and up) and a card (phones).
@@ -21,30 +21,11 @@ type RowProps = {
   onSelectedChange: (id: number, selected: boolean) => void;
 };
 
-/** "Nachname, Vorname „Fahrtenname“" linking to the editor; `stretched` covers the card. */
-function NameLink({ person, stretched = false }: { person: PersonListRow; stretched?: boolean }) {
-  const scout = scoutAddition(person);
-  return (
-    <Link
-      href={`/personen/${person.id}`}
-      // ~600 links, twice (table and cards): no prefetching, a click loads the editor.
-      prefetch={false}
-      className={cn(
-        "rounded-sm font-medium text-ink transition-colors hover:text-fir",
-        stretched && "before:absolute before:inset-0",
-      )}
-    >
-      {formatName(person)}
-      {scout ? <span className="font-normal text-ink-soft"> „{scout}“</span> : null}
-    </Link>
-  );
-}
-
 /** Name line: the link, then „nicht abdrucken“ / „verstorben“ chips right after it. */
 function NameLine({ person, stretched }: { person: PersonListRow; stretched?: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-      <NameLink person={person} stretched={stretched} />
+      <PersonLink person={person} stretched={stretched} />
       {person.doNotPrint ? (
         <Tag tone="crit" title="Erscheint in keinem PDF-Verzeichnis">
           nicht abdrucken

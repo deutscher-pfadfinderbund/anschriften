@@ -17,7 +17,7 @@ import {
 import type { AuditAction, AuditChange } from "@/lib/audit";
 import { computeEffectiveMembership, type MemberOrigin } from "@/lib/effective-members";
 import type { CsvPerson } from "@/lib/export";
-import { formatFullName, formatName, scoutAddition } from "@/lib/format";
+import { formatFullName, type PersonName } from "@/lib/format";
 import { byName, sortByDirectoryName } from "@/lib/name-order";
 import { RULE_KINDS, type RuleKind, type RuleRef } from "@/lib/rule-kinds";
 import type { Section } from "@/lib/sections";
@@ -369,9 +369,7 @@ export type AuditEntry = {
 };
 
 /** A change-log entry for the Änderungsprotokoll: with the person it is about (null: a deletion). */
-export type AuditLogRow = AuditEntry & {
-  person: { id: number; name: string; scout: string | null } | null;
-};
+export type AuditLogRow = AuditEntry & { person: (PersonName & { id: number }) | null };
 
 const auditColumns = {
   id: auditLog.id,
@@ -405,14 +403,11 @@ export async function recentAudit(limit: number): Promise<AuditLogRow[]> {
     .leftJoin(persons, eq(persons.id, auditLog.personId))
     .orderBy(desc(auditLog.at), desc(auditLog.id))
     .limit(limit);
-  return rows.map(({ personId, firstName, lastName, scoutName, at, ...r }) => {
-    const name = { firstName, lastName, scoutName };
-    return {
-      ...r,
-      at: at.toISOString(),
-      person: personId == null ? null : { id: personId, name: formatName(name), scout: scoutAddition(name) },
-    };
-  });
+  return rows.map(({ personId, firstName, lastName, scoutName, at, ...r }) => ({
+    ...r,
+    at: at.toISOString(),
+    person: personId == null ? null : { id: personId, firstName, lastName, scoutName },
+  }));
 }
 
 // --- master data: Gliederungen, Ämter, Stände -----------------------------------------

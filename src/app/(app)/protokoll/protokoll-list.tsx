@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { History, SearchX, X } from "lucide-react";
 
 import { AuditChanges } from "@/components/audit-changes";
 import { EmptyState } from "@/components/empty-state";
 import { focusSoonIfKeyboard } from "@/components/field";
+import { PersonLink } from "@/components/person-link";
 import { SearchField } from "@/components/search-field";
 import { Button } from "@/components/ui/button";
 import type { AuditLogRow } from "@/db/queries";
 import { ACTION_LABEL, auditFieldLabel } from "@/lib/audit";
-import { formatDateTime, plural } from "@/lib/format";
+import { formatDateTime, formatNameWithScout, plural } from "@/lib/format";
 import { matchesQuery } from "@/lib/utils";
 
 const SEARCH_ID = "protokoll-suche";
@@ -19,7 +19,7 @@ const SEARCH_ID = "protokoll-suche";
 /** Everything the search looks at: person, who, when and every changed field and value. */
 function searchText(e: AuditLogRow): string {
   return [
-    e.person ? `${e.person.name} ${e.person.scout ?? ""}` : "",
+    e.person ? formatNameWithScout(e.person) : "",
     e.actor,
     formatDateTime(e.at),
     ACTION_LABEL[e.action] ?? "",
@@ -40,14 +40,7 @@ function EntryRow({ entry }: { entry: AuditLogRow }) {
       </p>
       <p className="text-ui">
         {entry.person ? (
-          <Link
-            href={`/personen/${entry.person.id}`}
-            prefetch={false}
-            className="rounded-sm font-medium text-ink transition-colors hover:text-fir"
-          >
-            {entry.person.name}
-            {entry.person.scout ? <span className="font-normal text-ink-soft"> „{entry.person.scout}“</span> : null}
-          </Link>
+          <PersonLink person={entry.person} />
         ) : (
           <span className="text-ink-soft">{ACTION_LABEL.deleted}</span>
         )}
