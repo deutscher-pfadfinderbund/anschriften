@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { EMAIL_RE } from "@/lib/export";
-import { todayIso } from "@/lib/format";
+import { canonicalPhoneLabel, todayIso } from "@/lib/format";
 import { DESCRIPTION_MAX, TEXT_MAX } from "@/lib/limits";
 
 // Shared input contract for the person editor (client) and the save action (server).
@@ -151,8 +151,9 @@ function tenureErrorField(message: string): "startDate" | "endDate" {
 
 /**
  * The person payload: parsing it trims every text, turns blanks into null, drops blank
- * phone numbers and empty assignment rows, and checks every rule with a field path, so
- * `savePerson` parses exactly once and the editor can mark the offending field.
+ * phone numbers and empty assignment rows, spells phone labels the curated way and checks
+ * every rule with a field path, so `savePerson` parses exactly once and the editor can
+ * mark the offending field.
  */
 const personInputSchema = z
   .object({
@@ -176,7 +177,7 @@ const personInputSchema = z
       .array(phoneInputSchema)
       .max(20)
       .transform((rows) =>
-        rows.flatMap((p) => (p.number ? [{ label: p.label ?? "Telefon", number: p.number }] : [])),
+        rows.flatMap((p) => (p.number ? [{ label: canonicalPhoneLabel(p.label) || "Telefon", number: p.number }] : [])),
       ),
     notes: longText,
     doNotPrint: z.boolean(),

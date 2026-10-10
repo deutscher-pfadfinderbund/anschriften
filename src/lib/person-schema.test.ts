@@ -282,10 +282,10 @@ describe("personInputSchema: normalisation (parse once, no second cleaning pass)
     expect(d.street).toBeNull();
   });
 
-  it("drops blank phone numbers, trims and defaults the label", () => {
+  it("drops blank phone numbers, trims, canonicalises and defaults the label", () => {
     const d = parsed({
       phones: [
-        { label: " Privat ", number: " 0911 5550172 " },
+        { label: " privat ", number: " 0911 5550172 " },
         { label: "Mobil", number: "   " },
         { label: "  ", number: "0170 5550199" },
         { label: null, number: "030 5550111" },

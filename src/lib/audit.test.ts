@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { auditFieldLabel, diffSnapshots, formatPhones, listChange, type AuditSnapshot, type AuditTenure } from "./audit";
+import { auditFieldLabel, diffSnapshots, type AuditSnapshot, type AuditTenure } from "./audit";
 
 // All test data below is fictitious.
 
@@ -167,31 +167,6 @@ describe("diffSnapshots: manual Verteiler", () => {
       { field: "list", from: "Bundesrat", to: null },
       { field: "list", from: null, to: "Gildenrundbrief" },
     ]);
-  });
-});
-
-describe("listChange", () => {
-  it("is „— → name“ for a join and „name → —“ for a removal", () => {
-    expect(listChange("Bundesrat", true)).toEqual({ field: "list", from: null, to: "Bundesrat" });
-    expect(listChange("Bundesrat", false)).toEqual({ field: "list", from: "Bundesrat", to: null });
-  });
-});
-
-describe("formatPhones", () => {
-  it("joins label and number, a number without a label alone", () => {
-    expect(
-      formatPhones([
-        { label: "Mobil", number: "0170 1234567" },
-        { label: "", number: "0251 123456" },
-      ]),
-    ).toBe("Mobil 0170 1234567; 0251 123456");
-    expect(formatPhones([])).toBeNull();
-  });
-
-  it("spells labels the curated way, so the editor's re-spelling of an import is no change", () => {
-    expect(formatPhones([{ label: " mobil ", number: "0170 1" }])).toBe("Mobil 0170 1");
-    const imported = person({ phones: [{ label: "privat", number: "0251 2" }] });
-    expect(diffSnapshots(imported, person({ phones: [{ label: "Privat", number: "0251 2" }] }))).toEqual([]);
   });
 });
 

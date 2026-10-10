@@ -4,7 +4,7 @@
 // so an entry stays true when an Amt is renamed later and the UI only prints it.
 // No DB, safe on the client; the DB side is src/db/audit.ts.
 
-import { NO_OFFICE, canonicalPhoneLabel, formatDate, nullIfEmpty, tenureRange } from "@/lib/format";
+import { NO_OFFICE, formatDate, nullIfEmpty, tenureRange } from "@/lib/format";
 
 export type AuditAction = "created" | "updated" | "deleted";
 
@@ -109,17 +109,9 @@ type ScalarField = Exclude<AuditField, "assignment" | "history" | "list">;
 
 const date = (v: string | null) => formatDate(v) || null;
 
-/**
- * "Mobil 0170 1234567; Privat 0251 123456" (a number without a label stands alone).
- * Labels in their curated spelling, as the editor shows them: the editor saves an imported
- * "mobil" as "Mobil", which is no change worth logging.
- */
-export function formatPhones(phones: AuditSnapshot["phones"]): string | null {
-  const parts = phones.map((p) => {
-    const label = canonicalPhoneLabel(p.label);
-    return label ? `${label} ${p.number}` : p.number;
-  });
-  return parts.join("; ") || null;
+/** "Mobil 0170 1234567; Privat 0251 123456" (a number without a label stands alone). */
+function formatPhones(phones: AuditSnapshot["phones"]): string | null {
+  return phones.map((p) => (p.label ? `${p.label} ${p.number}` : p.number)).join("; ") || null;
 }
 
 /** The person's own fields as display strings, in AUDIT_FIELD_LABELS order. */
