@@ -154,7 +154,7 @@ function tenureErrorField(message: string): "startDate" | "endDate" {
  * phone numbers and empty assignment rows, and checks every rule with a field path, so
  * `savePerson` parses exactly once and the editor can mark the offending field.
  */
-export const personInputSchema = z
+const personInputSchema = z
   .object({
     id: rowId.optional(),
     /** `updated_at` of the record the form was loaded from — the optimistic-concurrency token. */

@@ -32,7 +32,7 @@ type Profile =
   | "nurOrdenStGeorg"
   | "nurOrdenStChristophorus";
 
-export const PROFILES: Profile[] = [
+const PROFILES: Profile[] = [
   "komplett",
   "nurBundesaemter",
   "nurBundesgilde",
