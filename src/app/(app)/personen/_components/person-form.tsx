@@ -9,7 +9,7 @@ import { deletePerson, savePerson } from "@/actions/persons";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { PageBody, PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import type { ActiveOfficeHolder, GroupRow, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
+import type { ActiveOfficeHolder, AuditEntry, GroupRow, OfficeRow, PersonEditData, RankRow } from "@/db/queries";
 import { callAction } from "@/lib/call-action";
 import { directoryUrl } from "@/lib/directory-url";
 import type { PersonCandidate } from "@/lib/duplicate-persons";
@@ -18,6 +18,7 @@ import type { FieldErrors } from "@/lib/person-schema";
 import { cn } from "@/lib/utils";
 
 import { AssignmentsPanel } from "./assignments-panel";
+import { ChangeLogPanel } from "./change-log-panel";
 import { ContactPanel } from "./contact-panel";
 import { keyRowErrors, snapshot, toFormValues, toPayload, type FormValues, type SetValue } from "./form-values";
 import { useActiveHolders } from "./holder-warning";
@@ -39,6 +40,7 @@ export function PersonForm({
   distributionLists,
   activeHolders,
   existingPersons,
+  changeLog,
 }: {
   person?: PersonEditData;
   groups: GroupRow[];
@@ -49,6 +51,8 @@ export function PersonForm({
   activeHolders: ActiveOfficeHolder[];
   /** Create mode only: existing names for the duplicate hint. */
   existingPersons?: PersonCandidate[];
+  /** Edit mode only: the person's change log, newest first. */
+  changeLog?: AuditEntry[];
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -215,6 +219,7 @@ export function PersonForm({
               <PrintPanel values={values} errors={errors} set={set} />
             </div>
           </div>
+          {changeLog ? <ChangeLogPanel entries={changeLog} className="mt-gutter" /> : null}
 
           {/* Sticky: Speichern stays in reach on a long form and on a phone. The status
               line takes its own row on a phone and sits between the buttons from sm up. */}

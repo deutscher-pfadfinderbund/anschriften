@@ -9,6 +9,7 @@ import {
   listGroups,
   listOffices,
   listRanks,
+  personAudit,
 } from "@/db/queries";
 import { requirePageSession } from "@/lib/auth-helpers";
 import { formatName } from "@/lib/format";
@@ -42,13 +43,14 @@ export default async function EditPersonPage({
   const personId = parseId(id);
   if (personId == null) notFound();
 
-  const [person, groups, offices, ranks, distributionLists, activeHolders] = await Promise.all([
+  const [person, groups, offices, ranks, distributionLists, activeHolders, changeLog] = await Promise.all([
     loadPerson(personId),
     listGroups(),
     listOffices(),
     listRanks(),
     listDistributionListNames(),
     listActiveOfficeHolders(),
+    personAudit(personId),
   ]);
   if (!person) notFound();
 
@@ -60,6 +62,7 @@ export default async function EditPersonPage({
       ranks={ranks}
       distributionLists={distributionLists}
       activeHolders={activeHolders}
+      changeLog={changeLog}
     />
   );
 }

@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { listsUsingRuleTarget, loadRules, type ListRef, type LoadedRule } from "@/db/list-rules";
 import {
   assignments,
+  auditLog,
   distributionListMembers,
   distributionLists,
   groups,
@@ -13,9 +14,10 @@ import {
   persons,
   ranks,
 } from "@/db/schema";
+import type { AuditAction, AuditChange } from "@/lib/audit";
 import { computeEffectiveMembership, type MemberOrigin } from "@/lib/effective-members";
 import type { CsvPerson } from "@/lib/export";
-import { formatFullName } from "@/lib/format";
+import { formatFullName, formatName, scoutAddition } from "@/lib/format";
 import { byName, sortByDirectoryName } from "@/lib/name-order";
 import { RULE_KINDS, type RuleKind, type RuleRef } from "@/lib/rule-kinds";
 import type { Section } from "@/lib/sections";
@@ -353,6 +355,64 @@ export async function listActiveOfficeHolders(): Promise<ActiveOfficeHolder[]> {
     name: formatFullName(r),
     startDate: r.startDate,
   }));
+}
+
+// --- change log (Änderungsverlauf, Protokoll) -----------------------------------------
+
+/** One change-log entry: who changed what, and when (`at`, ISO). */
+export type AuditEntry = {
+  id: number;
+  at: string;
+  actor: string;
+  action: AuditAction;
+  changes: AuditChange[];
+};
+
+/** A change-log entry for the Protokoll: with the person it is about (null: a deletion). */
+export type AuditLogRow = AuditEntry & {
+  person: { id: number; name: string; scout: string | null } | null;
+};
+
+const auditColumns = {
+  id: auditLog.id,
+  at: auditLog.at,
+  actor: auditLog.actor,
+  action: auditLog.action,
+  changes: auditLog.changes,
+};
+
+/** One person's change log, newest first (the editor's "Änderungsverlauf"). */
+export async function personAudit(personId: number): Promise<AuditEntry[]> {
+  const rows = await db
+    .select(auditColumns)
+    .from(auditLog)
+    .where(eq(auditLog.personId, personId))
+    .orderBy(desc(auditLog.at), desc(auditLog.id));
+  return rows.map((r) => ({ ...r, at: r.at.toISOString() }));
+}
+
+/** The latest `limit` changes across all persons, newest first (the Protokoll page). */
+export async function recentAudit(limit: number): Promise<AuditLogRow[]> {
+  const rows = await db
+    .select({
+      ...auditColumns,
+      personId: auditLog.personId,
+      firstName: persons.firstName,
+      lastName: persons.lastName,
+      scoutName: persons.scoutName,
+    })
+    .from(auditLog)
+    .leftJoin(persons, eq(persons.id, auditLog.personId))
+    .orderBy(desc(auditLog.at), desc(auditLog.id))
+    .limit(limit);
+  return rows.map(({ personId, firstName, lastName, scoutName, at, ...r }) => {
+    const name = { firstName, lastName, scoutName };
+    return {
+      ...r,
+      at: at.toISOString(),
+      person: personId == null ? null : { id: personId, name: formatName(name), scout: scoutAddition(name) },
+    };
+  });
 }
 
 // --- master data: Gliederungen, Ämter, Stände -----------------------------------------
