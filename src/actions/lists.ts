@@ -85,9 +85,17 @@ export async function saveList(id: number | null, raw: ListInput): Promise<SaveL
 }
 
 export async function deleteList(id: number): Promise<ActionResult> {
-  return mutation(async () => {
-    // Memberships and rules cascade; the mail log keeps its rows (list_id → NULL).
-    await db.delete(distributionLists).where(eq(distributionLists.id, id));
+  return mutation(async (by) => {
+    await db.transaction(async (tx) => {
+      // Memberships and rules cascade, so the manual members are recorded first (the log
+      // needs the list's name); the mail log keeps its rows (list_id → NULL).
+      const members = await tx
+        .select({ personId: distributionListMembers.personId })
+        .from(distributionListMembers)
+        .where(eq(distributionListMembers.listId, id));
+      await touchMembers(tx, id, members.map((m) => m.personId), by, false);
+      await tx.delete(distributionLists).where(eq(distributionLists.id, id));
+    });
     return { ok: true };
   });
 }
