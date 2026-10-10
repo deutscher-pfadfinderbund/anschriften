@@ -8,7 +8,7 @@ import { Tag } from "@/components/tag";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { PersonListRow } from "@/db/queries";
-import { birthYear, formatDate, formatNameWithScout, isVacant } from "@/lib/format";
+import { birthYear, formatDate, formatNameWithScout } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // One person in the directory, twice: a table row (md and up) and a card (phones).
@@ -21,16 +21,11 @@ type RowProps = {
   onSelectedChange: (id: number, selected: boolean) => void;
 };
 
-/** Name line: the link, then „vakant“ / „nicht abdrucken“ / „verstorben“ chips right after it. */
+/** Name line: the link, then „nicht abdrucken“ / „verstorben“ chips right after it. */
 function NameLine({ person, stretched }: { person: PersonListRow; stretched?: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
       <PersonLink person={person} stretched={stretched} />
-      {isVacant(person) ? (
-        <Tag tone="brass" title="Platzhalter ohne Namen: das Amt ist unbesetzt">
-          vakant
-        </Tag>
-      ) : null}
       {person.doNotPrint ? (
         <Tag tone="crit" title="Erscheint in keinem PDF-Verzeichnis">
           nicht abdrucken

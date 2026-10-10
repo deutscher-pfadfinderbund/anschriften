@@ -1,9 +1,10 @@
 import Link from "next/link";
 
-import { formatName, scoutAddition, type PersonName } from "@/lib/format";
+import { Tag } from "@/components/tag";
+import { formatName, isVacant, scoutAddition, type PersonName } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-/** "Nachname, Vorname „Fahrtenname“" linking to the editor; `stretched` covers the card around it. */
+/** "Nachname, Vorname „Fahrtenname“" (or a „vakant“ chip) linking to the editor; `stretched` covers the card around it. */
 export function PersonLink({ person, stretched = false }: { person: PersonName & { id: number }; stretched?: boolean }) {
   const scout = scoutAddition(person);
   return (
@@ -16,7 +17,13 @@ export function PersonLink({ person, stretched = false }: { person: PersonName &
         stretched && "before:absolute before:inset-0",
       )}
     >
-      {formatName(person)}
+      {isVacant(person) ? (
+        <Tag tone="brass" title="Platzhalter ohne Namen: das Amt ist unbesetzt">
+          vakant
+        </Tag>
+      ) : (
+        formatName(person)
+      )}
       {scout ? <span className="font-normal text-ink-soft"> „{scout}“</span> : null}
     </Link>
   );
