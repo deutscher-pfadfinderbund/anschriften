@@ -6,7 +6,7 @@ import { History, SearchX, X } from "lucide-react";
 
 import { AuditChanges } from "@/components/audit-changes";
 import { EmptyState } from "@/components/empty-state";
-import { focusSoon } from "@/components/field";
+import { focusSoonIfKeyboard } from "@/components/field";
 import { SearchField } from "@/components/search-field";
 import { Button } from "@/components/ui/button";
 import type { AuditLogRow } from "@/db/queries";
@@ -112,9 +112,8 @@ export function ProtokollList({ entries, limit }: { entries: AuditLogRow[]; limi
                 variant="outline"
                 onClick={() => {
                   setQuery("");
-                  // The button unmounts: keyboard users continue in the search field (a
-                  // tap must not open the phone keyboard).
-                  if (document.activeElement?.matches(":focus-visible")) focusSoon(SEARCH_ID);
+                  // The button unmounts: keyboard users continue in the search field.
+                  focusSoonIfKeyboard(SEARCH_ID);
                 }}
               >
                 <X />

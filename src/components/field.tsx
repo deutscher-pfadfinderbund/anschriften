@@ -113,3 +113,8 @@ export function FormError({ children }: { children: React.ReactNode }) {
 export function focusSoon(id: string): void {
   requestAnimationFrame(() => document.getElementById(id)?.focus());
 }
+
+/** focusSoon for keyboard users only (focus is visible): a tap must not open the phone keyboard. */
+export function focusSoonIfKeyboard(id: string): void {
+  if (document.activeElement?.matches(":focus-visible")) focusSoon(id);
+}

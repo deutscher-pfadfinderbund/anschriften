@@ -5,6 +5,7 @@ import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, SearchX, Users, X } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
+import { focusSoonIfKeyboard } from "@/components/field";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TableHead } from "@/components/ui/table";
@@ -24,17 +25,16 @@ import { useDirectoryParams } from "./use-directory-params";
 const STICKY_HEAD = "sticky top-(--top-bar) z-10 bg-surface-2 shadow-[inset_0_-1px_0_var(--line-strong)]";
 
 /**
- * The focused control is about to unmount (a reset or clear button): move keyboard focus
- * to the shown select-all box (`toSelectAll`, when the list is shown) or the search field,
- * so keyboard users keep their place instead of starting over at the page top. Pointer
- * focus is left alone: a tap must not open the phone keyboard.
+ * A reset or clear button is about to unmount: keyboard users keep their place instead of
+ * starting over at the page top — in the search field after a reset (focusSoonIfKeyboard),
+ * on the shown select-all box after clearing the selection (the search field when no list
+ * is shown). Pointer focus is left alone: a tap must not open the phone keyboard.
  */
-function keepKeyboardFocus(toSelectAll = false) {
+function focusSelectAllIfKeyboard() {
   if (!document.activeElement?.matches(":focus-visible")) return;
   // Both layouts are mounted and CSS hides one: a hidden box has no client rects.
-  const selectAll = toSelectAll
-    ? [...document.querySelectorAll<HTMLElement>("[data-select-all]")].find((el) => el.getClientRects().length > 0)
-    : undefined;
+  const boxes = [...document.querySelectorAll<HTMLElement>("[data-select-all]")];
+  const selectAll = boxes.find((el) => el.getClientRects().length > 0);
   (selectAll ?? document.getElementById(SEARCH_ID))?.focus();
 }
 
@@ -103,11 +103,11 @@ export function Directory({
   const hiddenCount = selected.length - shownSelected.length;
 
   const resetFilters = () => {
-    keepKeyboardFocus();
+    focusSoonIfKeyboard(SEARCH_ID);
     params.resetFilters();
   };
   const clearSelection = () => {
-    keepKeyboardFocus(true);
+    focusSelectAllIfKeyboard();
     setSelection(new Set());
   };
 
