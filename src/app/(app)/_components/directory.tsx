@@ -25,11 +25,17 @@ const STICKY_HEAD = "sticky top-(--top-bar) z-10 bg-surface-2 shadow-[inset_0_-1
 
 /**
  * The focused control is about to unmount (a reset or clear button): move keyboard focus
- * to the search field, so keyboard users keep their place instead of starting over at the
- * page top. Pointer focus is left alone: a tap must not open the phone keyboard.
+ * to the shown select-all box (`toSelectAll`, when the list is shown) or the search field,
+ * so keyboard users keep their place instead of starting over at the page top. Pointer
+ * focus is left alone: a tap must not open the phone keyboard.
  */
-function keepKeyboardFocus() {
-  if (document.activeElement?.matches(":focus-visible")) document.getElementById(SEARCH_ID)?.focus();
+function keepKeyboardFocus(toSelectAll = false) {
+  if (!document.activeElement?.matches(":focus-visible")) return;
+  // Both layouts are mounted and CSS hides one: a hidden box has no client rects.
+  const selectAll = toSelectAll
+    ? [...document.querySelectorAll<HTMLElement>("[data-select-all]")].find((el) => el.getClientRects().length > 0)
+    : undefined;
+  (selectAll ?? document.getElementById(SEARCH_ID))?.focus();
 }
 
 export function Directory({
@@ -53,7 +59,7 @@ export function Directory({
   const officeId = offices.some((o) => o.id === params.officeId) ? params.officeId : null;
   const listId = distributionLists.some((l) => l.id === params.listId) ? params.listId : null;
 
-  // `persons` arrive in directory order (listPersons sorts them with byDirectoryName);
+  // `persons` arrive in directory order (listPersons sorts them with sortByDirectoryName);
   // descending is the same list reversed. Filtering keeps the order.
   const indexed = useMemo(() => persons.map((p) => ({ ...p, ...searchIndex(p) })), [persons]);
   const ordered = useMemo(() => (params.sortDesc ? [...indexed].reverse() : indexed), [indexed, params.sortDesc]);
@@ -101,7 +107,7 @@ export function Directory({
     params.resetFilters();
   };
   const clearSelection = () => {
-    keepKeyboardFocus();
+    keepKeyboardFocus(true);
     setSelection(new Set());
   };
 
@@ -109,6 +115,7 @@ export function Directory({
   // nor change (the selection bar reports them).
   const selectAll = (
     <Checkbox
+      data-select-all
       aria-label={filtering ? "Alle angezeigten auswählen" : "Alle auswählen"}
       checked={allShownChecked}
       onCheckedChange={(v) => setAllShown(v === true)}
