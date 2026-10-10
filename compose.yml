@@ -11,13 +11,13 @@ services:
       db:
         condition: service_healthy
     networks:
-      - traefik
+      - web
       - internal
     labels:
       - "traefik.enable=true"
-      # App hängt an zwei Netzen (traefik + internal). Ohne diese Zeile könnte
+      # App hängt an zwei Netzen (web + internal). Ohne diese Zeile könnte
       # Traefik die interne IP wählen und intermittierend 504 liefern.
-      - "traefik.docker.network=traefik"
+      - "traefik.docker.network=web"
       - "traefik.http.routers.anschriften.rule=Host(`anschriften.deutscher-pfadfinderbund.de`)"
       - "traefik.http.routers.anschriften.entrypoints=websecure"
       - "traefik.http.routers.anschriften.tls.certresolver=letsencrypt"
@@ -60,8 +60,9 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # Tägliches pg_dump ins Host-Verzeichnis ./backups. Retention 14 tägliche /
-  # 8 wöchentliche Dumps. Läuft im internen Netz, greift wie die App über den
+  # Tägliches pg_dump ins Host-Verzeichnis BACKUP_DIR (Default ./backups; unter Komodo
+  # einen absoluten Pfad setzen, sonst liegen die Dumps im Klon und gehen beim Reclone
+  # verloren). Retention 14 tägliche / 8 wöchentliche Dumps. Läuft im internen Netz, greift wie die App über den
   # Hostnamen `db` zu. Restore-Prozedur: siehe docs/deployment.md.
   backup:
     image: prodrigestivill/postgres-backup-local:17-alpine
@@ -80,7 +81,7 @@ services:
       BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-8}
       BACKUP_KEEP_MONTHS: 0
     volumes:
-      - ./backups:/backups
+      - ${BACKUP_DIR:-./backups}:/backups
     networks:
       - internal
     logging:
@@ -89,11 +90,10 @@ services:
         max-size: "10m"
         max-file: "5"
 
-# Extern angelegtes Traefik-Netz des Servers (`docker network create traefik`,
-# bzw. der Name, den der Traefik-Stack dort tatsächlich nutzt). `internal` ist
+# Extern angelegtes Traefik-Netz des Servers (dort heißt es `web`). `internal` ist
 # ein privates Netz nur zwischen App und db.
 networks:
-  traefik:
+  web:
     external: true
   internal:
 

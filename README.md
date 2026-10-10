@@ -93,8 +93,8 @@ den Cutover-Ablauf beschreibt der Runbook **[docs/deployment.md](docs/deployment
 
 - Ein laufender **Traefik** mit einem `websecure`-Entrypoint und einem
   `certresolver` (in `compose.yml`: `letsencrypt`) für automatisches TLS.
-- Ein **externes Docker-Netz**, an dem Traefik hängt (in `compose.yml`: `traefik`).
-  Anlegen bzw. Namen an das Server-Setup anpassen: `docker network create traefik`.
+- Ein **externes Docker-Netz**, an dem Traefik hängt (in `compose.yml`: `web`).
+  Anlegen bzw. Namen an das Server-Setup anpassen: `docker network create web`.
 - Die Domain ist `anschriften.deutscher-pfadfinderbund.de` (Router-Rule in
   `compose.yml`); der DNS-Eintrag muss auf den Server zeigen.
 
