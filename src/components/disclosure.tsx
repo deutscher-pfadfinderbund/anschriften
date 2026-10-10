@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils";
 /**
  * A collapsible card (Panel's sibling): a native <details>, so keyboard and screen readers
  * get an expandable control for free. The summary row shows a chevron, the label and a
- * quiet count on the right. Pass `open`/`onOpenChange` to control it.
+ * quiet count on the right. Pass `open`/`onOpenChange` to control it, and an <h2> as
+ * `summary` when the card is a section of the page (it keeps the summary row's type).
  */
 export function Disclosure({
   summary,
