@@ -4,9 +4,10 @@
  *   bun scripts/import-mdb.ts <path-to.mdb> [--dry-run] [--overwrite-assignments]
  *
  * Reads the `Adressen` table via mdbtools (read-only), maps it onto the M2 schema and
- * upserts everything in a single transaction. Idempotent: persons are keyed on legacy_id,
- * their assignments and mailing-list memberships are deleted and recreated, and lookup
- * tables (groups/offices/ranks/lists) are get-or-created by name. --dry-run parses,
+ * upserts everything in a single transaction. Idempotent: persons are keyed on legacy_id
+ * (imported persons no longer in the .mdb are deleted), their assignments and
+ * mailing-list memberships are deleted and recreated, and lookup tables
+ * (groups/offices/ranks/lists) are get-or-created by name. --dry-run parses,
  * validates and prints statistics without writing.
  *
  * Guard (issue #11): the .mdb only carries person/group/office, so recreating assignments
@@ -17,7 +18,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { parse } from "csv-parse/sync";
-import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, notInArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
@@ -120,9 +121,10 @@ function buildModel(rows: Row[]): Model {
   }));
   const resolved = resolveLegacyIds(dedupInput);
 
-  const collidingLegacyIds = [
-    ...new Set(resolved.filter((r) => r.legacyId.includes("#")).map((r) => r.legacyId.split("#")[0])),
-  ].sort((a, b) => Number(a) - Number(b));
+  const collidingLegacyIds = resolved
+    .filter((r) => r.overwritten)
+    .map((r) => r.legacyId)
+    .sort((a, b) => Number(a) - Number(b));
 
   const tops = new Map<string, { section: Section; sortKey: number; kind: string | null }>();
   const officeNames = new Set<string>();
@@ -286,7 +288,7 @@ function printStats(model: Model, mode: string) {
 
   const u = model.unmapped;
   console.log(`\n----- Needs manual review (values only, no personal data) -----`);
-  console.log(`  colliding Access IDs (${u.collidingLegacyIds.length}): ${u.collidingLegacyIds.join(", ") || "-"}`);
+  console.log(`  overwritten Access IDs, latest row kept (${u.collidingLegacyIds.length}): ${u.collidingLegacyIds.join(", ") || "-"}`);
   console.log(`  Hilfsgruppe parse failures: ${[...u.hilfsgruppeParseFailures].join(" | ") || "-"}`);
   console.log(`  Hilfsgruppen without section mapping: ${[...u.unmappedSections].join(" | ") || "-"}`);
   console.log(`  unmapped Älterengemeinschaft values: ${[...u.unmappedAel].join(" | ") || "-"}`);
@@ -428,6 +430,13 @@ async function writeModel(model: Model, databaseUrl: string, overwriteAssignment
           .returning({ id: persons.id });
         personIdByLegacy.set(d.legacyId, row.id);
       }
+
+      // --- persons gone from the source (deleted in Access, stale conflict copies) ---
+      const removed = await tx
+        .delete(persons)
+        .where(and(isNotNull(persons.legacyId), notInArray(persons.legacyId, [...personIdByLegacy.keys()])))
+        .returning({ id: persons.id });
+      console.log(`Removed ${removed.length} person(s) no longer in the .mdb.`);
 
       // --- assignments + memberships: delete for imported persons, then recreate ---
       const importedIds = [...personIdByLegacy.values()];

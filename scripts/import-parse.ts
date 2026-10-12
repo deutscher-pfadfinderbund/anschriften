@@ -189,15 +189,16 @@ export interface DedupInput {
 export interface DedupResult {
   order: number;
   legacyId: string;
+  /** The id carried more than one name: an office slot overwritten in place. */
+  overwritten: boolean;
 }
 
 /**
- * Resolve stable legacy_ids for rows exported from the sync-conflicted Access file.
- * Rows are keyed on the Access ID. Within a colliding ID, rows are grouped by
- * (firstName, lastName): each name-group is one person and collapses to the row with the
- * latest `changedAt` (tie → last in file order) — these are Nextcloud conflict copies.
- * Genuinely different people sharing an ID (autonumber collisions) are kept as separate
- * persons via a deterministic "#n" suffix so no human is dropped. Deterministic across runs.
+ * Resolve one row per Access ID from the sync-conflicted Access file. Access keeps one
+ * row per office slot and overwrites it in place on a handover or a name fix, so every
+ * row sharing an ID is a version of the same slot, even under a different name
+ * (verified against the printed 2025-04 directory). The latest `changedAt` wins
+ * (tie → last in file order); older versions are stale. Deterministic across runs.
  */
 export function resolveLegacyIds(rows: DedupInput[]): DedupResult[] {
   const byId = new Map<string, DedupInput[]>();
@@ -208,31 +209,13 @@ export function resolveLegacyIds(rows: DedupInput[]): DedupResult[] {
 
   const nameKey = (r: DedupInput) =>
     `${r.firstName.trim().toLowerCase()}|${r.lastName.trim().toLowerCase()}`;
-  const minOrder = (rs: DedupInput[]) => Math.min(...rs.map((r) => r.order));
-  const pickLatest = (rs: DedupInput[]) =>
-    rs.reduce((best, r) =>
+
+  return [...byId].map(([id, group]) => {
+    const winner = group.reduce((best, r) =>
       r.changedAt > best.changedAt || (r.changedAt === best.changedAt && r.order > best.order)
         ? r
         : best,
     );
-
-  const out: DedupResult[] = [];
-  for (const [id, group] of byId) {
-    if (group.length === 1) {
-      out.push({ order: group[0].order, legacyId: id });
-      continue;
-    }
-    const byName = new Map<string, DedupInput[]>();
-    for (const r of group) {
-      const k = nameKey(r);
-      if (!byName.has(k)) byName.set(k, []);
-      byName.get(k)!.push(r);
-    }
-    const subgroups = [...byName.values()].sort((a, b) => minOrder(a) - minOrder(b));
-    subgroups.forEach((sg, i) => {
-      const winner = pickLatest(sg);
-      out.push({ order: winner.order, legacyId: i === 0 ? id : `${id}#${i + 1}` });
-    });
-  }
-  return out;
+    return { order: winner.order, legacyId: id, overwritten: new Set(group.map(nameKey)).size > 1 };
+  });
 }

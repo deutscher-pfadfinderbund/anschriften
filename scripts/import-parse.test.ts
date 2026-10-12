@@ -204,47 +204,34 @@ describe("resolveLegacyIds", () => {
       { id: "2", firstName: "Bert", lastName: "Beispiel", changedAt: "2020-01-01", order: 1 },
     ]);
     expect(res).toEqual([
-      { order: 0, legacyId: "1" },
-      { order: 1, legacyId: "2" },
+      { order: 0, legacyId: "1", overwritten: false },
+      { order: 1, legacyId: "2", overwritten: false },
     ]);
   });
 
-  it("collapses same-name conflict copies to the latest changedAt", () => {
+  it("collapses conflict copies to the latest changedAt", () => {
     const res = resolveLegacyIds([
       { id: "5", firstName: "Cara", lastName: "Muster", changedAt: "2019-01-01", order: 0 },
       { id: "5", firstName: "Cara", lastName: "Muster", changedAt: "2021-05-05", order: 1 },
       { id: "5", firstName: "Cara", lastName: "Muster", changedAt: "2020-03-03", order: 2 },
     ]);
-    expect(res).toEqual([{ order: 1, legacyId: "5" }]);
+    expect(res).toEqual([{ order: 1, legacyId: "5", overwritten: false }]);
   });
 
   it("breaks a changedAt tie by taking the last row in file order", () => {
     const res = resolveLegacyIds([
-      { id: "6", firstName: "Dana", lastName: "Muster", changedAt: "2020-01-01", order: 0 },
       { id: "6", firstName: "Dana", lastName: "Muster", changedAt: "2020-01-01", order: 3 },
+      { id: "6", firstName: "Dana", lastName: "Muster", changedAt: "2020-01-01", order: 0 },
     ]);
-    expect(res).toEqual([{ order: 3, legacyId: "6" }]);
+    expect(res).toEqual([{ order: 3, legacyId: "6", overwritten: false }]);
   });
 
-  it("keeps different people sharing an id as separate persons with #n suffixes", () => {
+  it("keeps only the latest holder of an office slot overwritten under a new name", () => {
     const res = resolveLegacyIds([
       { id: "9", firstName: "Emil", lastName: "Erste", changedAt: "2020-01-01", order: 0 },
-      { id: "9", firstName: "Frida", lastName: "Zweite", changedAt: "2020-01-01", order: 1 },
+      { id: "9", firstName: "Frida", lastName: "Zweite", changedAt: "2024-01-01", order: 1 },
+      { id: "9", firstName: "Emil", lastName: "Erste", changedAt: "2021-01-01", order: 2 },
     ]);
-    expect(res).toEqual([
-      { order: 0, legacyId: "9" },
-      { order: 1, legacyId: "9#2" },
-    ]);
-  });
-
-  it("is deterministic regardless of input order (suffix follows file order)", () => {
-    const rows = [
-      { id: "9", firstName: "Frida", lastName: "Zweite", changedAt: "2020-01-01", order: 5 },
-      { id: "9", firstName: "Emil", lastName: "Erste", changedAt: "2020-01-01", order: 2 },
-    ];
-    const res = resolveLegacyIds(rows);
-    // Emil appears first in file order (order 2) → bare id; Frida → #2
-    expect(res).toContainEqual({ order: 2, legacyId: "9" });
-    expect(res).toContainEqual({ order: 5, legacyId: "9#2" });
+    expect(res).toEqual([{ order: 1, legacyId: "9", overwritten: true }]);
   });
 });
