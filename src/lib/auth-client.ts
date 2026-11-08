@@ -1,6 +1,5 @@
-import { genericOAuthClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
-export const authClient = createAuthClient({
-  plugins: [genericOAuthClient()],
-});
+// better-auth 1.7 serves generic OAuth providers through the social sign-in API, so
+// the client needs no plugin.
+export const authClient = createAuthClient();

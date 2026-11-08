@@ -13,6 +13,9 @@ const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID ?? "";
 const KEYCLOAK_CLIENT_SECRET = process.env.KEYCLOAK_CLIENT_SECRET ?? "";
 const APP_URL = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
 
+/** The OAuth callback URI registered in Keycloak (better-auth < 1.7 path). */
+export const LEGACY_CALLBACK_PATH = "/api/auth/oauth2/callback/keycloak";
+
 // The single Keycloak client role that grants access to the Anschriftenverzeichnis.
 const REQUIRED_ROLE = "anschriften";
 
@@ -65,7 +68,6 @@ export const auth = betterAuth({
     "/delete-user",
     "/update-session",
     "/link-social",
-    "/oauth2/link",
     "/unlink-account",
     "/get-access-token",
     "/refresh-token",
@@ -86,6 +88,10 @@ export const auth = betterAuth({
           discoveryUrl: `${KEYCLOAK_ISSUER}/.well-known/openid-configuration`,
           clientId: KEYCLOAK_CLIENT_ID,
           clientSecret: KEYCLOAK_CLIENT_SECRET,
+          // better-auth 1.7 moved the callback to /api/auth/callback/:id. Keycloak has the
+          // old URI registered, so we keep announcing it and the auth route hands it to the
+          // new handler; no Keycloak change needed.
+          redirectURI: new URL(LEGACY_CALLBACK_PATH, APP_URL).toString(),
           scopes: ["openid", "profile", "email"],
           // Re-sync name/e-mail from the ID token on every login, so a change in Keycloak
           // reaches the app (and `updated_by`) at the next sign-in.

@@ -21,7 +21,7 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 
 - Next.js 16 (App Router, TypeScript, Turbopack), `output: "standalone"`
 - **Achtung Next 16:** `proxy.ts` statt `middleware.ts`; Docs in `node_modules/next/dist/docs/` lesen
-- better-auth **1.6.23 (gepinnt)** + `genericOAuth`-Plugin gegen Keycloak (OIDC discovery). Keine eigenen Accounts, kein Auth.js
+- better-auth **exakt gepinnt** (aktuell 1.7.x, Upgrades bewusst und mit Login-Test gegen den Dev-Keycloak) + `genericOAuth`-Plugin gegen Keycloak (OIDC discovery). Seit 1.7 läuft der Login über `signIn.social`; der in Keycloak registrierte Callback `/api/auth/oauth2/callback/keycloak` wird im Auth-Catch-all auf den neuen Pfad gebrückt. Keine eigenen Accounts, kein Auth.js
 - Postgres 17 + Drizzle ORM. Schema: `src/db/schema.ts`, Migrationen eingecheckt in `drizzle/`
 - Tailwind 4 (Tokens via `@theme` in `globals.css`), shadcn/ui
 - PDF: Typst (Issue #5) — Fachlogik in TS (`src/pdf/build-data.ts`), Template dumm halten
