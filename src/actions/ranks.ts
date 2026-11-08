@@ -11,6 +11,8 @@ import {
   deletedMeanwhile,
   firstError,
   guardedDelete,
+  idsValid,
+  INVALID_ID,
   mutation,
   nameField,
   orderNumber,
@@ -28,6 +30,7 @@ type RankInput = z.input<typeof rankSchema>;
 /** Create (`id` null) or update a Stand. */
 export async function saveRank(id: number | null, raw: RankInput): Promise<ActionResult> {
   return mutation(async (by) => {
+    if (id != null && !idsValid(id)) return INVALID_ID;
     const parsed = rankSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
     const values = { ...parsed.data, ...stamp(by) };

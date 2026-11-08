@@ -79,16 +79,26 @@ export const auth = betterAuth({
     "/unlink-account",
     "/get-access-token",
     "/refresh-token",
+    // Unused and inert with this config, but reachable: /account-info even refreshes and
+    // stores Keycloak tokens, which the two paths above are disabled to prevent.
+    "/account-info",
+    "/list-accounts",
+    "/request-password-reset",
+    "/send-verification-email",
+    "/verify-email",
+    "/delete-user/callback",
   ],
   hooks: {
-    // better-auth 1.7 lets /sign-in/social accept a bare ID token for any provider with a JWKS
-    // (Keycloak's discovery has one). The app only signs in through the code flow with state,
-    // PKCE and nonce, so a client-submitted token (e.g. replayed from an id_token_hint in a
-    // logout URL) must never open a session.
     before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path === "/sign-in/social" && ctx.body?.idToken) {
-        throw new APIError("BAD_REQUEST", { message: "ID token sign-in is disabled" });
-      }
+      if (ctx.path !== "/sign-in/social") return;
+      // better-auth 1.7 lets /sign-in/social accept a bare ID token for any provider with a
+      // JWKS (Keycloak's discovery has one). The app only signs in through the code flow with
+      // state, PKCE and nonce, so a client-submitted token (e.g. replayed from an
+      // id_token_hint in a logout URL) must never open a session.
+      if (ctx.body?.idToken) throw new APIError("BAD_REQUEST", { message: "ID token sign-in is disabled" });
+      // additionalData is copied into the OAuth state row in the database; the app sends
+      // none, and an anonymous caller must not park arbitrary data there.
+      if (ctx.body?.additionalData) throw new APIError("BAD_REQUEST", { message: "additionalData is not accepted" });
     }),
   },
   session: {

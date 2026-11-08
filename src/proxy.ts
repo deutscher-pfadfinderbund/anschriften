@@ -27,5 +27,5 @@ export const config = {
   // the session themselves), Next internals and static assets. The asset exclusion matches
   // only paths ending in a real file extension (`\.[\w]+$`) — not any path merely containing
   // a dot — so a crafted route like `/personen/1.` is NOT bypassed.
-  matcher: ["/((?!login|api/|_next/static|_next/image|.*\\.[\\w]+$).*)"],
+  matcher: ["/((?!login(?:/|$)|api/|_next/static|_next/image|.*\\.[\\w]+$).*)"],
 };

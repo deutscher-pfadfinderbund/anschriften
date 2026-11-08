@@ -11,12 +11,14 @@ import {
   deletedMeanwhile,
   firstError,
   guardedDelete,
+  idsValid,
+  INVALID_ID,
   mutation,
   nameField,
   orderNumber,
   stamp,
-  UserFacingError,
   type ActionResult,
+  UserFacingError,
 } from "@/lib/action-helpers";
 import { descendantIds } from "@/lib/groups";
 import { TEXT_MAX } from "@/lib/limits";
@@ -44,6 +46,7 @@ type GroupInput = z.input<typeof groupSchema>;
  */
 export async function saveGroup(id: number | null, raw: GroupInput): Promise<ActionResult> {
   return mutation(async (by) => {
+    if (id != null && !idsValid(id)) return INVALID_ID;
     const parsed = groupSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
     const data = parsed.data;

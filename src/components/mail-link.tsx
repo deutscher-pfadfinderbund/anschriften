@@ -9,7 +9,8 @@ export function MailLink({ email, className }: { email: string; className?: stri
   const at = email.lastIndexOf("@");
   return (
     <a
-      href={`mailto:${email}`}
+      // Encoded per part: a stored address like "a@b.de?bcc=x@y.de" must not add headers.
+      href={`mailto:${email.split("@").map(encodeURIComponent).join("@")}`}
       className={cn(
         "rounded-sm text-ink underline-offset-2 transition-colors wrap-anywhere hover:text-fir hover:underline",
         className,

@@ -8,12 +8,14 @@ import { assignments, distributionListMembers, persons } from "@/db/schema";
 import {
   dbFailure,
   deletedMeanwhile,
+  idsValid,
+  INVALID_ID,
   lockPerson,
   mutation,
-  stamp,
   StaleError,
-  UserFacingError,
+  stamp,
   type ActionResult,
+  UserFacingError,
 } from "@/lib/action-helpers";
 import type { AuditSnapshot } from "@/lib/audit";
 import { todayIso } from "@/lib/format";
@@ -159,6 +161,7 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
 
 export async function deletePerson(id: number): Promise<ActionResult> {
   return mutation(async (by) => {
+    if (!idsValid(id)) return INVALID_ID;
     await db.transaction(async (tx) => {
       // Assignments, memberships and the person's change log cascade with the person.
       const deleted = await tx.delete(persons).where(eq(persons.id, id)).returning({ id: persons.id });

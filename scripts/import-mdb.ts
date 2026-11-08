@@ -17,6 +17,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { parse } from "csv-parse/sync";
 import { and, eq, inArray, isNotNull, notInArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -542,7 +543,8 @@ async function main() {
 
   const csv = execFileSync(
     "mdb-export",
-    ["-D", "%Y-%m-%d", "-T", "%Y-%m-%d %H:%M:%S", mdbPath, "Adressen"],
+    // Absolute, so a file name starting with "-" is never read as an option.
+    ["-D", "%Y-%m-%d", "-T", "%Y-%m-%d %H:%M:%S", path.resolve(mdbPath), "Adressen"],
     { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
   );
 

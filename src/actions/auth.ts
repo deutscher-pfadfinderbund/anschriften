@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -32,6 +32,9 @@ export async function logout() {
       .select({ idToken: account.idToken })
       .from(account)
       .where(and(eq(account.userId, session.user.id), eq(account.providerId, PROVIDER_ID)))
+      // A user re-created in Keycloak (new `sub`, same e-mail) gets a second account row;
+      // only the most recently used one holds a token Keycloak still accepts.
+      .orderBy(desc(account.updatedAt))
       .limit(1);
     idTokenHint = keycloakAccount?.idToken ?? undefined;
   }

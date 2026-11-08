@@ -11,6 +11,8 @@ import {
   dbFailure,
   deletedMeanwhile,
   firstError,
+  idsValid,
+  INVALID_ID,
   mutation,
   nameField,
   stamp,
@@ -65,6 +67,7 @@ type ListInput = z.input<typeof listSchema>;
 /** Create (`id` null) or rename/describe a list. Returns the id so the UI can select it. */
 export async function saveList(id: number | null, raw: ListInput): Promise<SaveListResult> {
   return mutation(async (by) => {
+    if (id != null && !idsValid(id)) return INVALID_ID;
     const parsed = listSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
     const values = { ...parsed.data, ...stamp(by) };
@@ -86,6 +89,7 @@ export async function saveList(id: number | null, raw: ListInput): Promise<SaveL
 
 export async function deleteList(id: number): Promise<ActionResult> {
   return mutation(async (by) => {
+    if (!idsValid(id)) return INVALID_ID;
     await db.transaction(async (tx) => {
       // Memberships and rules cascade, so the manual members are recorded first (the log
       // needs the list's name); the mail log keeps its rows (list_id → NULL).
@@ -107,6 +111,7 @@ export async function deleteList(id: number): Promise<ActionResult> {
  */
 export async function addMembers(listId: number, personIds: number[]): Promise<AddMembersResult> {
   return mutation(async (by) => {
+    if (!idsValid(listId) || !Array.isArray(personIds)) return INVALID_ID;
     const requested = [...new Set(personIds.map(parseId).filter((id) => id != null))];
     if (requested.length === 0) return { ok: true, added: 0, skippedDeceased: 0 };
     const deceased = new Set(
@@ -141,6 +146,7 @@ export async function addMembers(listId: number, personIds: number[]): Promise<A
 
 export async function removeMember(listId: number, personId: number): Promise<ActionResult> {
   return mutation(async (by) => {
+    if (!idsValid(listId, personId)) return INVALID_ID;
     await db.transaction(async (tx) => {
       const removed = await tx
         .delete(distributionListMembers)
