@@ -65,12 +65,12 @@ export const LINK =
 
 /**
  * A navigation row (sidebar, Verteiler rail). One "active" language app-wide: --active
- * fill (always stronger than --hover), fir text and a straight fir marker bar.
+ * fill (always stronger than --hover), ink text and a straight fir marker bar.
  */
 export const NAV_ROW = {
   base: "relative flex w-full items-center rounded-md px-2.5 py-2 text-ui transition-colors",
   active:
-    "bg-active font-medium text-fir before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-fir",
+    "bg-active font-medium text-ink before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-fir",
   idle: "text-ink-soft hover:bg-hover hover:text-ink",
 }
 

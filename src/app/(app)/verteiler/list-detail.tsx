@@ -178,7 +178,7 @@ export function ListDetail({
                     // do not overlap.
                     "pointer-coarse:relative pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2",
                     separator === value
-                      ? "bg-active font-medium text-fir"
+                      ? "bg-active font-medium text-ink"
                       : "text-ink-soft hover:bg-hover hover:text-ink",
                   )}
                 >
