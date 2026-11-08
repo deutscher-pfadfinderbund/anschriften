@@ -16,8 +16,8 @@ export function LoginButton() {
     setPending(true);
     setFailed(false);
     try {
-      const { error } = await authClient.signIn.oauth2({
-        providerId: "keycloak",
+      const { error } = await authClient.signIn.social({
+        provider: "keycloak",
         callbackURL: "/",
         errorCallbackURL: "/login",
       });

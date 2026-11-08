@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { decodeJwt } from "jose";
@@ -13,14 +13,25 @@ const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID ?? "";
 const KEYCLOAK_CLIENT_SECRET = process.env.KEYCLOAK_CLIENT_SECRET ?? "";
 const APP_URL = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
 
+export const PROVIDER_ID = "keycloak";
+/** better-auth's own OAuth callback route (since 1.7). */
+export const CALLBACK_PATH = `/api/auth/callback/${PROVIDER_ID}`;
+/**
+ * The callback URI Keycloak has registered (better-auth < 1.7). Announced as redirectURI and
+ * bridged onto CALLBACK_PATH by the auth catch-all route.
+ * ponytail: temporary bridge — once Keycloak lists CALLBACK_PATH as a valid redirect URI, drop
+ * this, the redirectURI override and the custom GET in src/app/api/auth/[...all]/route.ts.
+ */
+export const LEGACY_CALLBACK_PATH = `/api/auth/oauth2/callback/${PROVIDER_ID}`;
+
 // The single Keycloak client role that grants access to the Anschriftenverzeichnis.
 const REQUIRED_ROLE = "anschriften";
 
 /**
  * Role gate. Keycloak is configured to emit the client roles into the ID token
- * (`resource_access[client].roles`). We decode the ID token — no signature check
- * is needed because it arrives straight from Keycloak's token endpoint over the
- * back channel — and only let users carrying the `anschriften` client role in.
+ * (`resource_access[client].roles`). We decode the ID token — better-auth has already
+ * verified its signature, issuer, audience and nonce against Keycloak's JWKS in the
+ * callback — and only let users carrying the `anschriften` client role in.
  *
  * Rejection happens here, inside `getUserInfo`, i.e. *before* better-auth creates
  * any user/session/account row, so a denied login leaves no orphan data. We throw
@@ -65,11 +76,21 @@ export const auth = betterAuth({
     "/delete-user",
     "/update-session",
     "/link-social",
-    "/oauth2/link",
     "/unlink-account",
     "/get-access-token",
     "/refresh-token",
   ],
+  hooks: {
+    // better-auth 1.7 lets /sign-in/social accept a bare ID token for any provider with a JWKS
+    // (Keycloak's discovery has one). The app only signs in through the code flow with state,
+    // PKCE and nonce, so a client-submitted token (e.g. replayed from an id_token_hint in a
+    // logout URL) must never open a session.
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === "/sign-in/social" && ctx.body?.idToken) {
+        throw new APIError("BAD_REQUEST", { message: "ID token sign-in is disabled" });
+      }
+    }),
+  },
   session: {
     // Roles are only checked at login (deliberate simplification per roadmap:
     // "role removal takes effect at session expiry"). To keep that blast radius
@@ -82,10 +103,12 @@ export const auth = betterAuth({
     genericOAuth({
       config: [
         {
-          providerId: "keycloak",
+          providerId: PROVIDER_ID,
           discoveryUrl: `${KEYCLOAK_ISSUER}/.well-known/openid-configuration`,
           clientId: KEYCLOAK_CLIENT_ID,
           clientSecret: KEYCLOAK_CLIENT_SECRET,
+          // Keycloak still has the pre-1.7 callback registered (see LEGACY_CALLBACK_PATH).
+          redirectURI: new URL(LEGACY_CALLBACK_PATH, APP_URL).toString(),
           scopes: ["openid", "profile", "email"],
           // Re-sync name/e-mail from the ID token on every login, so a change in Keycloak
           // reaches the app (and `updated_by`) at the next sign-in.
@@ -96,6 +119,10 @@ export const auth = betterAuth({
             const idToken = tokens.idToken;
             if (!idToken) return null;
             const claims = decodeJwt(idToken);
+            // Only an ID token Keycloak issued to this client may pass — not an access token or
+            // another client's token whose `aud` happens to include ours — whatever path inside
+            // better-auth led here. null fails the login with a retryable error.
+            if (claims.typ !== "ID" || claims.azp !== KEYCLOAK_CLIENT_ID) return null;
             assertRole(claims);
             const email = typeof claims.email === "string" ? claims.email : null;
             const name =
