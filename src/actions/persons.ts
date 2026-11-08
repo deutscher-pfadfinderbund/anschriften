@@ -47,7 +47,7 @@ export async function savePerson(raw: PersonInput): Promise<SaveResult> {
   return mutation(async (by) => {
     // An edit compares the PLZ with the stored one (unchanged odd/foreign PLZ stay valid). A
     // save in between is refused by lockPerson anyway, so this read needs no lock.
-    const editId = rowId.safeParse(raw.id);
+    const editId = rowId.safeParse(raw?.id);
     const stored = editId.success
       ? await db.select({ postalCode: persons.postalCode }).from(persons).where(eq(persons.id, editId.data))
       : [];
