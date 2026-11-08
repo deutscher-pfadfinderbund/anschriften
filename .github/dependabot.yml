@@ -1,0 +1,22 @@
+# Weekly update PRs, grouped so the small team gets one PR per ecosystem instead of
+# a stream. Security updates still arrive immediately as their own PRs.
+version: 2
+updates:
+  - package-ecosystem: npm # bun.lock is supported by the npm ecosystem
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
