@@ -32,14 +32,13 @@ export function ListFormDialog({
   /** Called with the saved list's id (to select a newly created list). */
   onSaved: (id: number) => void;
 }) {
-  // Lives here, not in ListForm: while saving, Esc, the overlay and X must not close the
-  // dialog, or the server's answer (e.g. "Name schon vergeben") is lost.
+  // Lives here, not in ListForm: the dialog must know it is busy (see Dialog `busy`).
   const [isPending, startTransition] = useTransition();
   return (
-    <Dialog open={draft != null} onOpenChange={(o) => !o && !isPending && onClose()}>
+    <Dialog open={draft != null} busy={isPending} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         {draft ? (
-          <ListForm draft={draft} onCancel={onClose} onSaved={onSaved} transition={[isPending, startTransition]} />
+          <ListForm draft={draft} onCancel={onClose} onSaved={onSaved} pending={isPending} startTransition={startTransition} />
         ) : null}
       </DialogContent>
     </Dialog>
@@ -51,12 +50,14 @@ function ListForm({
   draft,
   onCancel,
   onSaved,
-  transition: [isPending, startTransition],
+  pending: isPending,
+  startTransition,
 }: {
   draft: ListDraft;
   onCancel: () => void;
   onSaved: (id: number) => void;
-  transition: ReturnType<typeof useTransition>;
+  pending: boolean;
+  startTransition: React.TransitionStartFunction;
 }) {
   const [name, setName] = useState(draft.name);
   const [description, setDescription] = useState(draft.description);

@@ -123,13 +123,7 @@ export function ComposeMailDialog({
     recipientCount > 0 && subject.trim().length > 0 && body.trim().length > 0 && !isPending;
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        // While sending, the dialog stays put: closing it would hide the outcome.
-        if (!o && !isPending) close();
-      }}
-    >
+    <Dialog open={open} busy={isPending} onOpenChange={(o) => !o && close()}>
       <DialogContent
         className="sm:max-w-lg"
         onInteractOutside={(e) => {

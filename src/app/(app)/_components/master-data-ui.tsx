@@ -223,12 +223,7 @@ export function EntryDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next && !pending) close();
-      }}
-    >
+    <Dialog open={open} busy={pending} onOpenChange={(next) => !next && close()}>
       <DialogContent
         className={className}
         onEscapeKeyDown={(e) => {

@@ -5,6 +5,7 @@
 import { getListName, personsForCsvByIds, personsForCsvByList } from "@/db/queries";
 import { getSession } from "@/lib/auth-helpers";
 import { asciiSlug, buildCsv, CSV_BOM, type CsvPerson } from "@/lib/export";
+import { IDS_MAX } from "@/lib/limits";
 import { todayIso } from "@/lib/format";
 import { parseId } from "@/lib/ids";
 
@@ -39,7 +40,7 @@ export async function GET(request: Request): Promise<Response> {
       return new Response("Keine gültigen IDs übergeben.", { status: 400 });
     }
     // Sanity cap far above the real dataset (~700 persons) against abusive queries.
-    if (ids.length > 5000) {
+    if (ids.length > IDS_MAX) {
       return new Response("Zu viele IDs übergeben.", { status: 400 });
     }
     rows = await personsForCsvByIds(ids);

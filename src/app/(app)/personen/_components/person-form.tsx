@@ -101,7 +101,7 @@ export function PersonForm({
     if (isSaving) return;
     const rows = values.assignments;
     startSave(async () => {
-      const payload = toPayload(values, person && { id: person.id, updatedAt: version, postalCode: person.postalCode }, orders);
+      const payload = toPayload(values, person && { id: person.id, updatedAt: version }, orders);
       const res = await callAction(() => savePerson(payload));
       if (!res.ok) {
         const fieldErrors = keyRowErrors(res.errors ?? {}, rows);

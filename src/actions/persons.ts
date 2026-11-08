@@ -17,7 +17,7 @@ import {
 } from "@/lib/action-helpers";
 import type { AuditSnapshot } from "@/lib/audit";
 import { todayIso } from "@/lib/format";
-import { parsePersonInput, resolveTenureEnd, type FieldErrors, type PersonInput } from "@/lib/person-schema";
+import { parsePersonInput, resolveTenureEnd, rowId, type FieldErrors, type PersonInput } from "@/lib/person-schema";
 
 type SaveResult =
   | { ok: true; id: number }
@@ -45,7 +45,13 @@ const FK_MESSAGES: Record<string, string> = {
  */
 export async function savePerson(raw: PersonInput): Promise<SaveResult> {
   return mutation(async (by) => {
-    const parsed = parsePersonInput(raw);
+    // An edit compares the PLZ with the stored one (unchanged odd/foreign PLZ stay valid). A
+    // save in between is refused by lockPerson anyway, so this read needs no lock.
+    const editId = rowId.safeParse(raw.id);
+    const stored = editId.success
+      ? await db.select({ postalCode: persons.postalCode }).from(persons).where(eq(persons.id, editId.data))
+      : [];
+    const parsed = parsePersonInput(raw, stored[0]?.postalCode);
     if (!parsed.ok)
       return {
         ok: false,

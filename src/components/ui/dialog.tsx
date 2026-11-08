@@ -10,10 +10,22 @@ import { XIcon } from "lucide-react"
 /** `open` of a controlled <Dialog>, for its panel; undefined when uncontrolled. */
 const DialogOpenContext = React.createContext<boolean | undefined>(undefined)
 
-function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
+/**
+ * `busy`: an action of the dialog is running, so Esc, the overlay and X do not close it —
+ * its answer (an error, a partial send) would otherwise be lost with the dialog.
+ */
+function Dialog({
+  busy = false,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root> & { busy?: boolean }) {
   return (
     <DialogOpenContext value={props.open}>
-      <DialogPrimitive.Root data-slot="dialog" {...props} />
+      <DialogPrimitive.Root
+        data-slot="dialog"
+        onOpenChange={(open) => (open || !busy) && onOpenChange?.(open)}
+        {...props}
+      />
     </DialogOpenContext>
   )
 }

@@ -83,7 +83,7 @@ export function HistorySection({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [removing, setRemoving] = useState<HistoricalAssignment | null>(null);
   const [isRemoving, startRemove] = useTransition();
-  // Owned here so Esc/overlay/X cannot close the form dialog while it saves (its answer would be lost).
+  // Owned here: the form dialog must know it is busy (see Dialog `busy`).
   const [isSavingDraft, startSaveDraft] = useTransition();
 
   function remove() {
@@ -167,7 +167,7 @@ export function HistorySection({
         </div>
       ) : null}
 
-      <Dialog open={draft != null} onOpenChange={(o) => !o && !isSavingDraft && setDraft(null)}>
+      <Dialog open={draft != null} busy={isSavingDraft} onOpenChange={(o) => !o && setDraft(null)}>
         <DialogContent>
           {draft ? (
             <HistoryForm
@@ -178,7 +178,8 @@ export function HistorySection({
               groupOptions={groupOptions}
               officeOptions={officeOptions}
               onDone={() => setDraft(null)}
-              transition={[isSavingDraft, startSaveDraft]}
+              pending={isSavingDraft}
+              startTransition={startSaveDraft}
             />
           ) : null}
         </DialogContent>
@@ -213,7 +214,8 @@ function HistoryForm({
   groupOptions,
   officeOptions,
   onDone,
-  transition: [pending, startTransition],
+  pending,
+  startTransition,
 }: {
   personId: number;
   version: string;
@@ -222,7 +224,8 @@ function HistoryForm({
   groupOptions: ComboOption[];
   officeOptions: ComboOption[];
   onDone: () => void;
-  transition: ReturnType<typeof useTransition>;
+  pending: boolean;
+  startTransition: React.TransitionStartFunction;
 }) {
   const [draft, setDraft] = useState(initial);
   const [tried, setTried] = useState(false);

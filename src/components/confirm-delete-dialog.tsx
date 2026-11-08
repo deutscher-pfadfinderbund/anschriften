@@ -11,10 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-/**
- * Shared confirmation dialog for destructive delete actions. While the deletion runs it
- * cannot be dismissed (Esc, overlay, X), so a refusal is never lost.
- */
+/** Shared confirmation dialog for destructive delete actions. */
 export function ConfirmDeleteDialog({
   open,
   onOpenChange,
@@ -36,7 +33,7 @@ export function ConfirmDeleteDialog({
   onConfirm: () => void;
 }) {
   return (
-    <Dialog open={open} onOpenChange={(o) => (o || !pending) && onOpenChange(o)}>
+    <Dialog open={open} busy={pending} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

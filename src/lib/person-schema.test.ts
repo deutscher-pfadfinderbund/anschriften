@@ -245,14 +245,20 @@ describe("personInputSchema: postal code format", () => {
       expect(parsePersonInput(base({ postalCode })).ok, postalCode).toBe(true);
   });
 
-  it("does not re-check an unchanged stored postal code, so imported odd ones stay editable", () => {
-    expect(parsePersonInput(base({ postalCode: "1234", loadedPostalCode: "1234" })).ok).toBe(true);
-    expect(parsePersonInput(base({ postalCode: "1235", loadedPostalCode: "1234" })).ok).toBe(false);
+  it("rejects a city or other text typed into the PLZ field", () => {
+    for (const postalCode of ["A-1010 Wien", "Tel 1234567", "A1010"])
+      expect(parsePersonInput(base({ postalCode })).ok, postalCode).toBe(false);
   });
 
-  it("never passes loadedPostalCode on to the saved data", () => {
-    const r = parsePersonInput(base({ postalCode: "90402", loadedPostalCode: "90402" }));
-    expect(r.ok && "loadedPostalCode" in r.data).toBe(false);
+  it("does not re-check an unchanged stored postal code, so imported odd ones stay editable", () => {
+    expect(parsePersonInput(base({ postalCode: "1234" }), "1234").ok).toBe(true);
+    expect(parsePersonInput(base({ postalCode: "1235" }), "1234").ok).toBe(false);
+  });
+
+  it("reports the PLZ error together with other field errors", () => {
+    const r = parsePersonInput(base({ postalCode: "1234", email: "kaputt" }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(Object.keys(r.errors).sort()).toEqual(["email", "postalCode"]);
   });
 
   it("skips the check for an empty or whitespace-only postal code", () => {
