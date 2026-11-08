@@ -29,8 +29,10 @@ export async function GET(request: Request): Promise<Response> {
       return new Response("Ungültige Verteiler-ID.", { status: 400 });
     }
     const [name, data] = await Promise.all([getListName(listId), personsForCsvByList(listId)]);
+    // Deleted meanwhile (another tab): an error, not an empty file that looks like an empty list.
+    if (name == null) return new Response("Diesen Verteiler gibt es nicht mehr.", { status: 404 });
     rows = data;
-    baseName = name ? asciiSlug(name) : `verteiler-${listId}`;
+    baseName = asciiSlug(name) || `verteiler-${listId}`;
   } else if (idsRaw != null) {
     const ids = [...new Set(idsRaw.split(",").map(parseId).filter((id) => id != null))];
     if (ids.length === 0) {

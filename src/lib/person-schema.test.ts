@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   isValidDate,
   parsePersonInput,
+  POSTAL_CODE_MESSAGE,
   type PersonData,
   resolveTenureEnd,
   validatePersonDates,
@@ -231,16 +232,27 @@ describe("personInputSchema: e-mail format", () => {
 });
 
 describe("personInputSchema: postal code format", () => {
-  it("rejects a postal code that is not exactly five digits", () => {
+  it("rejects a typed postal code that is neither German nor foreign with a country code", () => {
     for (const postalCode of ["1234", "123456", "abcde", "9040a", "90 402"]) {
       const r = parsePersonInput(base({ postalCode }));
       expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.errors.postalCode).toBe("Die PLZ muss aus 5 Ziffern bestehen.");
+      if (!r.ok) expect(r.errors.postalCode).toBe(POSTAL_CODE_MESSAGE);
     }
   });
 
-  it("accepts a five-digit postal code", () => {
-    expect(parsePersonInput(base({ postalCode: "90402" })).ok).toBe(true);
+  it("accepts a five-digit and a foreign postal code with country code", () => {
+    for (const postalCode of ["90402", "01067", "A-1010", "CH 8001", "NL-1234 AB", "1234 AB"])
+      expect(parsePersonInput(base({ postalCode })).ok, postalCode).toBe(true);
+  });
+
+  it("does not re-check an unchanged stored postal code, so imported odd ones stay editable", () => {
+    expect(parsePersonInput(base({ postalCode: "1234", loadedPostalCode: "1234" })).ok).toBe(true);
+    expect(parsePersonInput(base({ postalCode: "1235", loadedPostalCode: "1234" })).ok).toBe(false);
+  });
+
+  it("never passes loadedPostalCode on to the saved data", () => {
+    const r = parsePersonInput(base({ postalCode: "90402", loadedPostalCode: "90402" }));
+    expect(r.ok && "loadedPostalCode" in r.data).toBe(false);
   });
 
   it("skips the check for an empty or whitespace-only postal code", () => {

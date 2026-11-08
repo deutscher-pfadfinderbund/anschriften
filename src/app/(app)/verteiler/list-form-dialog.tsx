@@ -32,10 +32,15 @@ export function ListFormDialog({
   /** Called with the saved list's id (to select a newly created list). */
   onSaved: (id: number) => void;
 }) {
+  // Lives here, not in ListForm: while saving, Esc, the overlay and X must not close the
+  // dialog, or the server's answer (e.g. "Name schon vergeben") is lost.
+  const [isPending, startTransition] = useTransition();
   return (
-    <Dialog open={draft != null} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={draft != null} onOpenChange={(o) => !o && !isPending && onClose()}>
       <DialogContent>
-        {draft ? <ListForm draft={draft} onCancel={onClose} onSaved={onSaved} /> : null}
+        {draft ? (
+          <ListForm draft={draft} onCancel={onClose} onSaved={onSaved} transition={[isPending, startTransition]} />
+        ) : null}
       </DialogContent>
     </Dialog>
   );
@@ -46,12 +51,13 @@ function ListForm({
   draft,
   onCancel,
   onSaved,
+  transition: [isPending, startTransition],
 }: {
   draft: ListDraft;
   onCancel: () => void;
   onSaved: (id: number) => void;
+  transition: ReturnType<typeof useTransition>;
 }) {
-  const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(draft.name);
   const [description, setDescription] = useState(draft.description);
   const [error, setError] = useState<string | null>(null);

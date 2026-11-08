@@ -13,6 +13,9 @@ export class SessionExpiredError extends Error {
   }
 }
 
+/** The export target no longer exists (HTTP 404); the message is the server's German text. */
+export class GoneError extends Error {}
+
 /**
  * Filename from a Content-Disposition header (`filename="…"` or bare), null when absent.
  * Our export routes only send ASCII names, so the RFC 5987 `filename*` form is not needed.
@@ -32,6 +35,8 @@ export function filenameFromDisposition(header: string | null): string | null {
 export async function downloadFile(url: string, fallbackName: string): Promise<void> {
   const res = await fetch(url, { credentials: "same-origin" });
   if (res.redirected || res.status === 401) throw new SessionExpiredError();
+  // 404: the thing to export is gone (e.g. a list deleted in another tab) — retrying won't help.
+  if (res.status === 404) throw new GoneError(await res.text());
   if (!res.ok) throw new Error(`Download failed with HTTP ${res.status}`);
   const blob = await res.blob();
   const filename = filenameFromDisposition(res.headers.get("Content-Disposition")) ?? fallbackName;
@@ -48,8 +53,14 @@ export async function downloadFile(url: string, fallbackName: string): Promise<v
 }
 
 const DOWNLOADS = {
-  csv: { fallbackName: "anschriften.csv", failure: "CSV-Export fehlgeschlagen." },
-  pdf: { fallbackName: "anschriftenverzeichnis.pdf", failure: "PDF konnte nicht erzeugt werden." },
+  csv: {
+    fallbackName: "anschriften.csv",
+    failure: "CSV-Export fehlgeschlagen.",
+    // Excel opens a double-clicked CSV with "General" columns and strips the leading zero
+    // of PLZ like 01067; a Word mail merge reads the file as text and is fine.
+    hint: "Für Excel: über Daten → Aus Text/CSV öffnen und die PLZ-Spalte als Text einstellen, sonst fehlt bei PLZ wie 01067 die führende Null.",
+  },
+  pdf: { fallbackName: "anschriftenverzeichnis.pdf", failure: "PDF konnte nicht erzeugt werden.", hint: undefined },
 } as const;
 
 /**
@@ -64,7 +75,10 @@ export function useDownload(kind: keyof typeof DOWNLOADS) {
     setPending(true);
     try {
       await downloadFile(url, DOWNLOADS[kind].fallbackName);
-      toast.success(`${kind.toUpperCase()} heruntergeladen.`);
+      toast.success(`${kind.toUpperCase()} heruntergeladen.`, {
+        description: DOWNLOADS[kind].hint,
+        duration: DOWNLOADS[kind].hint ? 10_000 : undefined, // time to read the hint
+      });
     } catch (err) {
       if (err instanceof SessionExpiredError)
         toast.error("Deine Sitzung ist abgelaufen – bitte neu anmelden.", {
@@ -73,6 +87,7 @@ export function useDownload(kind: keyof typeof DOWNLOADS) {
           closeButton: true,
           action: { label: "Neu anmelden", onClick: () => window.location.assign("/login") },
         });
+      else if (err instanceof GoneError) toast.error(`${err.message} Bitte lade die Seite neu.`);
       else toast.error(`${DOWNLOADS[kind].failure} Bitte versuche es noch einmal.`);
     } finally {
       setPending(false);

@@ -150,6 +150,15 @@ function tenureErrorField(message: string): "startDate" | "endDate" {
 }
 
 /**
+ * A German PLZ (5 digits) or a foreign one with its country code ("A-1010", "CH 8001",
+ * "NL-1234 AB") or in Dutch form ("1234 AB"). A bare 4-digit number is refused: it is far
+ * more often a mistyped German PLZ than an Austrian or Swiss one.
+ */
+const POSTAL_CODE_RE = /^(?:\d{5}|[A-Z]{1,3}[- ]?\d[\dA-Z -]{1,8}|\d{4} ?[A-Z]{2})$/i;
+export const POSTAL_CODE_MESSAGE =
+  "Bitte eine 5-stellige PLZ eingeben, eine ausländische mit Länderkürzel (z. B. A-1010).";
+
+/**
  * The person payload: parsing it trims every text, turns blanks into null, drops blank
  * phone numbers and empty assignment rows, spells phone labels the curated way and checks
  * every rule with a field path, so `savePerson` parses exactly once and the editor can
@@ -171,6 +180,8 @@ const personInputSchema = z
     street: shortText,
     addressExtra: shortText,
     postalCode: shortText,
+    /** The PLZ the editor loaded: an unchanged (e.g. imported foreign) PLZ is not re-validated. */
+    loadedPostalCode: shortText.optional(),
     city: shortText,
     email: shortText,
     phones: z
@@ -194,8 +205,9 @@ const personInputSchema = z
       ctx.addIssue({ code: "custom", path: ["lastName"], message: "Nachname oder Fahrtenname ist erforderlich." });
     if (val.email && !EMAIL_RE.test(val.email))
       ctx.addIssue({ code: "custom", path: ["email"], message: "Bitte eine gültige E-Mail-Adresse eingeben." });
-    if (val.postalCode && !/^\d{5}$/.test(val.postalCode))
-      ctx.addIssue({ code: "custom", path: ["postalCode"], message: "Die PLZ muss aus 5 Ziffern bestehen." });
+    // Only a typed PLZ is checked, so a person with an imported odd PLZ stays editable.
+    if (val.postalCode && val.postalCode !== val.loadedPostalCode && !POSTAL_CODE_RE.test(val.postalCode))
+      ctx.addIssue({ code: "custom", path: ["postalCode"], message: POSTAL_CODE_MESSAGE });
 
     const dateError = validatePersonDates(val.birthDate, val.deathDate);
     if (dateError) ctx.addIssue({ code: "custom", path: [dateError.field], message: dateError.message });
@@ -228,11 +240,14 @@ const personInputSchema = z
       seen.add(key);
     });
   })
-  .transform((val) => ({
-    ...val,
-    // Only empty rows can still lack a Gliederung here (superRefine rejected the rest).
-    assignments: val.assignments.flatMap((a) => (a.groupId == null ? [] : [{ ...a, groupId: a.groupId }])),
-  }));
+  .transform(({ loadedPostalCode, ...val }) => {
+    void loadedPostalCode; // only compared above, never stored
+    return {
+      ...val,
+      // Only empty rows can still lack a Gliederung here (superRefine rejected the rest).
+      assignments: val.assignments.flatMap((a) => (a.groupId == null ? [] : [{ ...a, groupId: a.groupId }])),
+    };
+  });
 
 /** What the editor sends (raw form values; blanks allowed). */
 export type PersonInput = z.input<typeof personInputSchema>;

@@ -294,6 +294,17 @@ describe("office history — only active tenures are printed (issue #22)", () =>
     const kanzleiNames = data.kanzlei.map((e) => e.name);
     expect(kanzleiNames).toEqual(["Neu Kanzler"]);
   });
+
+  it("keeps a deceased Kanzlerin with a still-active tenure off the cover", () => {
+    const raw: RawData = {
+      ranks: RANKS,
+      offices: OFFICES,
+      groups: GROUPS,
+      persons: [person({ id: 1, firstName: "Tote", lastName: "Kanzlerin", deathDate: "2026-01-01" })],
+      assignments: [{ id: 1, personId: 1, groupId: 1, officeId: 2, endDate: null }],
+    };
+    expect(buildProfileData(raw, "komplett", NO_OPTIONS).kanzlei).toEqual([]);
+  });
 });
 
 describe("group tree ordering", () => {

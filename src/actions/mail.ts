@@ -45,7 +45,8 @@ const composeSchema = z.object({
     .max(BODY_MAX, `Nachricht ist zu lang (max. ${BODY_MAX.toLocaleString("de-DE")} Zeichen).`),
   // A send targets either a whole list (effective set) or an explicit selection.
   listId: rowId.nullish(),
-  personIds: z.array(rowId).nullish(),
+  // Same sanity cap as the CSV export, far above the ~700 persons.
+  personIds: z.array(rowId).max(5000, "Zu viele Personen ausgewählt.").nullish(),
 });
 
 type SendMailInput = z.infer<typeof composeSchema>;
@@ -67,16 +68,20 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
   const { subject, body, listId, personIds } = parsed.data;
 
+  if (listId == null && !personIds?.length) return { ok: false, message: "Kein Verteiler und keine Auswahl angegeben." };
+
   let emails: (string | null)[];
-  if (listId != null) {
-    // Effective members (manual ∪ rules, living persons only).
-    const ids = await effectiveMemberIds(listId);
-    emails = await personEmailsByIds(ids);
-  } else if (personIds && personIds.length > 0) {
-    // Explicit selection: the chosen persons (the query drops deceased ones).
-    emails = await personEmailsByIds([...new Set(personIds)]);
-  } else {
-    return { ok: false, message: "Kein Verteiler und keine Auswahl angegeben." };
+  try {
+    emails =
+      listId != null
+        ? // Effective members (manual ∪ rules, living persons only).
+          await personEmailsByIds(await effectiveMemberIds(listId))
+        : // Explicit selection: the chosen persons (the query drops deceased ones).
+          await personEmailsByIds([...new Set(personIds)]);
+  } catch (err) {
+    // Nothing has been sent yet: say so, instead of the client's "maybe partly sent" warning.
+    console.error("sendMail: loading recipients failed", err);
+    return { ok: false, message: "Die Empfänger konnten nicht geladen werden – es wurde nichts versendet. Bitte versuche es noch einmal." };
   }
 
   // Same rule as the compose preview and the clipboard copy (collectEmails), so the

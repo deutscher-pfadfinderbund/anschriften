@@ -166,7 +166,7 @@ function endFields(end: EndChoice | null) {
  */
 export function toPayload(
   v: FormValues,
-  person: { id: number; updatedAt: string } | undefined,
+  person: { id: number; updatedAt: string; postalCode: string | null } | undefined,
   orders: EndPreviousOrder[],
 ): PersonInput {
   return {
@@ -186,6 +186,7 @@ export function toPayload(
     street: v.street,
     addressExtra: v.addressExtra,
     postalCode: v.postalCode,
+    loadedPostalCode: person?.postalCode,
     city: v.city,
     email: v.email,
     notes: v.notes,
