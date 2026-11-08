@@ -3,20 +3,22 @@
 # both together). The Typst version + checksums in the Dockerfile are bumped by hand too.
 version: 2
 updates:
-  - package-ecosystem: npm # also updates bun.lock
+  - package-ecosystem: bun # bun.lock
     directory: /
     schedule:
       interval: weekly
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+        # better-auth comes as its own PR: every bump needs the login test (AGENTS.md).
+        exclude-patterns: [better-auth]
     ignore:
       # Follows the node:24 runtime image, not the newest Node.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
-      # TypeScript 7 breaks typescript-eslint (bun run lint); lift once it is supported.
+      # typescript-eslint supports < 6.1 only (7 breaks bun run lint); lift once it widens.
       - dependency-name: typescript
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
