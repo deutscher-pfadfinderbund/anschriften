@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { decodeJwt } from "jose";
@@ -80,6 +80,17 @@ export const auth = betterAuth({
     "/get-access-token",
     "/refresh-token",
   ],
+  hooks: {
+    // better-auth 1.7 lets /sign-in/social accept a bare ID token for any provider with a JWKS
+    // (Keycloak's discovery has one). The app only signs in through the code flow with state,
+    // PKCE and nonce, so a client-submitted token (e.g. replayed from an id_token_hint in a
+    // logout URL) must never open a session.
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === "/sign-in/social" && ctx.body?.idToken) {
+        throw new APIError("BAD_REQUEST", { message: "ID token sign-in is disabled" });
+      }
+    }),
+  },
   session: {
     // Roles are only checked at login (deliberate simplification per roadmap:
     // "role removal takes effect at session expiry"). To keep that blast radius
