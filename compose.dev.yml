@@ -18,7 +18,7 @@ services:
   # Local Keycloak for developing/testing the login flow. Imports the dpb-dev
   # realm (client "anschriften", role "anschriften", test users kanzler/gast).
   keycloak:
-    image: quay.io/keycloak/keycloak:26.4
+    image: quay.io/keycloak/keycloak:26.8
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
