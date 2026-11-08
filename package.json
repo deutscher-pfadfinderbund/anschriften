@@ -36,7 +36,7 @@
     "@types/react-dom": "^19.3.0",
     "csv-parse": "^7.0.3",
     "drizzle-kit": "^0.31.11",
-    "eslint": "^9.39.5",
+    "eslint": "10",
     "eslint-config-next": "16.4.5",
     "tailwindcss": "^4.3.5",
     "typescript": "^5.9.3",
