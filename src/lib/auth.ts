@@ -20,7 +20,7 @@ export const CALLBACK_PATH = `/api/auth/callback/${PROVIDER_ID}`;
  * The callback URI Keycloak has registered (better-auth < 1.7). Announced as redirectURI and
  * bridged onto CALLBACK_PATH by the auth catch-all route.
  * ponytail: temporary bridge — once Keycloak lists CALLBACK_PATH as a valid redirect URI, drop
- * this, the redirectURI override and the custom GET in src/app/api/auth/[...all]/route.ts.
+ * this, the redirectURI override and the path rewrite in src/app/api/auth/[...all]/route.ts.
  */
 export const LEGACY_CALLBACK_PATH = `/api/auth/oauth2/callback/${PROVIDER_ID}`;
 
@@ -67,38 +67,17 @@ export const auth = betterAuth({
   // German login page with `?error=<code>` instead of better-auth's English error page.
   // These are retryable, so the login page must not show them as "Kein Zugriff".
   onAPIError: { errorURL: "/login" },
-  // Endpoints the app never uses but a signed-in user could call directly. Most important:
-  // /update-user would let anyone rename themselves, and that name is what every
-  // `updated_by` and `mail_log.sent_by` records. Name and e-mail come from Keycloak only.
-  disabledPaths: [
-    "/update-user",
-    "/change-email",
-    "/delete-user",
-    "/update-session",
-    "/link-social",
-    "/unlink-account",
-    "/get-access-token",
-    "/refresh-token",
-    // Unused and inert with this config, but reachable: /account-info even refreshes and
-    // stores Keycloak tokens, which the two paths above are disabled to prevent.
-    "/account-info",
-    "/list-accounts",
-    "/request-password-reset",
-    "/send-verification-email",
-    "/verify-email",
-    "/delete-user/callback",
-  ],
+  // Which better-auth endpoints are reachable over HTTP at all is an allowlist in
+  // src/app/api/auth/[...all]/route.ts (e.g. /update-user stays closed: the name it would set
+  // is what every `updated_by` records; name and e-mail come from Keycloak only).
   hooks: {
+    // /sign-in/social takes only what the login button sends. better-auth 1.7 would also
+    // accept a bare ID token (Keycloak's discovery has a JWKS), opening a session without
+    // state, PKCE or nonce (e.g. replayed from an id_token_hint), and it stores
+    // additionalData in the OAuth state row — anonymous callers must not park data there.
     before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path !== "/sign-in/social") return;
-      // better-auth 1.7 lets /sign-in/social accept a bare ID token for any provider with a
-      // JWKS (Keycloak's discovery has one). The app only signs in through the code flow with
-      // state, PKCE and nonce, so a client-submitted token (e.g. replayed from an
-      // id_token_hint in a logout URL) must never open a session.
-      if (ctx.body?.idToken) throw new APIError("BAD_REQUEST", { message: "ID token sign-in is disabled" });
-      // additionalData is copied into the OAuth state row in the database; the app sends
-      // none, and an anonymous caller must not park arbitrary data there.
-      if (ctx.body?.additionalData) throw new APIError("BAD_REQUEST", { message: "additionalData is not accepted" });
+      if (ctx.path === "/sign-in/social" && (ctx.body?.idToken || ctx.body?.additionalData))
+        throw new APIError("BAD_REQUEST", { message: "Not accepted" });
     }),
   },
   session: {

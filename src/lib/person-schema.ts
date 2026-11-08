@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { EMAIL_RE } from "@/lib/export";
 import { canonicalPhoneLabel, todayIso } from "@/lib/format";
+import { INT4_MAX } from "@/lib/ids";
 import { DESCRIPTION_MAX, TEXT_MAX } from "@/lib/limits";
 
 // Shared input contract for the person editor (client) and the save action (server).
@@ -19,8 +20,8 @@ export function optText(max: number) {
 const shortText = optText(TEXT_MAX);
 const longText = optText(DESCRIPTION_MAX);
 
-/** A row id (any table's serial primary key; Postgres `integer`, so at most 2^31 − 1). */
-export const rowId = z.number().int().positive().max(2_147_483_647);
+/** A row id (any table's serial primary key, a Postgres `integer`). */
+export const rowId = z.number().int().positive().max(INT4_MAX);
 
 /** One phone row as the form sends it; blank numbers are dropped by the person schema. */
 const phoneInputSchema = z.object({ label: shortText, number: shortText });

@@ -7,11 +7,7 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
-    # Hardening (tested with the image): read-only root, the only writable place is /tmp
-    # (Typst's per-export temp dir), no Linux capabilities, no privilege escalation.
-    read_only: true
-    tmpfs:
-      - /tmp:size=256m
+    # No Linux capabilities, no privilege escalation (tested with the production image).
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
@@ -103,9 +99,7 @@ services:
 networks:
   web:
     external: true
-  # internal: true — db and backup need no internet; the app reaches out via `web`.
   internal:
-    internal: true
 
 volumes:
   db-data:

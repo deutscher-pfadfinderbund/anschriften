@@ -6,7 +6,7 @@ import type { Tx } from "@/db";
 import { persons } from "@/db/schema";
 import { actorName, getSession } from "@/lib/auth-helpers";
 import { NAME_MAX } from "@/lib/limits";
-import { rowId } from "@/lib/person-schema";
+import { parseId } from "@/lib/ids";
 import { ORDER_MAX } from "@/lib/master-data";
 
 // Shared helpers for the Server Actions in src/actions/*. Every action follows the same
@@ -62,13 +62,9 @@ export async function mutation<R extends { ok: boolean }>(
   return result;
 }
 
-/**
- * Ids passed to an action as plain arguments arrive unchecked: the TypeScript types do not
- * reach a hand-crafted request, and e.g. a string id slips past `===` comparisons such as
- * the Gliederung cycle guard. Every id argument goes through this first.
- */
+/** Id arguments reach an action unchecked (types do not bind a crafted request): check them first. */
 export function idsValid(...ids: unknown[]): boolean {
-  return ids.every((id) => rowId.safeParse(id).success);
+  return ids.every((id) => typeof id === "number" && parseId(id) === id);
 }
 export const INVALID_ID = Object.freeze({
   ok: false as const,

@@ -12,10 +12,10 @@ import {
   INVALID_ID,
   lockPerson,
   mutation,
-  StaleError,
   stamp,
-  type ActionResult,
+  StaleError,
   UserFacingError,
+  type ActionResult,
 } from "@/lib/action-helpers";
 import type { AuditSnapshot } from "@/lib/audit";
 import { todayIso } from "@/lib/format";

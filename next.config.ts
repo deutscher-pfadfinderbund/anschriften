@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   // Don't advertise the framework.
   poweredByHeader: false,
   // Server Actions parse their body before the session check, for anonymous callers too.
-  // The largest real payload is a Rundmail (50 000 characters); 1 MB was the default.
+  // The largest real payload is a Rundmail (50 000 characters).
   experimental: { serverActions: { bodySizeLimit: "512kb" } },
   // Conservative security headers for every response. No full CSP on purpose:
   // Next relies on inline bootstrap scripts, and a wrong CSP would break the app
