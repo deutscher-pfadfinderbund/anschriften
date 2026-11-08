@@ -29,9 +29,9 @@ const REQUIRED_ROLE = "anschriften";
 
 /**
  * Role gate. Keycloak is configured to emit the client roles into the ID token
- * (`resource_access[client].roles`). We decode the ID token — no signature check
- * is needed because it arrives straight from Keycloak's token endpoint over the
- * back channel — and only let users carrying the `anschriften` client role in.
+ * (`resource_access[client].roles`). We decode the ID token — better-auth has already
+ * verified its signature, issuer, audience and nonce against Keycloak's JWKS in the
+ * callback — and only let users carrying the `anschriften` client role in.
  *
  * Rejection happens here, inside `getUserInfo`, i.e. *before* better-auth creates
  * any user/session/account row, so a denied login leaves no orphan data. We throw
@@ -119,6 +119,10 @@ export const auth = betterAuth({
             const idToken = tokens.idToken;
             if (!idToken) return null;
             const claims = decodeJwt(idToken);
+            // Only an ID token Keycloak issued to this client may pass — not an access token or
+            // another client's token whose `aud` happens to include ours — whatever path inside
+            // better-auth led here. null fails the login with a retryable error.
+            if (claims.typ !== "ID" || claims.azp !== KEYCLOAK_CLIENT_ID) return null;
             assertRole(claims);
             const email = typeof claims.email === "string" ? claims.email : null;
             const name =
