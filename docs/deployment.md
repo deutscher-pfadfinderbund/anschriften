@@ -136,7 +136,7 @@ docker run --rm -it \
   --network anschriften_internal \
   -v "$PWD:/repo" -w /repo \
   -e DATABASE_URL="postgres://anschriften:<pass>@db:5432/anschriften" \
-  oven/bun:1.2 \
+  oven/bun:1.4 \
   bash -c "apt-get update && apt-get install -y --no-install-recommends mdbtools \
            && bun install --frozen-lockfile \
            && bun scripts/import-mdb.ts adressen.mdb --dry-run"
