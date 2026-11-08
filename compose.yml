@@ -7,6 +7,10 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
+    # No Linux capabilities, no privilege escalation (tested with the production image).
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       db:
         condition: service_healthy

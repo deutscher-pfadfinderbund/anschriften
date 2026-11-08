@@ -85,6 +85,12 @@ ls -lh backups/last
 gunzip -c backups/last/anschriften-latest.sql.gz | head -40   # Kopf des Dumps
 ```
 
+Die Dumps enthalten das komplette Verzeichnis (personenbezogene Daten) und die
+Keycloak-Tokens aus der Tabelle `account`. Das Verzeichnis daher nur für den Betriebs-Account
+lesbar halten (`chmod 700` auf `BACKUP_DIR`) und Kopien außerhalb des Servers nur
+verschlüsselt ablegen. Ein Restore stellt auch inzwischen gelöschte Personen wieder her —
+Löschwünsche danach erneut anwenden.
+
 **Backup sofort auslösen (ohne auf den Zeitplan zu warten):**
 
 ```bash
@@ -103,11 +109,15 @@ docker compose stop app
 # 2) Dump auswählen
 ls -lh backups/daily
 
-# 3) Schema leeren und Dump einspielen (-T = kein TTY, Pipe funktioniert)
-docker compose exec -T db psql -U anschriften -d anschriften \
-  -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+# 3) Schemas leeren und Dump einspielen (-T = kein TTY, Pipe funktioniert).
+#    Der Dump enthält auch das Schema `drizzle` (Migrations-Journal) — es muss mit weg,
+#    sonst bleibt das Journal auf dem neuen Stand, während `public` alt ist, und die App
+#    überspringt Migrationen. ON_ERROR_STOP + single-transaction: bricht beim ersten
+#    Fehler ab und spielt dann gar nichts ein, statt Fehler still zu überlesen.
+docker compose exec -T db psql -U anschriften -d anschriften -v ON_ERROR_STOP=1 \
+  -c "DROP SCHEMA public CASCADE; DROP SCHEMA IF EXISTS drizzle CASCADE; CREATE SCHEMA public;"
 gunzip -c backups/daily/anschriften-2026-08-05.sql.gz \
-  | docker compose exec -T db psql -U anschriften -d anschriften
+  | docker compose exec -T db psql -U anschriften -d anschriften -v ON_ERROR_STOP=1 --single-transaction
 
 # 4) App wieder starten (wendet ggf. fehlende Migrationen an)
 docker compose up -d app

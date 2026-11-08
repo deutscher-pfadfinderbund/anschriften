@@ -11,6 +11,8 @@ import {
   deletedMeanwhile,
   firstError,
   guardedDelete,
+  idsValid,
+  INVALID_ID,
   mutation,
   nameField,
   orderNumber,
@@ -44,6 +46,7 @@ type GroupInput = z.input<typeof groupSchema>;
  */
 export async function saveGroup(id: number | null, raw: GroupInput): Promise<ActionResult> {
   return mutation(async (by) => {
+    if (id != null && !idsValid(id)) return INVALID_ID;
     const parsed = groupSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
     const data = parsed.data;

@@ -6,6 +6,7 @@ import type { Tx } from "@/db";
 import { persons } from "@/db/schema";
 import { actorName, getSession } from "@/lib/auth-helpers";
 import { NAME_MAX } from "@/lib/limits";
+import { parseId } from "@/lib/ids";
 import { ORDER_MAX } from "@/lib/master-data";
 
 // Shared helpers for the Server Actions in src/actions/*. Every action follows the same
@@ -60,6 +61,15 @@ export async function mutation<R extends { ok: boolean }>(
   if (result.ok) revalidateApp();
   return result;
 }
+
+/** Id arguments reach an action unchecked (types do not bind a crafted request): check them first. */
+export function idsValid(...ids: unknown[]): boolean {
+  return ids.every((id) => typeof id === "number" && parseId(id) === id);
+}
+export const INVALID_ID = Object.freeze({
+  ok: false as const,
+  message: "Ungültige Anfrage – bitte lade die Seite neu.",
+});
 
 /** The audit fields of a write: who (`by`, see `mutation`) and when. */
 export function stamp(by: string) {
@@ -185,6 +195,7 @@ export async function guardedDelete(
   remove: () => Promise<unknown>,
   subject: string,
 ): Promise<ActionResult> {
+  if (!idsValid(id)) return INVALID_ID;
   const blocker = (await blockers()).get(id);
   if (blocker) return { ok: false, message: blocker };
   try {

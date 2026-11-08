@@ -13,6 +13,18 @@ export async function getSession(requestHeaders?: Headers) {
 }
 
 /**
+ * The session of an export download, or null. The session cookie is SameSite=Lax, so a
+ * foreign page could otherwise make a signed-in browser start exports (a PDF spawns Typst)
+ * by plain navigation. Only same-origin requests (our download buttons) and direct ones
+ * (typed URL, older clients without Sec-Fetch-Site) count.
+ */
+export async function getExportSession(request: Request) {
+  const site = request.headers.get("sec-fetch-site");
+  if (site === "cross-site" || site === "same-site") return null;
+  return getSession(request.headers);
+}
+
+/**
  * Authoritative session gate for page components under (app). The layout check is
  * NOT a security boundary: Next.js skips re-rendering layouts on RSC navigations,
  * so pages can render without it. Each protected page must call this first, before

@@ -11,6 +11,8 @@ import {
   deletedMeanwhile,
   firstError,
   guardedDelete,
+  idsValid,
+  INVALID_ID,
   mutation,
   nameField,
   orderNumber,
@@ -29,6 +31,7 @@ type OfficeInput = z.input<typeof officeSchema>;
 /** Create (`id` null) or update an Amt. */
 export async function saveOffice(id: number | null, raw: OfficeInput): Promise<ActionResult> {
   return mutation(async (by) => {
+    if (id != null && !idsValid(id)) return INVALID_ID;
     const parsed = officeSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
     const values = { ...parsed.data, ...stamp(by) };

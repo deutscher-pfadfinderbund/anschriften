@@ -2,7 +2,7 @@
 // Runs on the Node runtime (spawns the Typst CLI) and is never cached. This session check is
 // the gate (401 otherwise): the proxy skips /api, so an expired session reaches us and gets a
 // 401 the download helper recognises — this endpoint serves the confidential directory.
-import { getSession } from "@/lib/auth-helpers";
+import { getExportSession } from "@/lib/auth-helpers";
 import { buildData, isProfile, type BuildOptions } from "@/pdf/build-data";
 import { compilePdf } from "@/pdf/compile";
 
@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
-  if (!(await getSession(request.headers))) {
+  if (!(await getExportSession(request))) {
     return new Response("Nicht angemeldet.", { status: 401 });
   }
 
