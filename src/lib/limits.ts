@@ -11,3 +11,5 @@ export const DESCRIPTION_MAX = 2000;
 /** Rundmail subject and body. */
 export const SUBJECT_MAX = 200;
 export const BODY_MAX = 50_000;
+/** Persons per selection (CSV export, Rundmail): far above the ~700 in the directory. */
+export const IDS_MAX = 5000;

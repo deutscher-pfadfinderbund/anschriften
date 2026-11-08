@@ -19,8 +19,8 @@ export function optText(max: number) {
 const shortText = optText(TEXT_MAX);
 const longText = optText(DESCRIPTION_MAX);
 
-/** A row id (any table's serial primary key). */
-export const rowId = z.number().int().positive();
+/** A row id (any table's serial primary key; Postgres `integer`, so at most 2^31 − 1). */
+export const rowId = z.number().int().positive().max(2_147_483_647);
 
 /** One phone row as the form sends it; blank numbers are dropped by the person schema. */
 const phoneInputSchema = z.object({ label: shortText, number: shortText });
@@ -150,6 +150,15 @@ function tenureErrorField(message: string): "startDate" | "endDate" {
 }
 
 /**
+ * A German PLZ (5 digits) or a foreign one with its country code ("A-1010", "CH 8001",
+ * "NL-1234 AB") or in Dutch form ("1234 AB"). A bare 4-digit number is refused: it is far
+ * more often a mistyped German PLZ than an Austrian or Swiss one.
+ */
+const POSTAL_CODE_RE = /^(?:\d{5}|[A-Z]{1,3}[- ]\d{3,6}(?: ?[A-Z]{1,3})?|\d{4} ?[A-Z]{2})$/i;
+export const POSTAL_CODE_MESSAGE =
+  "Bitte eine 5-stellige PLZ eingeben, eine ausländische mit Länderkürzel (z. B. A-1010).";
+
+/**
  * The person payload: parsing it trims every text, turns blanks into null, drops blank
  * phone numbers and empty assignment rows, spells phone labels the curated way and checks
  * every rule with a field path, so `savePerson` parses exactly once and the editor can
@@ -194,8 +203,6 @@ const personInputSchema = z
       ctx.addIssue({ code: "custom", path: ["lastName"], message: "Nachname oder Fahrtenname ist erforderlich." });
     if (val.email && !EMAIL_RE.test(val.email))
       ctx.addIssue({ code: "custom", path: ["email"], message: "Bitte eine gültige E-Mail-Adresse eingeben." });
-    if (val.postalCode && !/^\d{5}$/.test(val.postalCode))
-      ctx.addIssue({ code: "custom", path: ["postalCode"], message: "Die PLZ muss aus 5 Ziffern bestehen." });
 
     const dateError = validatePersonDates(val.birthDate, val.deathDate);
     if (dateError) ctx.addIssue({ code: "custom", path: [dateError.field], message: dateError.message });
@@ -241,16 +248,27 @@ export type PersonData = z.output<typeof personInputSchema>;
 
 export type FieldErrors = Record<string, string>;
 
-/** Parse + validate a person payload. Returns either clean data or field-keyed German errors. */
+/**
+ * Parse + validate a person payload. Returns either clean data or field-keyed German errors.
+ * `storedPostalCode` is the PLZ in the database (edits only): it is exempt from the format
+ * check while unchanged, so a person with an imported odd or foreign PLZ stays editable.
+ */
 export function parsePersonInput(
   raw: unknown,
+  storedPostalCode?: string | null,
 ): { ok: true; data: PersonData } | { ok: false; errors: FieldErrors } {
   const result = personInputSchema.safeParse(raw);
-  if (result.success) return { ok: true, data: result.data };
   const errors: FieldErrors = {};
-  for (const issue of result.error.issues) {
-    const key = issue.path.join(".") || "_";
-    if (!errors[key]) errors[key] = issue.message;
-  }
+  if (!result.success)
+    for (const issue of result.error.issues) {
+      const key = issue.path.join(".") || "_";
+      if (!errors[key]) errors[key] = issue.message;
+    }
+  // From the raw payload, so the PLZ error shows even when another field failed as well.
+  const typed = (raw as { postalCode?: unknown } | null)?.postalCode;
+  const postalCode = typeof typed === "string" ? typed.trim() : "";
+  if (postalCode && postalCode !== storedPostalCode && !POSTAL_CODE_RE.test(postalCode))
+    errors.postalCode = POSTAL_CODE_MESSAGE;
+  if (result.success && !errors.postalCode) return { ok: true, data: result.data };
   return { ok: false, errors };
 }

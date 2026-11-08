@@ -238,6 +238,11 @@ function isLeaderOffice(name: string): boolean {
   return s.includes("führer") || s.includes("vogt") || s.includes("vögt");
 }
 
+/** Printed at all: not "Nicht abdrucken" and alive (the deceased only appear in the memorial). */
+function printable(p: DataPerson | undefined): p is DataPerson {
+  return p != null && !p.doNotPrint && !p.deathDate;
+}
+
 function personDisplayName(p: DataPerson): string {
   // A nameless placeholder stands for an unfilled office — say so instead of a blank.
   if (isVacant(p)) return "vakant";
@@ -312,7 +317,6 @@ export function buildProfileData(
   };
 
   const anchored = new Set<number>(); // persons that already carry a register label
-  const printable = (p: DataPerson | undefined): p is DataPerson => p != null && !p.doNotPrint && !p.deathDate;
 
   // Build one entry for a person's presence in a group (offices already collapsed).
   const makeEntry = (p: DataPerson, officeNames: string[], depth: number): Entry => {
@@ -701,7 +705,7 @@ function buildKanzlei(
   for (const a of activeAssignments) {
     if (a.officeId == null || !kanzlerOfficeIds.has(a.officeId)) continue;
     const p = personById.get(a.personId);
-    if (!p || p.doNotPrint || seen.has(p.id)) continue;
+    if (!printable(p) || seen.has(p.id)) continue;
     seen.add(p.id);
     const officeName = officeById.get(a.officeId)!.name;
     result.push({

@@ -32,10 +32,14 @@ export function ListFormDialog({
   /** Called with the saved list's id (to select a newly created list). */
   onSaved: (id: number) => void;
 }) {
+  // Lives here, not in ListForm: the dialog must know it is busy (see Dialog `busy`).
+  const [isPending, startTransition] = useTransition();
   return (
-    <Dialog open={draft != null} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={draft != null} busy={isPending} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
-        {draft ? <ListForm draft={draft} onCancel={onClose} onSaved={onSaved} /> : null}
+        {draft ? (
+          <ListForm draft={draft} onCancel={onClose} onSaved={onSaved} pending={isPending} startTransition={startTransition} />
+        ) : null}
       </DialogContent>
     </Dialog>
   );
@@ -46,12 +50,15 @@ function ListForm({
   draft,
   onCancel,
   onSaved,
+  pending: isPending,
+  startTransition,
 }: {
   draft: ListDraft;
   onCancel: () => void;
   onSaved: (id: number) => void;
+  pending: boolean;
+  startTransition: React.TransitionStartFunction;
 }) {
-  const [isPending, startTransition] = useTransition();
   const [name, setName] = useState(draft.name);
   const [description, setDescription] = useState(draft.description);
   const [error, setError] = useState<string | null>(null);

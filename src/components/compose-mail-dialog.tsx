@@ -55,7 +55,10 @@ export function ComposeMailDialog({
   const [confirming, setConfirming] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  /** The one way out: Esc, X, „Abbrechen“ and a finished send all drop the draft. */
+  /**
+   * The one way out: Esc, X, „Abbrechen“ and a finished send all drop the draft. A stray
+   * click beside the dialog does not (see onInteractOutside): it would silently lose a long text.
+   */
   function close() {
     onOpenChange(false);
     setSubject("");
@@ -120,14 +123,13 @@ export function ComposeMailDialog({
     recipientCount > 0 && subject.trim().length > 0 && body.trim().length > 0 && !isPending;
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        // While sending, the dialog stays put: closing it would hide the outcome.
-        if (!o && !isPending) close();
-      }}
-    >
-      <DialogContent className="sm:max-w-lg">
+    <Dialog open={open} busy={isPending} onOpenChange={(o) => !o && close()}>
+      <DialogContent
+        className="sm:max-w-lg"
+        onInteractOutside={(e) => {
+          if (subject.trim() || body.trim()) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>E-Mail schreiben</DialogTitle>
           <DialogDescription>

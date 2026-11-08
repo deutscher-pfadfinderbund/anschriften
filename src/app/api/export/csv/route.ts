@@ -5,6 +5,7 @@
 import { getListName, personsForCsvByIds, personsForCsvByList } from "@/db/queries";
 import { getSession } from "@/lib/auth-helpers";
 import { asciiSlug, buildCsv, CSV_BOM, type CsvPerson } from "@/lib/export";
+import { IDS_MAX } from "@/lib/limits";
 import { todayIso } from "@/lib/format";
 import { parseId } from "@/lib/ids";
 
@@ -29,15 +30,17 @@ export async function GET(request: Request): Promise<Response> {
       return new Response("Ungültige Verteiler-ID.", { status: 400 });
     }
     const [name, data] = await Promise.all([getListName(listId), personsForCsvByList(listId)]);
+    // Deleted meanwhile (another tab): an error, not an empty file that looks like an empty list.
+    if (name == null) return new Response("Diesen Verteiler gibt es nicht mehr.", { status: 404 });
     rows = data;
-    baseName = name ? asciiSlug(name) : `verteiler-${listId}`;
+    baseName = asciiSlug(name) || `verteiler-${listId}`;
   } else if (idsRaw != null) {
     const ids = [...new Set(idsRaw.split(",").map(parseId).filter((id) => id != null))];
     if (ids.length === 0) {
       return new Response("Keine gültigen IDs übergeben.", { status: 400 });
     }
     // Sanity cap far above the real dataset (~700 persons) against abusive queries.
-    if (ids.length > 5000) {
+    if (ids.length > IDS_MAX) {
       return new Response("Zu viele IDs übergeben.", { status: 400 });
     }
     rows = await personsForCsvByIds(ids);

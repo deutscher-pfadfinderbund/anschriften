@@ -6,7 +6,7 @@ import { effectiveMemberIds, personEmailsByIds } from "@/db/queries";
 import { SESSION_EXPIRED, firstError, getActionSession, revalidateApp } from "@/lib/action-helpers";
 import { actorName } from "@/lib/auth-helpers";
 import { collectEmails } from "@/lib/export";
-import { BODY_MAX, SUBJECT_MAX } from "@/lib/limits";
+import { BODY_MAX, IDS_MAX, SUBJECT_MAX } from "@/lib/limits";
 import { isMailEnabled, mailFailureMessage, sendListMail } from "@/lib/mail";
 import { rowId } from "@/lib/person-schema";
 
@@ -45,10 +45,16 @@ const composeSchema = z.object({
     .max(BODY_MAX, `Nachricht ist zu lang (max. ${BODY_MAX.toLocaleString("de-DE")} Zeichen).`),
   // A send targets either a whole list (effective set) or an explicit selection.
   listId: rowId.nullish(),
-  personIds: z.array(rowId).nullish(),
+  personIds: z.array(rowId).max(IDS_MAX, "Zu viele Personen ausgewählt.").nullish(),
 });
 
 type SendMailInput = z.infer<typeof composeSchema>;
+
+/** A failure before anything went out (the client must not warn of a partial send). */
+const NOTHING_SENT = {
+  ok: false,
+  message: "Der Server hat gerade ein Problem – es wurde nichts versendet. Bitte versuche es noch einmal.",
+} as const;
 
 /**
  * Send a plaintext mailing to a whole distribution list or a table selection.
@@ -57,7 +63,15 @@ type SendMailInput = z.infer<typeof composeSchema>;
  * trusted.
  */
 export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
-  const session = await getActionSession();
+  // Called without callAction (the client must tell a failed request from a partial send),
+  // so a database error before sending is answered here, not thrown.
+  let session: Awaited<ReturnType<typeof getActionSession>>;
+  try {
+    session = await getActionSession();
+  } catch (err) {
+    console.error("sendMail: session lookup failed", err);
+    return NOTHING_SENT;
+  }
   if (!session) return SESSION_EXPIRED;
   // Defense in depth: the UI hides the buttons when the module is off, but the
   // action re-checks so a stale client or a direct call still cannot send.
@@ -67,16 +81,21 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
   if (!parsed.success) return { ok: false, message: firstError(parsed.error) };
   const { subject, body, listId, personIds } = parsed.data;
 
+  if (listId == null && !personIds?.length) return { ok: false, message: "Kein Verteiler und keine Auswahl angegeben." };
+
   let emails: (string | null)[];
-  if (listId != null) {
-    // Effective members (manual ∪ rules, living persons only).
-    const ids = await effectiveMemberIds(listId);
-    emails = await personEmailsByIds(ids);
-  } else if (personIds && personIds.length > 0) {
-    // Explicit selection: the chosen persons (the query drops deceased ones).
-    emails = await personEmailsByIds([...new Set(personIds)]);
-  } else {
-    return { ok: false, message: "Kein Verteiler und keine Auswahl angegeben." };
+  try {
+    emails =
+      listId != null
+        ? // Effective members (manual ∪ rules, living persons only).
+          await personEmailsByIds(await effectiveMemberIds(listId))
+        : // Explicit selection: the chosen persons (the query drops deceased ones).
+          await personEmailsByIds([...new Set(personIds)]);
+  } catch (err) {
+    // Only reads above — keep sending out of this try: "nothing was sent" must stay true
+    // (otherwise the client's "maybe partly sent" warning is the honest answer).
+    console.error("sendMail: loading recipients failed", err);
+    return NOTHING_SENT;
   }
 
   // Same rule as the compose preview and the clipboard copy (collectEmails), so the

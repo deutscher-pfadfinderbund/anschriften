@@ -83,6 +83,8 @@ export function HistorySection({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [removing, setRemoving] = useState<HistoricalAssignment | null>(null);
   const [isRemoving, startRemove] = useTransition();
+  // Owned here: the form dialog must know it is busy (see Dialog `busy`).
+  const [isSavingDraft, startSaveDraft] = useTransition();
 
   function remove() {
     if (!removing) return;
@@ -165,7 +167,7 @@ export function HistorySection({
         </div>
       ) : null}
 
-      <Dialog open={draft != null} onOpenChange={(o) => !o && setDraft(null)}>
+      <Dialog open={draft != null} busy={isSavingDraft} onOpenChange={(o) => !o && setDraft(null)}>
         <DialogContent>
           {draft ? (
             <HistoryForm
@@ -176,6 +178,8 @@ export function HistorySection({
               groupOptions={groupOptions}
               officeOptions={officeOptions}
               onDone={() => setDraft(null)}
+              pending={isSavingDraft}
+              startTransition={startSaveDraft}
             />
           ) : null}
         </DialogContent>
@@ -210,6 +214,8 @@ function HistoryForm({
   groupOptions,
   officeOptions,
   onDone,
+  pending,
+  startTransition,
 }: {
   personId: number;
   version: string;
@@ -218,11 +224,12 @@ function HistoryForm({
   groupOptions: ComboOption[];
   officeOptions: ComboOption[];
   onDone: () => void;
+  pending: boolean;
+  startTransition: React.TransitionStartFunction;
 }) {
   const [draft, setDraft] = useState(initial);
   const [tried, setTried] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
   const isNew = draft.id == null;
 
   const groupError = tried && draft.groupId == null ? "Bitte eine Gliederung wählen." : undefined;

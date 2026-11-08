@@ -19,8 +19,8 @@ export default function Error({
   return (
     <StandaloneCard title="Etwas ist schiefgelaufen" className="text-center">
       <p>
-        Die Aktion konnte nicht abgeschlossen werden. Vielleicht ist deine Sitzung abgelaufen —
-        dann melde dich bitte neu an. Sonst versuche es einfach noch einmal.
+        Die Seite konnte gerade nicht geladen werden oder die letzte Aktion ist fehlgeschlagen.
+        Versuche es einfach noch einmal. Hilft das nicht, melde dich bitte neu an.
       </p>
       {error.digest ? (
         <p className="mt-2 text-caption text-ink-faint">Fehlerkennung: {error.digest}</p>
