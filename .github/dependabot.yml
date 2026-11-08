@@ -1,14 +1,22 @@
-# Weekly update PRs, grouped so the small team gets one PR per ecosystem instead of
-# a stream. Security updates still arrive immediately as their own PRs.
+# Weekly version-update PRs; npm minor/patch and GitHub Actions arrive grouped.
+# Bun is pinned twice by hand: oven/bun in the Dockerfile and bun-version in ci.yml (bump
+# both together). The Typst version + checksums in the Dockerfile are bumped by hand too.
 version: 2
 updates:
-  - package-ecosystem: npm # bun.lock is supported by the npm ecosystem
+  - package-ecosystem: npm # also updates bun.lock
     directory: /
     schedule:
       interval: weekly
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Follows the node:24 runtime image, not the newest Node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 breaks typescript-eslint (bun run lint); lift once it is supported.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -16,7 +24,21 @@ updates:
     groups:
       actions:
         patterns: ["*"]
-  - package-ecosystem: docker
+  - package-ecosystem: docker # Dockerfile
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # A Node major moves the runtime; bump it together with @types/node by hand.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: docker-compose # compose.yml, compose.dev.yml (postgres, backup, keycloak, mailpit)
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # A Postgres major needs a dump/restore (docs/deployment.md), never a blind bump.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+      - dependency-name: prodrigestivill/postgres-backup-local
+        update-types: ["version-update:semver-major"]
