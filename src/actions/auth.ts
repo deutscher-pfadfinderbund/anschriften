@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { account } from "@/db/auth-schema";
 import { getActionSession } from "@/lib/action-helpers";
-import { auth } from "@/lib/auth";
+import { auth, PROVIDER_ID } from "@/lib/auth";
 
 const KEYCLOAK_ISSUER = process.env.KEYCLOAK_ISSUER ?? "";
 const KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID ?? "";
@@ -31,7 +31,7 @@ export async function logout() {
     const [keycloakAccount] = await db
       .select({ idToken: account.idToken })
       .from(account)
-      .where(and(eq(account.userId, session.user.id), eq(account.providerId, "keycloak")))
+      .where(and(eq(account.userId, session.user.id), eq(account.providerId, PROVIDER_ID)))
       .limit(1);
     idTokenHint = keycloakAccount?.idToken ?? undefined;
   }
