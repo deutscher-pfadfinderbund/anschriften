@@ -37,7 +37,7 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** Fir lozenge + app name. Shared by the sidebar header and the mobile top bar. */
+/** Brand lozenge + app name. Shared by the sidebar header and the mobile top bar. */
 export function Wordmark() {
   return (
     <div className="flex min-w-0 items-center font-display text-[18px] leading-tight font-semibold text-ink">

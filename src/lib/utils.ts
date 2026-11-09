@@ -57,20 +57,20 @@ export const TOUCH_HIT =
   "pointer-coarse:relative pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2"
 
 /**
- * Inline text link (and link-styled button) in running text: fir and underlined at
+ * Inline text link (and link-styled button) in running text: brand and underlined at
  * rest, so it is not told apart by colour alone.
  */
 export const LINK =
-  "text-fir underline decoration-fir/40 underline-offset-2 transition-colors hover:decoration-fir"
+  "text-brand underline decoration-brand/40 underline-offset-2 transition-colors hover:decoration-brand"
 
 /**
  * A navigation row (sidebar, Verteiler rail). One "active" language app-wide: --active
- * fill (always stronger than --hover), ink text and a straight fir marker bar.
+ * fill (always stronger than --hover), ink text and a straight brand marker bar.
  */
 export const NAV_ROW = {
   base: "relative flex w-full items-center rounded-md px-2.5 py-2 text-ui transition-colors",
   active:
-    "bg-active font-medium text-ink before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-fir",
+    "bg-active font-medium text-ink before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-brand",
   idle: "text-ink-soft hover:bg-hover hover:text-ink",
 }
 

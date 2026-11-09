@@ -111,7 +111,7 @@ function CommandItem({
       {props["data-checked"] ? <span className="sr-only">, ausgewählt</span> : null}
       <CheckIcon
         aria-hidden
-        className="ml-auto text-fir opacity-0 group-data-[checked=true]/command-item:opacity-100"
+        className="ml-auto text-brand opacity-0 group-data-[checked=true]/command-item:opacity-100"
       />
     </CommandPrimitive.Item>
   )

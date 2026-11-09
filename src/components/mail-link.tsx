@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 /**
- * A mailto link in ink, fir only on hover, so a column of addresses is no green stripe.
+ * A mailto link in ink, brand blue only on hover, so a column of addresses is no blue stripe.
  * A long address wraps, first before the "@", instead of being cut off: touch screens
  * have no tooltip to reveal the rest.
  */
@@ -12,7 +12,7 @@ export function MailLink({ email, className }: { email: string; className?: stri
       // A stored address like "a@b.de?bcc=x@y.de" must not add headers; umlauts stay readable.
       href={`mailto:${email.replace(/[?&#%]/g, encodeURIComponent)}`}
       className={cn(
-        "rounded-sm text-ink underline-offset-2 transition-colors wrap-anywhere hover:text-fir hover:underline",
+        "rounded-sm text-ink underline-offset-2 transition-colors wrap-anywhere hover:text-brand hover:underline",
         className,
       )}
     >

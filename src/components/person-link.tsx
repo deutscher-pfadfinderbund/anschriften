@@ -13,7 +13,7 @@ export function PersonLink({ person, stretched = false }: { person: PersonName &
       // Long lists (~600 links, twice in the directory): no prefetching, a click loads the editor.
       prefetch={false}
       className={cn(
-        "rounded-sm font-medium text-ink transition-colors hover:text-fir",
+        "rounded-sm font-medium text-ink transition-colors hover:text-brand",
         stretched && "before:absolute before:inset-0",
       )}
     >

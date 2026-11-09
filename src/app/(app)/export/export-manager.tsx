@@ -2,7 +2,7 @@
 
 // Interactive PDF export form (issue #5): pick one of five profiles, toggle the print
 // options and download the generated directory. A calm radio list, plain checkbox rows
-// and one primary button; fir only for the checked dot and that button.
+// and one primary button; brand only for the checked dot and that button.
 import { useState } from "react";
 import Link from "next/link";
 import { LoaderCircle } from "lucide-react";
@@ -36,13 +36,13 @@ type OptionId = (typeof OPTIONS)[number]["id"];
 const ROW = "flex cursor-pointer gap-3 px-4 py-2.5 transition-colors hover:bg-hover sm:px-gutter";
 
 /**
- * Native radio, redrawn in the field skin: --control ring, fir dot when checked. Focus
+ * Native radio, redrawn in the field skin: --control ring, brand dot when checked. Focus
  * uses the app-wide :focus-visible outline.
  */
 const RADIO =
   "mt-0.5 grid size-4 shrink-0 cursor-pointer appearance-none place-content-center rounded-full border border-control bg-field transition-colors " +
-  "before:size-2 before:rounded-full before:bg-fir before:opacity-0 before:transition-opacity " +
-  "checked:border-fir checked:before:opacity-100 hover:not-checked:border-ink-soft " +
+  "before:size-2 before:rounded-full before:bg-brand before:opacity-0 before:transition-opacity " +
+  "checked:border-brand checked:before:opacity-100 hover:not-checked:border-ink-soft " +
   // Forced colours (Windows high contrast) repaint backgrounds: draw the dot in text colour.
   "forced-colors:before:bg-[CanvasText]";
 

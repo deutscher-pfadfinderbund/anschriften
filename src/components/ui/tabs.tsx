@@ -20,7 +20,7 @@ function Tabs({
 
 /*
  * Deviation from the shadcn default on purpose: the app has exactly one language
- * for "active/selected" — neutral surface, ink text and a fir marker
+ * for "active/selected" — neutral surface, ink text and a brand marker
  * (see the sidebar nav and the Verteiler rail). The stock raised white box with a
  * shadow would be a second idiom, so the list stays transparent and the marker
  * lives on the trigger.
@@ -53,8 +53,8 @@ function TabsTrigger({
         "hover:text-ink",
         "disabled:pointer-events-none disabled:opacity-50",
         "data-[state=active]:text-ink",
-        // Fir marker: an underline on the active tab.
-        "after:absolute after:inset-x-1 after:-bottom-px after:h-0.5 after:rounded-full after:bg-fir after:opacity-0 after:transition-opacity",
+        // Brand marker: an underline on the active tab.
+        "after:absolute after:inset-x-1 after:-bottom-px after:h-0.5 after:rounded-full after:bg-brand after:opacity-0 after:transition-opacity",
         "data-[state=active]:after:opacity-100",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className

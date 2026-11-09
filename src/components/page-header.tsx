@@ -35,7 +35,7 @@ export function PageHeader({
           href={backHref}
           className={cn(
             TOUCH_HIT,
-            "mb-2 inline-flex items-center gap-1 rounded-sm text-caption text-ink-soft transition-colors hover:text-fir",
+            "mb-2 inline-flex items-center gap-1 rounded-sm text-caption text-ink-soft transition-colors hover:text-brand",
           )}
         >
           <ArrowLeft aria-hidden className="size-3.5" />

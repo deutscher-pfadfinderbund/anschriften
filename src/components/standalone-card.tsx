@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Centered card for the pages outside the app shell (login, 404, error): the
- * fir lozenge, the "Deutscher Pfadfinderbund" eyebrow and a serif title, then
+ * brand lozenge, the "Deutscher Pfadfinderbund" eyebrow and a serif title, then
  * the page's own content. Renders the page's <main>, or a <div> inside the shell's.
  */
 export function StandaloneCard({

@@ -44,10 +44,10 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 ## Design (UI)
 
 Referenz-Mockup (Struktur übernehmen): https://claude.ai/code/artifact/f1874284-ef26-4484-b1da-83ed5a63a597
-**Wichtig: dezenter als das Mockup — Grün NUR als Akzent** (Primär-Buttons, Links, aktive Markierung), Flächen/Chips/Hover neutral. Tokens sind in `src/app/globals.css` definiert — verwenden, nicht neu erfinden:
+**Wichtig: dezenter als das Mockup — Bundesblau NUR als Akzent** (Primär-Buttons, Links, aktive Markierung), Flächen/Chips/Hover neutral. Tokens sind in `src/app/globals.css` definiert — verwenden, nicht neu erfinden:
 
-- Grundton Papierweiß/Anthrazit (light/dark), Tinte fast schwarz
-- Akzent Tannengrün `--color-fir` (#2E5C46) sparsam; Messing `--color-brass` nur für kleine Kennzeichnungen (Verteiler-Chips)
+- Grundton kühles Hellgrau (light) bzw. gedimmtes Slate (dark), Tinte fast schwarz bzw. hellgrau
+- Akzent Bundesblau `--color-brand` (#0051A8, wie DPB-Website/Bundesarchiv) sparsam; Messing `--color-brass` nur für kleine Kennzeichnungen (Verteiler-Chips)
 - Schrift: Fira Sans (UI/Daten, wie das gedruckte Verzeichnis), Display-Serif (Iowan Old Style/Palatino-Stack) nur für Seitentitel, Wortmarke und Panel-Überschriften
 - Dicht aber ruhig: 13.5–14px Tabellentext, `tabular-nums` für Zahlenspalten
 - Beide Themes pflegen (`prefers-color-scheme` + `data-theme`-Override)

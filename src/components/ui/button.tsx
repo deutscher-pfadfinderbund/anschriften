@@ -13,14 +13,14 @@ import { cn } from "@/lib/utils"
 const TOUCH_TARGET = "pointer-coarse:min-h-11 pointer-coarse:min-w-11"
 
 // Focus: no ring classes here on purpose — buttons use the app-wide solid
-// :focus-visible outline from globals.css (2px fir, 2px offset), which stays
-// visible on a fir fill too.
+// :focus-visible outline from globals.css (2px brand, 2px offset), which stays
+// visible on a brand fill too.
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-body font-medium whitespace-nowrap transition-colors select-none active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-fir-deep",
+        default: "bg-primary text-primary-foreground hover:bg-brand-deep",
         outline:
           "border-line-strong bg-surface text-ink hover:bg-hover aria-expanded:bg-active",
         ghost: "hover:bg-hover hover:text-ink aria-expanded:bg-active aria-expanded:text-ink",

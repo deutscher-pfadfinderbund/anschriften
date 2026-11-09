@@ -20,7 +20,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       containerAriaLabel="Benachrichtigungen"
       toastOptions={{ closeButtonAriaLabel: "Schließen" }}
       icons={{
-        success: <CircleCheckIcon className="size-4 text-fir" />,
+        success: <CircleCheckIcon className="size-4 text-brand" />,
         info: <InfoIcon className="size-4" />,
         warning: <TriangleAlertIcon className="size-4 text-brass" />,
         error: <OctagonXIcon className="size-4 text-crit" />,

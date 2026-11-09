@@ -60,7 +60,7 @@ export function HolderNotes({
         key={h.assignmentId}
         icon={TriangleAlert}
         action={
-          <NoteButton id={`h-${h.assignmentId}-end`} onClick={() => onEnd(h)} className="text-fir hover:underline">
+          <NoteButton id={`h-${h.assignmentId}-end`} onClick={() => onEnd(h)} className="text-brand hover:underline">
             Amtszeit beenden …
           </NoteButton>
         }
