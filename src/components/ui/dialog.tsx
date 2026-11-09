@@ -84,9 +84,9 @@ const SIDES = {
   // Sized against the viewport (dvw/dvh), never `100%`, which follows a page that scrolls
   // sideways; max-h keeps a tall dialog's buttons reachable on a phone.
   center:
-    "top-1/2 left-1/2 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100dvw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 ring-1 ring-line-strong sm:max-w-sm data-open:zoom-in-95 data-closed:zoom-out-95",
+    "top-1/2 left-1/2 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100dvw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 ring-1 ring-edge sm:max-w-sm data-open:zoom-in-95 data-closed:zoom-out-95",
   // A full-height drawer (the mobile navigation); its content scrolls itself.
-  left: "top-0 left-0 flex h-dvh w-72 max-w-[85vw] flex-col overflow-hidden border-r border-line bg-surface-2 data-open:slide-in-from-left data-closed:slide-out-to-left",
+  left: "top-0 left-0 flex h-dvh w-72 max-w-[85vw] flex-col overflow-hidden border-r border-edge bg-surface-2 data-open:slide-in-from-left data-closed:slide-out-to-left",
 }
 
 type PanelProps = React.ComponentProps<typeof DialogPrimitive.Content> & { side?: keyof typeof SIDES }
@@ -123,7 +123,7 @@ function DialogPanel({ className, children, onCloseAutoFocus, side = "center", .
         })
       }}
       className={cn(
-        "fixed z-50 text-body text-popover-foreground shadow-lg duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed z-50 text-body text-popover-foreground duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         SIDES[side],
         className
       )}
@@ -173,7 +173,7 @@ function DialogFooter({ className, children, ...props }: React.ComponentProps<"d
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-line bg-muted/50 p-4 sm:flex-row sm:items-center sm:justify-end",
+        "-mx-4 -mb-4 flex flex-col-reverse gap-2 border-t border-line p-4 sm:flex-row sm:items-center sm:justify-end",
         className
       )}
       {...props}

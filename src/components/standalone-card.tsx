@@ -1,4 +1,5 @@
 import { BundEyebrow, Raute } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 /**
@@ -9,17 +10,19 @@ import { cn } from "@/lib/utils";
 export function StandaloneCard({
   title,
   className,
-  as: Root = "main",
+  inShell = false,
   children,
 }: {
   /** Page title (h1, display serif). */
   title: string;
   /** Extra classes on the card body (e.g. text alignment). */
   className?: string;
-  /** "div" inside the app shell, which already has the <main> landmark. */
-  as?: "main" | "div";
+  /** Inside the app shell: a <div> (the shell has the <main> landmark and the
+   * sidebar's theme switch). Outside it: the page's <main> with the switch. */
+  inShell?: boolean;
   children: React.ReactNode;
 }) {
+  const Root = inShell ? "div" : "main";
   return (
     <Root className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
       <div className="w-full max-w-sm rounded-xl border border-line bg-surface px-6 py-8 sm:px-8">
@@ -31,6 +34,11 @@ export function StandaloneCard({
           </h1>
         </div>
         <div className={cn("text-body text-ink-soft", className)}>{children}</div>
+        {inShell ? null : (
+          <div className="mt-6 text-center">
+            <ThemeToggle />
+          </div>
+        )}
       </div>
     </Root>
   );

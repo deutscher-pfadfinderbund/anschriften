@@ -45,52 +45,55 @@
 
 /*
  * Design tokens. A colour that differs per theme is written once as light-dark(LIGHT, DARK).
- * Like the DPB website's Bundesarchiv: one brand colour, Bundesblau, for
- * everything clickable (primary buttons, links, focus, active marker); the rest
- * is cool neutral gray. Dark is a dimmed slate, not near-black.
+ * "Druckschwarz", like the DPB Bundesarchiv (its tokens.css): black ink on white
+ * paper, one gray for secondary text, red only for errors and removing. No second
+ * hue, square corners, no shadows. Dark is tuned, not inverted: no pure black or
+ * white, and hairlines are quieter because bright lines smear on black.
  */
 :root {
   color-scheme: light dark;
 
-  /* Surfaces */
-  --paper: light-dark(#f6f7f8, #212529);
-  --surface: light-dark(#ffffff, #2b3035);
-  --surface-2: light-dark(#eef0f2, #262a2f);
-  /* Fill of text fields, selects and checkboxes (dark: slightly inset). */
-  --field: light-dark(#ffffff, #1e2125);
+  /* Surfaces: flat. Panels and floating surfaces are page with an edge. */
+  --paper: light-dark(#ffffff, #0b0b0b);
+  --surface: var(--paper);
+  --surface-2: var(--paper);
+  --field: var(--paper);
 
   /* Ink. ink-faint still carries real content (labels, sublines,
-   * placeholders), so it stays ≥ 4.5:1 on every surface, --hover and --active
+   * placeholders), so it stays >= 4.5:1 on the paper, --hover and --active
    * (a selected row). */
-  --ink: light-dark(#2b2f33, #e3e6e9);
-  --ink-soft: light-dark(#555c63, #b6bcc3);
-  --ink-faint: light-dark(#5c636a, #abb2b9);
+  --ink: light-dark(#000000, #f0f0f0);
+  --ink-soft: light-dark(#595959, #a0a0a0);
+  --ink-faint: light-dark(#636363, #959595);
 
-  /* Lines: --line/--line-strong separate regions; --control is the boundary
-   * of form controls (≥ 3:1 against every surface, field, --hover and --active,
-   * WCAG 1.4.11: checkboxes sit on hovered and selected rows). */
-  --line: light-dark(#e2e5e8, #3a4047);
-  --line-strong: light-dark(#c8cdd2, #4b525a);
-  --control: light-dark(#7a8188, #8a9199);
+  /* Lines: --line is the hairline tying a row's two ends, --line-strong an edge;
+   * --control is the boundary of form controls (>= 3:1 against the paper,
+   * --hover and --active, WCAG 1.4.11: checkboxes sit on hovered and selected rows). */
+  --line: light-dark(#dcdcdc, #333333);
+  --line-strong: light-dark(#8f8f8f, #6e6e6e);
+  /* The ink edge of buttons and floating surfaces: separation by an edge,
+   * never a shadow. */
+  --edge: var(--ink);
+  --control: light-dark(#7f7f7f, #7c7c7c);
 
-  /* Interaction: --active is always visibly stronger than --hover, on every
-   * surface (paper, surface, surface-2) in both themes. */
-  --hover: light-dark(#eceef1, #343a40);
-  --active: light-dark(#e2e5e9, #3b4147);
+  /* Interaction: --active is always visibly stronger than --hover. */
+  --hover: light-dark(#f2f2f2, #1a1a1a);
+  --active: light-dark(#e8e8e8, #262626);
   /* Modal backdrop. */
-  --scrim: light-dark(rgb(33 37 41 / 0.28), rgb(0 0 0 / 0.5));
+  --scrim: light-dark(rgb(0 0 0 / 0.28), rgb(0 0 0 / 0.6));
 
-  /* --brand: text, marker, ring (lightened in dark so links stay ≥ 4.5:1).
-   * --brand-fill: primary buttons and checked boxes (white text), --brand-deep
-   * its hover. Light --paper and --brand are mirrored in app/icon.svg. */
-  --brand: light-dark(#0051a8, #86b1df);
-  --brand-fill: light-dark(#0051a8, #2a65b0);
-  --brand-deep: light-dark(#00458f, #3571bc);
+  /* --brand: the ink of links, markers and the focus ring.
+   * --brand-fill: primary buttons and checked boxes. Light: a black fill with white
+   * text that inverts on hover (--brand-fill-hover). Dark: never an ink fill (a bright
+   * block glares on black): outlined on a dim ground, so it still reads as the
+   * primary action beside an outline button; the hover lifts it further.
+   * Light --paper and --brand are mirrored in app/icon.svg. */
+  --brand: var(--ink);
+  --brand-fill: light-dark(#000000, #262626);
+  --brand-fill-hover: light-dark(#ffffff, #3a3a3a);
 
-  --brass: light-dark(#a08028, #c8a94e);
-  --brass-tint: light-dark(#f4efdf, #3a3422);
-  --crit: light-dark(#a63d2f, #e08473);
-  --crit-tint: light-dark(#f6e7e4, #43302d);
+  --crit: light-dark(#c4000b, #ff6b61);
+  --crit-tint: light-dark(#fbe9ea, #2c1514);
 
   /* shadcn semantic tokens → design tokens */
   --background: var(--paper);
@@ -98,12 +101,11 @@
   --popover: var(--surface);
   --popover-foreground: var(--ink);
   --primary: var(--brand-fill);
-  --primary-foreground: #ffffff;
-  --muted: var(--surface-2);
+  --primary-foreground: light-dark(#ffffff, #f0f0f0);
   --destructive: var(--crit);
   --border: var(--line);
   --ring: var(--brand);
-  --radius: 0.5rem;
+  --radius: 0px;
 
   /* Height of the sticky mobile top bar (MobileNav), shown below lg only. Toasts,
    * the scroll padding and the directory's sticky table head keep clear of it. */
@@ -133,14 +135,13 @@
   --color-ink-faint: var(--ink-faint);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-edge: var(--edge);
   --color-control: var(--control);
   --color-hover: var(--hover);
   --color-active: var(--active);
   --color-scrim: var(--scrim);
   --color-brand: var(--brand);
-  --color-brand-deep: var(--brand-deep);
-  --color-brass: var(--brass);
-  --color-brass-tint: var(--brass-tint);
+  --color-brand-fill-hover: var(--brand-fill-hover);
   --color-crit: var(--crit);
   --color-crit-tint: var(--crit-tint);
 
@@ -150,15 +151,15 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-  --color-muted: var(--muted);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-ring: var(--ring);
 
   /* Fira Sans for everything (UI and data, like the printed directory); the
-   * display serif only for page titles, the wordmark and panel/dialog titles. */
+   * Bundesarchiv's system serif only for page titles, the wordmark and
+   * panel/dialog titles. */
   --font-sans: var(--font-fira-sans), "Fira Sans", "Seravek", "Avenir Next", "Segoe UI", sans-serif;
-  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-display: ui-serif, "Iowan Old Style", "New York", Charter, Georgia, serif;
 
   /*
    * Type scale — pick from these instead of arbitrary text-[…px] values.
@@ -183,6 +184,9 @@
 
   /* Inner padding of panels and dialogs (p-gutter, px-gutter, gap-gutter). */
   --spacing-gutter: 1.125rem;
+
+  /* Flat: no shadow utilities (a future shadcn component's shadow-md renders nothing). */
+  --shadow-*: initial;
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -230,11 +234,11 @@
     }
   }
 
-  /* One solid focus indicator app-wide (brand, 2px, offset). Primitives that
+  /* One solid focus indicator app-wide (ink, 3px, offset 3px). Primitives that
    * draw their own (fields: border + inset ring) opt out with outline-none. */
   :focus-visible {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
+    outline: 3px solid var(--ring);
+    outline-offset: 3px;
   }
 }
 
@@ -256,7 +260,7 @@
     transition: background-color 150ms, color 150ms;
   }
   & [data-button][data-action] {
-    border-color: var(--line-strong);
+    border-color: var(--edge);
     background: var(--surface);
     color: var(--ink);
   }
@@ -272,8 +276,8 @@
   & [data-button]:focus-visible,
   & [data-close-button]:focus-visible {
     box-shadow: none;
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
+    outline: 3px solid var(--ring);
+    outline-offset: 3px;
   }
   & [data-description] {
     color: var(--ink-soft);

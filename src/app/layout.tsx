@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { cookies } from "next/headers";
 import "./globals.css";
 
 // Fira Sans is vendored (see ./fonts, OFL.txt alongside) instead of pulled from
@@ -27,13 +28,16 @@ export const metadata: Metadata = {
   description: "Bundesanschriftenverzeichnis des Deutschen Pfadfinderbundes",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // The viewer's saved light/dark choice (ThemeToggle); without one: the system's.
+  const saved = (await cookies()).get("theme")?.value;
+  const theme = saved === "light" || saved === "dark" ? saved : undefined;
   return (
-    <html lang="de" className={`${firaSans.variable} h-full antialiased`}>
+    <html lang="de" data-theme={theme} className={`${firaSans.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

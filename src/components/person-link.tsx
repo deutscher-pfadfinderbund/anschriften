@@ -13,12 +13,12 @@ export function PersonLink({ person, stretched = false }: { person: PersonName &
       // Long lists (~600 links, twice in the directory): no prefetching, a click loads the editor.
       prefetch={false}
       className={cn(
-        "rounded-sm font-medium text-ink transition-colors hover:text-brand",
+        "rounded-sm font-medium text-ink underline-offset-2 hover:underline",
         stretched && "before:absolute before:inset-0",
       )}
     >
       {isVacant(person) ? (
-        <Tag tone="brass" title="Platzhalter ohne Namen: das Amt ist unbesetzt">
+        <Tag title="Platzhalter ohne Namen: das Amt ist unbesetzt">
           vakant
         </Tag>
       ) : (

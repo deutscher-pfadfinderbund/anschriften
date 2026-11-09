@@ -22,7 +22,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       icons={{
         success: <CircleCheckIcon className="size-4 text-brand" />,
         info: <InfoIcon className="size-4" />,
-        warning: <TriangleAlertIcon className="size-4 text-brass" />,
+        warning: <TriangleAlertIcon className="size-4" />,
         error: <OctagonXIcon className="size-4 text-crit" />,
         loading: <Loader2Icon className="size-4 animate-spin" />,
       }}
@@ -31,7 +31,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           fontFamily: "var(--font-sans)",
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--line-strong)",
+          "--normal-border": "var(--edge)",
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }

@@ -14,7 +14,8 @@ import {
 
 import { logout } from "@/actions/auth";
 import { BundEyebrow, Raute } from "@/components/brand";
-import { NAV_ROW, TOUCH_HIT, cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { NAV_ROW, QUIET_ACTION, TOUCH_HIT, cn } from "@/lib/utils";
 
 type NavEntry = { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
 
@@ -40,7 +41,7 @@ function initials(name: string): string {
 /** Brand lozenge + app name. Shared by the sidebar header and the mobile top bar. */
 export function Wordmark() {
   return (
-    <div className="flex min-w-0 items-center font-display text-[18px] leading-tight font-semibold text-ink">
+    <div className="flex min-w-0 items-center font-display text-[18px] leading-tight font-semibold tracking-[0.06em] text-ink [font-variant-caps:small-caps]">
       <Raute className="mr-[7px] inline-block size-[9px] -translate-y-px" />
       {/* Soft hyphen: if a wide fallback serif does not fit, the name breaks
           as „Anschriften-/verzeichnis“ instead of overflowing its box. */}
@@ -127,27 +128,23 @@ export function SidebarContent({
       </nav>
 
       <div className="flex items-center gap-2.5 border-t border-line px-4 py-3.5">
-        {/* Neutral on purpose: the avatar is neither a link nor an active marker. */}
         <div
           aria-hidden
-          className="grid size-[30px] shrink-0 place-items-center rounded-full border border-line-strong bg-surface text-micro font-semibold text-ink-soft"
+          className="grid size-[30px] shrink-0 place-items-center border border-line-strong bg-surface text-micro font-semibold text-ink-soft"
         >
           {initials(userName)}
         </div>
         <div className="min-w-0 flex-1 leading-tight">
           <div className="truncate text-caption font-medium text-ink">{userName}</div>
-          <form action={logout}>
-            <button
-              type="submit"
-              className={cn(
-                TOUCH_HIT,
-                "inline-flex items-center gap-1 rounded-sm text-micro text-ink-soft transition-colors hover:text-ink",
-              )}
-            >
-              <LogOut aria-hidden className="size-3" />
-              Abmelden
-            </button>
-          </form>
+          <div className="flex flex-wrap items-center gap-x-3">
+            <form action={logout}>
+              <button type="submit" className={cn(TOUCH_HIT, QUIET_ACTION)}>
+                <LogOut aria-hidden className="size-3" />
+                Abmelden
+              </button>
+            </form>
+            <ThemeToggle />
+          </div>
         </div>
       </div>
     </>

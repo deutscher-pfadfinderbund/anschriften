@@ -173,7 +173,7 @@ export function ListDetail({
                   aria-pressed={separator === value}
                   onClick={() => setSeparator(value)}
                   className={cn(
-                    "rounded-[5px] px-2 py-0.5 text-caption transition-colors",
+                    "px-2 py-0.5 text-caption transition-colors",
                     // Taller tap band on touch; vertical only, so the two toggles' bands
                     // do not overlap.
                     "pointer-coarse:relative pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2",

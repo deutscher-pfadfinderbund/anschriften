@@ -181,7 +181,6 @@ export function StammdatenManager({
                             {lists.map((l) => (
                               <Tag
                                 key={l.listId}
-                                tone="brass"
                                 title={`Wer dieses Amt hat, ist automatisch im Verteiler „${l.listName}“.`}
                               >
                                 {l.listName}

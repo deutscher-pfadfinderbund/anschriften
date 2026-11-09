@@ -56,6 +56,10 @@ export const FIELD =
 export const TOUCH_HIT =
   "pointer-coarse:relative pointer-coarse:after:absolute pointer-coarse:after:-inset-x-3 pointer-coarse:after:-inset-y-2"
 
+/** Quiet text action in a footer or bar (Abmelden, the theme switch). */
+export const QUIET_ACTION =
+  "inline-flex items-center gap-1 text-micro text-ink-soft transition-colors hover:text-ink"
+
 /**
  * Inline text link (and link-styled button) in running text: brand and underlined at
  * rest, so it is not told apart by colour alone.
@@ -70,7 +74,7 @@ export const LINK =
 export const NAV_ROW = {
   base: "relative flex w-full items-center rounded-md px-2.5 py-2 text-ui transition-colors",
   active:
-    "bg-active font-medium text-ink before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-brand",
+    "bg-active font-medium text-ink before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:bg-brand",
   idle: "text-ink-soft hover:bg-hover hover:text-ink",
 }
 

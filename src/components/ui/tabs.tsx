@@ -54,7 +54,7 @@ function TabsTrigger({
         "disabled:pointer-events-none disabled:opacity-50",
         "data-[state=active]:text-ink",
         // Brand marker: an underline on the active tab.
-        "after:absolute after:inset-x-1 after:-bottom-px after:h-0.5 after:rounded-full after:bg-brand after:opacity-0 after:transition-opacity",
+        "after:absolute after:inset-x-1 after:-bottom-px after:h-0.5 after:bg-brand after:opacity-0 after:transition-opacity",
         "data-[state=active]:after:opacity-100",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className

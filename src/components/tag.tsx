@@ -5,8 +5,6 @@ const TONES = {
   neutral: "border-line bg-surface-2 text-ink-soft",
   /** Something that needs attention (nicht abdrucken, fehlgeschlagen). */
   crit: "border-crit/30 bg-crit-tint font-medium text-crit",
-  /** Small identifying mark (Verteiler on an Amt). */
-  brass: "border-brass/40 bg-brass-tint text-ink-soft",
 } as const;
 
 /** The one recipe for small chips on a record. */
@@ -17,7 +15,7 @@ export function Tag({
   className,
   children,
 }: {
-  /** neutral (default) | crit | brass. */
+  /** neutral (default) | crit. */
   tone?: keyof typeof TONES;
   /** Leading icon (decorative), kept outside the truncated text. */
   icon?: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
@@ -31,7 +29,7 @@ export function Tag({
     <span
       title={title}
       className={cn(
-        "inline-flex h-5 max-w-full shrink-0 items-center gap-1 rounded-[4px] border px-1.5 text-caption leading-none whitespace-nowrap [&_svg]:size-3 [&_svg]:shrink-0",
+        "inline-flex h-5 max-w-full shrink-0 items-center gap-1 border px-1.5 text-caption leading-none whitespace-nowrap [&_svg]:size-3 [&_svg]:shrink-0",
         TONES[tone],
         className,
       )}
