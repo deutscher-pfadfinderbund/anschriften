@@ -44,12 +44,12 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 ## Design (UI)
 
 Referenz-Mockup (nur Struktur übernehmen): https://claude.ai/code/artifact/f1874284-ef26-4484-b1da-83ed5a63a597
-**Theme „Druckschwarz“ wie das DPB-Bundesarchiv** (Repo `bundesarchiv`, `DESIGN.md` + `tokens.css`): schwarze Tinte auf weißem Papier, kein zweiter Farbton. Tokens sind in `src/app/globals.css` definiert — verwenden, nicht neu erfinden:
+**Theme: monochrom, modern, schlicht.** Fast-schwarze Tinte auf Weiß, kühle Neutralgraus, kein zweiter Farbton. Tokens sind in `src/app/globals.css` definiert — verwenden, nicht neu erfinden:
 
-- Papier weiß (light) bzw. #0b0b0b (dark), Tinte schwarz bzw. #f0f0f0; Grau für Nebentext (`ink-soft`/`ink-faint`), als Fläche nur für Hover/Auswahl (`hover`/`active`), nie als Akzent. Dark ist abgestimmt, nicht invertiert
-- `--color-brand` ist Tinte (Links unterstrichen, Marker, Fokus); Primär-Button schwarz gefüllt und beim Hover invertiert, im Dark umrandet auf gedimmtem Grund (nie Tintenfläche). Rot (`--color-crit`) nur für Fehler und Löschen
-- Eckig (`--radius: 0`), flach (keine Schatten); Buttons und schwebende Flächen (Dialog, Drawer, Popover, Toast) bekommen die Tinten-Kante `--edge`. Fokus: 3px Tinte, 3px Abstand
-- Schrift: Fira Sans (UI/Daten, wie das gedruckte Verzeichnis), System-Serif (`ui-serif`/Iowan-Stack) nur für Seitentitel, Wortmarke (Kapitälchen) und Panel-Überschriften
+- Papier weiß, Seitenleiste/Top-Bar minimal grau (`surface-2`); Dark ist gedimmtes Graphit (#161618), nicht Schwarz und nicht invertiert. Grau für Nebentext (`ink-soft`/`ink-faint`), als Fläche nur für Hover/Auswahl (`hover`/`active`), nie als Akzent
+- `--color-brand` ist Tinte (Links unterstrichen, Fokus); Primär-Button tintengefüllt (im Dark hell mit dunkler Schrift). Aktiv/ausgewählt = `active`-Fläche + mittleres Gewicht (Navigation, Tabs). Rot (`--color-crit`) nur für Fehler und Löschen
+- Gerundet (`--radius: 0.5rem`); Kanten weich grau (`line-strong`) für Buttons und schwebende Flächen; alle Formularfelder und Checkboxen in `--control` (grau, ≥ 3:1 — nie darunter). Schatten: nur `shadow-xs` (Outline-Button) und `shadow-md`/`shadow-lg` auf Schwebendem (Popover, Select, Dialog, Drawer, Auswahlleiste). Fokus: 2px Tinte, 2px Abstand; Felder: Tintenrand + 1px Ring
+- Schrift: Fira Sans (UI/Daten, wie das gedruckte Verzeichnis), System-Serif (`ui-serif`/Iowan-Stack) nur für Seitentitel, Wortmarke (einzeilig, Größe wie Panel-Überschriften) und Panel-Überschriften
 - Dicht aber ruhig: 13.5–14px Tabellentext, `tabular-nums` für Zahlenspalten
 - Beide Themes pflegen; immer umschaltbar: `ThemeToggle` (`src/components/theme-toggle.tsx`) setzt das Cookie `theme`, das Root-Layout rendert es als `<html data-theme>`; ohne Cookie folgt die Seite dem System
 

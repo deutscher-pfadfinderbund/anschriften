@@ -29,7 +29,7 @@ export function Tag({
     <span
       title={title}
       className={cn(
-        "inline-flex h-5 max-w-full shrink-0 items-center gap-1 border px-1.5 text-caption leading-none whitespace-nowrap [&_svg]:size-3 [&_svg]:shrink-0",
+        "inline-flex h-5 max-w-full shrink-0 items-center gap-1 rounded-md border px-1.5 text-caption leading-none whitespace-nowrap [&_svg]:size-3 [&_svg]:shrink-0",
         TONES[tone],
         className,
       )}

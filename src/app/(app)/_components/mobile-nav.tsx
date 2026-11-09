@@ -10,6 +10,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+import { Raute } from "@/components/brand";
+
 import { SidebarContent, Wordmark } from "./sidebar";
 
 /**
@@ -24,7 +26,10 @@ export function MobileNav({ userName }: { userName: string }) {
 
   return (
     <header className="sticky top-0 z-30 flex h-(--top-bar) shrink-0 items-center justify-between gap-3 border-b border-line bg-surface-2 pr-1.5 pl-4 lg:hidden">
-      <Wordmark />
+      <div className="flex min-w-0 items-center gap-2">
+        <Raute className="size-2" />
+        <Wordmark />
+      </div>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           <button

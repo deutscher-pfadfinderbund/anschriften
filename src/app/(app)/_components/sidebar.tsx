@@ -38,14 +38,15 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** Brand lozenge + app name. Shared by the sidebar header and the mobile top bar. */
+/**
+ * The app name in the display serif, on one line: at text-panel it fits the rail
+ * (w-60 minus px-5) even in Georgia, the widest serif of the stack. The soft
+ * hyphen is the fallback should a serif still be too wide.
+ */
 export function Wordmark() {
   return (
-    <div className="flex min-w-0 items-center font-display text-[18px] leading-tight font-semibold tracking-[0.06em] text-ink [font-variant-caps:small-caps]">
-      <Raute className="mr-[7px] inline-block size-[9px] -translate-y-px" />
-      {/* Soft hyphen: if a wide fallback serif does not fit, the name breaks
-          as „Anschriften-/verzeichnis“ instead of overflowing its box. */}
-      <span className="min-w-0">Anschriften&shy;verzeichnis</span>
+    <div className="min-w-0 font-display text-panel leading-tight font-semibold text-ink">
+      Anschriften&shy;verzeichnis
     </div>
   );
 }
@@ -102,8 +103,12 @@ export function SidebarContent({
 
   return (
     <>
+      {/* One left edge for the lozenge, the wordmark and the nav icons below. */}
       <div className="border-b border-line px-5 pt-5 pb-4">
-        <BundEyebrow className="mb-1" />
+        <div className="mb-1 flex items-center gap-2">
+          <Raute className="size-2" />
+          <BundEyebrow />
+        </div>
         <Wordmark />
       </div>
 
@@ -127,24 +132,24 @@ export function SidebarContent({
         ))}
       </nav>
 
-      <div className="flex items-center gap-2.5 border-t border-line px-4 py-3.5">
-        <div
-          aria-hidden
-          className="grid size-[30px] shrink-0 place-items-center border border-line-strong bg-surface text-micro font-semibold text-ink-soft"
-        >
-          {initials(userName)}
-        </div>
-        <div className="min-w-0 flex-1 leading-tight">
-          <div className="truncate text-caption font-medium text-ink">{userName}</div>
-          <div className="flex flex-wrap items-center gap-x-3">
-            <form action={logout}>
-              <button type="submit" className={cn(TOUCH_HIT, QUIET_ACTION)}>
-                <LogOut aria-hidden className="size-3" />
-                Abmelden
-              </button>
-            </form>
-            <ThemeToggle />
+      <div className="border-t border-line px-5 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <div
+            aria-hidden
+            className="grid size-7 shrink-0 place-items-center rounded-full border border-line-strong bg-surface text-micro font-semibold text-ink-soft"
+          >
+            {initials(userName)}
           </div>
+          <div className="min-w-0 truncate text-caption font-medium text-ink">{userName}</div>
+        </div>
+        <div className="mt-2.5 flex items-center gap-6">
+          <form action={logout} className="flex">
+            <button type="submit" className={cn(TOUCH_HIT, QUIET_ACTION)}>
+              <LogOut aria-hidden className="size-3" />
+              Abmelden
+            </button>
+          </form>
+          <ThemeToggle />
         </div>
       </div>
     </>

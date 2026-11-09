@@ -90,7 +90,7 @@ export function EntryRow({
         {/* Fixed width and tabular figures, so the column of numbers lines up. */}
         <span
           title={order == null ? orderText : orderLabel}
-          className="inline-block w-9 shrink-0 border border-line bg-surface-2 px-1 py-px text-right text-micro tabular-nums text-ink-faint"
+          className="inline-block w-9 shrink-0 rounded-sm border border-line bg-surface-2 px-1 py-px text-right text-micro tabular-nums text-ink-faint"
         >
           {order ?? "—"}
         </span>

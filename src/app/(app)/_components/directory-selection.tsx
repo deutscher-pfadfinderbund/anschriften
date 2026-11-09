@@ -78,7 +78,7 @@ export function SelectionBar({
         role="region"
         aria-label="Auswahl"
         className={cn(
-          "sticky bottom-3 z-20 mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-edge bg-surface px-3 py-2.5 sm:px-4",
+          "sticky bottom-3 z-20 mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line-strong bg-surface px-3 py-2.5 shadow-md sm:px-4",
           // While the bar is shown, the page's scroll padding keeps a row that gets
           // keyboard focus clear of it: its tallest wrap per breakpoint, plus air.
           "[html:has(&)]:scroll-pb-48 sm:[html:has(&)]:scroll-pb-36 xl:[html:has(&)]:scroll-pb-20",

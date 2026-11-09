@@ -36,7 +36,7 @@ type OptionId = (typeof OPTIONS)[number]["id"];
 const ROW = "flex cursor-pointer gap-3 px-4 py-2.5 transition-colors hover:bg-hover sm:px-gutter";
 
 /**
- * Native radio, redrawn in the field skin: --control ring, brand dot when checked. Focus
+ * Native radio, redrawn like the checkbox: --control ring, brand dot when checked. Focus
  * uses the app-wide :focus-visible outline.
  */
 const RADIO =

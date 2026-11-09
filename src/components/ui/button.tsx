@@ -13,17 +13,17 @@ import { cn } from "@/lib/utils"
 const TOUCH_TARGET = "pointer-coarse:min-h-11 pointer-coarse:min-w-11"
 
 // Focus: no ring classes here on purpose — buttons use the app-wide solid
-// :focus-visible outline from globals.css (3px ink, 3px offset).
-// Primary: ink fill that inverts on hover (dark: outlined, see --brand-fill);
-// outline: the same ink edge on the paper.
+// :focus-visible outline from globals.css (2px ink, 2px offset).
+// Primary: ink fill (near-white in dark), one step softer on hover; outline: the
+// soft --line-strong edge plus shadow-xs, so it still reads as a button.
 const buttonVariants = cva(
   "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-body font-medium whitespace-nowrap transition-colors select-none active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "border-edge bg-primary text-primary-foreground hover:bg-brand-fill-hover hover:text-ink",
+        default: "bg-primary text-primary-foreground hover:bg-brand-fill-hover",
         outline:
-          "border-edge bg-surface text-ink hover:bg-hover aria-expanded:bg-active",
+          "border-line-strong bg-surface text-ink shadow-xs hover:bg-hover aria-expanded:bg-active",
         ghost: "hover:bg-hover hover:text-ink aria-expanded:bg-active aria-expanded:text-ink",
         destructive: "bg-destructive/10 text-destructive hover:bg-destructive/15",
       },

@@ -35,8 +35,9 @@ export const matchesWords = (folded: string, words: readonly string[]): boolean 
 
 /**
  * The one skin for text-like form controls: Input, Textarea, SelectTrigger and
- * the Combobox trigger. Same height, a --control border (≥ 3:1), --field fill,
- * a placeholder clearly lighter than values, and a solid inset focus ring.
+ * the Combobox trigger. Same height, a --control border (≥ 3:1, gray, never ink),
+ * --field fill, a placeholder clearly lighter than values, and a solid ink focus
+ * ring (border + 1px ring).
  * 16px text below `md` keeps iOS from zooming into a focused field.
  */
 export const FIELD =
@@ -69,12 +70,11 @@ export const LINK =
 
 /**
  * A navigation row (sidebar, Verteiler rail). One "active" language app-wide: --active
- * fill (always stronger than --hover), ink text and a straight brand marker bar.
+ * fill (always stronger than --hover), medium-weight ink text.
  */
 export const NAV_ROW = {
-  base: "relative flex w-full items-center rounded-md px-2.5 py-2 text-ui transition-colors",
-  active:
-    "bg-active font-medium text-ink before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:bg-brand",
+  base: "flex w-full items-center rounded-md px-2.5 py-2 text-ui transition-colors",
+  active: "bg-active font-medium text-ink",
   idle: "text-ink-soft hover:bg-hover hover:text-ink",
 }
 

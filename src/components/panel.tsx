@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 
 /**
- * The app's one card: a bordered surface (no shadow — calm, like a printed
- * page) with a display-serif h2 header. Use it for every boxed section.
+ * The app's one card: a bordered surface (no shadow — shadows are for what
+ * floats) with a display-serif h2 header. Use it for every boxed section.
  */
 export function Panel({
   title,

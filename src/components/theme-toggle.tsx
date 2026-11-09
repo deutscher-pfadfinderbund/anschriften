@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
 
 import { QUIET_ACTION, TOUCH_HIT, cn } from "@/lib/utils";
 
-// The viewer's light/dark choice, as in the Bundesarchiv: the "theme" cookie.
+// The viewer's light/dark choice: the "theme" cookie.
 // The root layout renders it as <html data-theme>, so a saved choice paints from
 // the first frame; without one the page follows the system.
 const COOKIE = "theme";
@@ -48,20 +48,26 @@ function toggle() {
   }
 }
 
-/** Text button switching between the light and the dark view. */
-export function ThemeToggle({ className }: { className?: string }) {
+/**
+ * Text button switching between the light and the dark view. Both labels share
+ * one grid cell, the inactive one invisible: the button keeps the width of the
+ * longer label, so nothing around it moves when it flips.
+ */
+export function ThemeToggle() {
   const dark = useIsDark();
-  const label = dark ? "Helle Ansicht" : "Dunkle Ansicht";
   const Icon = dark ? Sun : Moon;
   return (
     <button
       type="button"
       onClick={toggle}
       // The scheme is only known after hydration: no wrong label before it.
-      className={cn(TOUCH_HIT, QUIET_ACTION, dark === null && "invisible", className)}
+      className={cn(TOUCH_HIT, QUIET_ACTION, dark === null && "invisible")}
     >
       <Icon aria-hidden className="size-3" />
-      {label}
+      <span className="grid *:col-start-1 *:row-start-1">
+        <span className={cn(dark && "invisible")}>Dunkle Ansicht</span>
+        <span className={cn(!dark && "invisible")}>Helle Ansicht</span>
+      </span>
     </button>
   );
 }

@@ -24,7 +24,13 @@ export function StandaloneCard({
 }) {
   const Root = inShell ? "div" : "main";
   return (
-    <Root className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
+    <Root
+      className={cn(
+        "flex flex-1 items-center justify-center px-4 py-10 sm:px-6",
+        // Outside the shell the card lifts off the recessed ground, like the sidebar.
+        !inShell && "bg-surface-2",
+      )}
+    >
       <div className="w-full max-w-sm rounded-xl border border-line bg-surface px-6 py-8 sm:px-8">
         <div className="mb-6 text-center">
           <Raute className="mx-auto mb-4 block size-[11px]" />

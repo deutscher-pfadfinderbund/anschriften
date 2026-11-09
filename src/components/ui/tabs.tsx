@@ -20,10 +20,9 @@ function Tabs({
 
 /*
  * Deviation from the shadcn default on purpose: the app has exactly one language
- * for "active/selected" — neutral surface, ink text and a brand marker
- * (see the sidebar nav and the Verteiler rail). The stock raised white box with a
- * shadow would be a second idiom, so the list stays transparent and the marker
- * lives on the trigger.
+ * for "active/selected" — the --active fill and medium ink text (see NAV_ROW in
+ * the sidebar and the Verteiler rail). The stock raised white box with a shadow
+ * would be a second idiom, so the list stays transparent.
  */
 function TabsList({
   className,
@@ -49,13 +48,9 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "relative inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-ui font-medium whitespace-nowrap text-ink-soft transition-colors",
-        "hover:text-ink",
+        "inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-ui font-medium whitespace-nowrap text-ink-soft transition-colors",
         "disabled:pointer-events-none disabled:opacity-50",
-        "data-[state=active]:text-ink",
-        // Brand marker: an underline on the active tab.
-        "after:absolute after:inset-x-1 after:-bottom-px after:h-0.5 after:bg-brand after:opacity-0 after:transition-opacity",
-        "data-[state=active]:after:opacity-100",
+        "hover:bg-hover hover:text-ink data-[state=active]:bg-active data-[state=active]:text-ink",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
