@@ -32,8 +32,8 @@ function Mark({
   );
 }
 
-/** The Lilie in its rhombus: the bund's emblem (mobile top bar, standalone pages).
- * Decorative: the wordmark or title next to it already names the page. */
+/** The Lilie from the letterhead emblem, cut free of its black field (mobile top bar,
+ * standalone pages). Decorative: the wordmark or title next to it already names the page. */
 export function Lilie({ className }: { className?: string }) {
   return <Mark image={lilie} position="center" className={className} />;
 }
