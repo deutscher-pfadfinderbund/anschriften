@@ -1,12 +1,11 @@
-import { Lilie, Schriftzug } from "@/components/brand";
+import { Lilie } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 /**
  * Centered column for the pages outside the app shell (login, 404, error): the
- * Lilie, the letterhead's lettering and a serif title, then the page's own
- * content. No box, like the panels. Renders the page's <main>, or a <div> inside
- * the shell's.
+ * Lilie and a serif title, then the page's own content. No box, like the panels.
+ * Renders the page's <main>, or a <div> inside the shell's.
  */
 export function StandaloneCard({
   title,
@@ -29,8 +28,7 @@ export function StandaloneCard({
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
           <Lilie className="mb-5 h-16" />
-          <Schriftzug className="w-56" />
-          <h1 className="mt-3 font-display text-title font-semibold text-balance text-ink">
+          <h1 className="font-display text-title font-semibold text-balance text-ink">
             {title}
           </h1>
         </div>

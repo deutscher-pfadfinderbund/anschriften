@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 import { logout } from "@/actions/auth";
-import { Schriftzug } from "@/components/brand";
+import { Lilie } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NAV_ROW, QUIET_ACTION, TOUCH_HIT, cn } from "@/lib/utils";
 
@@ -102,9 +102,9 @@ export function SidebarContent({
 
   return (
     <>
-      {/* The letterhead's lettering over the app name, on one left edge with the nav icons. */}
+      {/* The Lilie over the app name, on one left edge with the nav icons. */}
       <div className="border-b border-line px-5 pt-6 pb-4">
-        <Schriftzug className="mb-2.5 w-44" />
+        <Lilie className="mb-3 h-10" />
         <Wordmark />
       </div>
 

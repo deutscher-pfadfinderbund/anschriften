@@ -46,7 +46,7 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 Referenz-Mockup (nur Struktur übernehmen): https://claude.ai/code/artifact/f1874284-ef26-4484-b1da-83ed5a63a597
 **Theme „Satzspiegel“: die Seite ist ein gesetztes Blatt.** Keine Kästen um Abschnitte — große Serifen-Titel über einer Tintenlinie, Haarlinien und Weißraum tragen die Struktur. Fast-schwarze Tinte auf Weiß, kühle Neutralgraus, kein zweiter Farbton. Tokens sind in `src/app/globals.css` definiert — verwenden, nicht neu erfinden:
 
-- Marke aus dem DPB-Briefkopf: `Schriftzug` (Seitenleiste, Login) und `Lilie` (Top-Bar, Login) aus `src/components/brand`, als Maske in Tintenfarbe (folgt hell/dunkel). Keine eigenen Logos erfinden
+- Marke: nur die `Lilie` aus dem DPB-Briefkopf (`src/components/brand`; Seitenleiste, Top-Bar, Login, Favicon), als Maske in Tintenfarbe (folgt hell/dunkel). Der Schriftzug „Deutscher Pfadfinderbund“ ist für Briefköpfe, nicht für die App. Keine eigenen Logos erfinden
 - Papier weiß, auch Seitenleiste und Top-Bar; Dark ist gedimmtes Graphit (#161618). Grau für Nebentext (`ink-soft`/`ink-faint`), als Fläche nur für Hover/Auswahl (`hover`/`active`) und leise Füllungen (`surface-2`: Chips, Dialog-Fuß)
 - Abschnitte = `Panel` (Titel `text-section` + `border-ink`-Linie, kein Rahmen). Listenzeilen in Abschnitten ohne eigenen Seitenabstand, damit Text und Linien bündig mit dem Titel stehen. Seitentitel `text-display` (bis 40px), ohne Linie darunter
 - `--color-brand` ist Tinte (Links unterstrichen, Fokus); Primär-Button tintengefüllt (im Dark hell mit dunkler Schrift). Aktiv/ausgewählt = `active`-Fläche + mittleres Gewicht (Navigation, Tabs). Rot (`--color-crit`) nur für Fehler und Löschen
