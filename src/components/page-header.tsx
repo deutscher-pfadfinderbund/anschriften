@@ -29,7 +29,7 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className={cn(PAGE_GUTTER, "border-b border-line pt-5 pb-4")}>
+    <header className={cn(PAGE_GUTTER, "pt-8 pb-2 sm:pt-10")}>
       {backHref ? (
         <Link
           href={backHref}
@@ -44,7 +44,7 @@ export function PageHeader({
       ) : null}
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="min-w-0">
-          <h1 className="font-display text-title font-semibold text-balance text-ink">{title}</h1>
+          <h1 className="font-display text-display font-semibold text-balance text-ink">{title}</h1>
           {subtitle ? <p className="mt-0.5 text-ui text-ink-soft">{subtitle}</p> : null}
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}

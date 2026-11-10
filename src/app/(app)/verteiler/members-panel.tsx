@@ -142,7 +142,7 @@ function MemberRow({
   const scout = scoutAddition(m);
   const email = m.email?.trim() ?? "";
   return (
-    <li className="flex items-center gap-3 border-b border-line px-4 py-2 last:border-b-0 sm:px-gutter">
+    <li className="flex items-center gap-3 border-b border-line py-2 last:border-b-0">
       <div className="min-w-0 flex-1 @xl:grid @xl:grid-cols-2 @xl:items-center @xl:gap-4">
         <div className="min-w-0">
           <div className="truncate text-ui text-ink">

@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 /**
  * Quiet placeholder for empty lists: muted icon, the sentence stating what is
  * missing, an optional hint and an optional call to action. Meant to sit inside
- * a card body; pass `className` to adjust the vertical rhythm.
+ * a section; pass `className` to adjust the vertical rhythm.
  */
 export function EmptyState({
   icon: Icon,

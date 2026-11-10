@@ -19,6 +19,16 @@ const firaSans = localFont({
   ],
 });
 
+// Source Serif 4 for titles, vendored the same way (OFL-SourceSerif4.txt): one weight,
+// so a Windows Chrome no longer falls back to Georgia.
+const sourceSerif = localFont({
+  variable: "--font-source-serif",
+  display: "swap",
+  // Size the fallback from a serif, so titles do not shift when the face arrives.
+  adjustFontFallback: "Times New Roman",
+  src: [{ path: "./fonts/SourceSerif4-SemiBold.woff2", weight: "600", style: "normal" }],
+});
+
 export const metadata: Metadata = {
   // Every page exports its own short title; the template appends the app name.
   title: {
@@ -37,7 +47,7 @@ export default async function RootLayout({
   const saved = (await cookies()).get("theme")?.value;
   const theme = saved === "light" || saved === "dark" ? saved : undefined;
   return (
-    <html lang="de" data-theme={theme} className={`${firaSans.variable} h-full antialiased`}>
+    <html lang="de" data-theme={theme} className={`${firaSans.variable} ${sourceSerif.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

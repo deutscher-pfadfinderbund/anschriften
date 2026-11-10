@@ -111,7 +111,7 @@ export async function sendMail(raw: SendMailInput): Promise<SendMailResult> {
     listId: listId ?? null,
   });
 
-  // Refresh the "Zuletzt versendet" card regardless of outcome (failures are logged too).
+  // Refresh the "Zuletzt versendet" section regardless of outcome (failures are logged too).
   revalidateApp();
 
   if (!result.ok) return { ok: false, message: mailFailureMessage(result), sent: result.sent };

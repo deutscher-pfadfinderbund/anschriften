@@ -38,7 +38,7 @@ export function Field({
   const message = error ?? hint;
   return (
     <div className={className}>
-      <label htmlFor={id} className="eyebrow mb-1.5 block">
+      <label htmlFor={id} className="field-label mb-1.5 block">
         {label}
       </label>
       {children}

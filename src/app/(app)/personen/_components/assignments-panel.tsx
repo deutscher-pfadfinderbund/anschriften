@@ -184,7 +184,7 @@ export function AssignmentsPanel({
                     />
                     <div>
                       {/* Invisible caption: keeps the buttons level with the fields. */}
-                      <span aria-hidden className="eyebrow invisible mb-1.5 block">
+                      <span aria-hidden className="field-label invisible mb-1.5 block">
                         Aktion
                       </span>
                       <div className="flex items-center justify-end">

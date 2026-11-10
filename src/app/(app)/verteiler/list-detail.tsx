@@ -214,7 +214,7 @@ export function ListDetail({
             {recentMail.map((e) => (
               <li
                 key={e.id}
-                className="flex items-start justify-between gap-3 border-b border-line px-4 py-2.5 last:border-b-0 sm:px-gutter"
+                className="flex items-start justify-between gap-3 border-b border-line py-2.5 last:border-b-0"
               >
                 <div className="min-w-0">
                   <div className="truncate text-ui text-ink">{e.subject}</div>

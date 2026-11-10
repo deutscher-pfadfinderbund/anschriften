@@ -86,7 +86,7 @@ const SIDES = {
   center:
     "top-1/2 left-1/2 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100dvw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 shadow-lg ring-1 ring-line-strong sm:max-w-sm data-open:zoom-in-95 data-closed:zoom-out-95",
   // A full-height drawer (the mobile navigation); its content scrolls itself.
-  left: "top-0 left-0 flex h-dvh w-72 max-w-[85vw] flex-col overflow-hidden border-r border-line bg-surface-2 shadow-lg data-open:slide-in-from-left data-closed:slide-out-to-left",
+  left: "top-0 left-0 flex h-dvh w-72 max-w-[85vw] flex-col overflow-hidden border-r border-line bg-paper shadow-lg data-open:slide-in-from-left data-closed:slide-out-to-left",
 }
 
 type PanelProps = React.ComponentProps<typeof DialogPrimitive.Content> & { side?: keyof typeof SIDES }

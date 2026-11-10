@@ -33,7 +33,8 @@ const OPTIONS = [
 type OptionId = (typeof OPTIONS)[number]["id"];
 
 /** One row of the radio list and the checkbox list: full width, neutral hover. */
-const ROW = "flex cursor-pointer gap-3 px-4 py-2.5 transition-colors hover:bg-hover sm:px-gutter";
+// No hover fill: the rows stand flush with the section title, a fill would end at the text.
+const ROW = "flex cursor-pointer gap-3 py-2.5";
 
 /**
  * Native radio, redrawn like the checkbox: --control ring, brand dot when checked. Focus
@@ -67,7 +68,6 @@ export function ExportManager() {
         title="Profil"
         description="Welche Teile des Verzeichnisses das PDF enthält."
         flush
-        className="overflow-hidden"
       >
         <fieldset>
           <legend className="sr-only">Profil</legend>
@@ -95,7 +95,7 @@ export function ExportManager() {
         </fieldset>
       </Panel>
 
-      <Panel title="Optionen" flush className="overflow-hidden">
+      <Panel title="Optionen" flush>
         <div className="divide-y divide-line">
           {OPTIONS.map((o) => (
             <label key={o.id} className={`${ROW} items-center text-ui text-ink`}>

@@ -22,7 +22,7 @@ import { useDirectoryParams } from "./use-directory-params";
  * Header cells stick below the mobile top bar (--top-bar, 0 from lg up).
  * The bottom line is an inset shadow: a collapsed border would stay behind when stuck.
  */
-const STICKY_HEAD = "sticky top-(--top-bar) z-10 bg-surface-2 shadow-[inset_0_-1px_0_var(--line-strong)]";
+const STICKY_HEAD = "sticky top-(--top-bar) z-10 bg-paper shadow-[inset_0_-1px_0_var(--ink)]";
 
 /**
  * A reset or clear button is about to unmount: keyboard users keep their place instead of
@@ -171,7 +171,7 @@ export function Directory({
         />
       ) : null}
 
-      <div className="mt-3 overflow-clip rounded-lg border border-line bg-surface">
+      <div className="mt-3">
         {persons.length === 0 ? (
           <EmptyState
             icon={Users}
@@ -254,9 +254,9 @@ export function Directory({
               </tbody>
             </table>
             <div className="md:hidden">
-              <label className="flex cursor-pointer items-center gap-3 border-b border-line-strong bg-surface-2 px-3 py-2.5">
+              <label className="flex cursor-pointer items-center gap-3 border-b border-ink bg-paper px-3 py-2.5">
                 {selectAll}
-                <span className="eyebrow">{filtering ? "Alle angezeigten auswählen" : "Alle auswählen"}</span>
+                <span className="field-label">{filtering ? "Alle angezeigten auswählen" : "Alle auswählen"}</span>
               </label>
               <ul>
                 {rows.map((p) => (

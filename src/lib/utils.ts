@@ -9,7 +9,7 @@ import { fold } from "@/lib/format"
 const twMerge = extendTailwindMerge({
   extend: {
     theme: {
-      text: ["micro", "caption", "ui", "body", "panel", "section", "title"],
+      text: ["micro", "caption", "ui", "body", "panel", "section", "title", "display"],
       spacing: ["gutter"],
     },
   },

@@ -7,7 +7,7 @@ import { formatDateTime, plural } from "@/lib/format";
 export function ChangeLogPanel({ entries, className }: { entries: AuditEntry[]; className?: string }) {
   return (
     <Disclosure
-      summary={<h2>Änderungsverlauf</h2>}
+      summary={<h2 className="font-display text-section font-semibold">Änderungsverlauf</h2>}
       count={`${entries.length} ${plural(entries.length, "Änderung", "Änderungen")}`}
       className={className}
     >

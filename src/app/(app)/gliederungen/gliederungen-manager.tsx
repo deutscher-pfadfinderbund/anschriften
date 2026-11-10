@@ -217,7 +217,7 @@ export function GliederungenManager({
           // A child always takes its parent's Bereich (saveGroup enforces it): say so
           // instead of showing a locked select.
           <div>
-            <p className="eyebrow mb-1.5">Bereich</p>
+            <p className="field-label mb-1.5">Bereich</p>
             <p className="text-body text-ink">
               {SECTION_LABELS[parent.section]}
               <span className="text-caption text-ink-faint"> · von „{parent.name}“ übernommen</span>

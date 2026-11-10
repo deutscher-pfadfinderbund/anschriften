@@ -44,12 +44,14 @@ Zentrale Referenz: Roadmap-Issue #7 im Repo (`gh issue view 7`). Jeder Meilenste
 ## Design (UI)
 
 Referenz-Mockup (nur Struktur übernehmen): https://claude.ai/code/artifact/f1874284-ef26-4484-b1da-83ed5a63a597
-**Theme: monochrom, modern, schlicht.** Fast-schwarze Tinte auf Weiß, kühle Neutralgraus, kein zweiter Farbton. Tokens sind in `src/app/globals.css` definiert — verwenden, nicht neu erfinden:
+**Theme „Satzspiegel“: die Seite ist ein gesetztes Blatt.** Keine Kästen um Abschnitte — große Serifen-Titel über einer Tintenlinie, Haarlinien und Weißraum tragen die Struktur. Fast-schwarze Tinte auf Weiß, kühle Neutralgraus, kein zweiter Farbton. Tokens sind in `src/app/globals.css` definiert — verwenden, nicht neu erfinden:
 
-- Papier weiß, Seitenleiste/Top-Bar minimal grau (`surface-2`); Dark ist gedimmtes Graphit (#161618), nicht Schwarz und nicht invertiert. Grau für Nebentext (`ink-soft`/`ink-faint`), als Fläche nur für Hover/Auswahl (`hover`/`active`), nie als Akzent
+- Marke aus dem DPB-Briefkopf: `Schriftzug` (Seitenleiste, Login) und `Lilie` (Top-Bar, Login) aus `src/components/brand`, als Maske in Tintenfarbe (folgt hell/dunkel). Keine eigenen Logos erfinden
+- Papier weiß, auch Seitenleiste und Top-Bar; Dark ist gedimmtes Graphit (#161618). Grau für Nebentext (`ink-soft`/`ink-faint`), als Fläche nur für Hover/Auswahl (`hover`/`active`) und leise Füllungen (`surface-2`: Chips, Dialog-Fuß)
+- Abschnitte = `Panel` (Titel `text-section` + `border-ink`-Linie, kein Rahmen). Listenzeilen in Abschnitten ohne eigenen Seitenabstand, damit Text und Linien bündig mit dem Titel stehen. Seitentitel `text-display` (bis 40px), ohne Linie darunter
 - `--color-brand` ist Tinte (Links unterstrichen, Fokus); Primär-Button tintengefüllt (im Dark hell mit dunkler Schrift). Aktiv/ausgewählt = `active`-Fläche + mittleres Gewicht (Navigation, Tabs). Rot (`--color-crit`) nur für Fehler und Löschen
-- Gerundet (`--radius: 0.5rem`); Kanten weich grau (`line-strong`) für Buttons und schwebende Flächen; alle Formularfelder und Checkboxen in `--control` (grau, ≥ 3:1 — nie darunter). Schatten: nur `shadow-xs` (Outline-Button) und `shadow-md`/`shadow-lg` auf Schwebendem (Popover, Select, Dialog, Drawer, Auswahlleiste). Fokus: 2px Tinte, 2px Abstand; Felder: Tintenrand + 1px Ring
-- Schrift: Fira Sans (UI/Daten, wie das gedruckte Verzeichnis), System-Serif (`ui-serif`/Iowan-Stack) nur für Seitentitel, Wortmarke (einzeilig, Größe wie Panel-Überschriften) und Panel-Überschriften
+- Bedienelemente gerundet (`--radius: 0.5rem`); Buttons und Schwebendes mit weicher Kante (`line-strong`), Formularfelder und Checkboxen in `--control` (grau, ≥ 3:1 — nie darunter). Schatten nur `shadow-xs` (Outline-Button) und `shadow-md`/`shadow-lg` auf Schwebendem (Popover, Select, Dialog, Drawer, Auswahlleiste). Fokus: 2px Tinte, 2px Abstand; Felder: Tintenrand + 1px Ring
+- Schrift: Fira Sans (UI/Daten, wie das gedruckte Verzeichnis), Source Serif 4 (eingecheckt in `src/app/fonts`, überall gleich) nur für Seitentitel, Wortmarke und Abschnitts-/Dialogtitel. Feldbeschriftungen `field-label` (normale Schreibung); `eyebrow` (kleine Versalien) nur für Tabellenköpfe und Seitenleisten-Gruppen
 - Dicht aber ruhig: 13.5–14px Tabellentext, `tabular-nums` für Zahlenspalten
 - Beide Themes pflegen; immer umschaltbar: `ThemeToggle` (`src/components/theme-toggle.tsx`) setzt das Cookie `theme`, das Root-Layout rendert es als `<html data-theme>`; ohne Cookie folgt die Seite dem System
 

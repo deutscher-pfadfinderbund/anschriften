@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 import { logout } from "@/actions/auth";
-import { BundEyebrow, Raute } from "@/components/brand";
+import { Schriftzug } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NAV_ROW, QUIET_ACTION, TOUCH_HIT, cn } from "@/lib/utils";
 
@@ -40,8 +40,7 @@ function initials(name: string): string {
 
 /**
  * The app name in the display serif, on one line: at text-panel it fits the rail
- * (w-60 minus px-5) even in Georgia, the widest serif of the stack. The soft
- * hyphen is the fallback should a serif still be too wide.
+ * (w-60 minus px-5). The soft hyphen is the fallback should it ever be too wide.
  */
 export function Wordmark() {
   return (
@@ -103,12 +102,9 @@ export function SidebarContent({
 
   return (
     <>
-      {/* One left edge for the lozenge, the wordmark and the nav icons below. */}
-      <div className="border-b border-line px-5 pt-5 pb-4">
-        <div className="mb-1 flex items-center gap-2">
-          <Raute className="size-2" />
-          <BundEyebrow />
-        </div>
+      {/* The letterhead's lettering over the app name, on one left edge with the nav icons. */}
+      <div className="border-b border-line px-5 pt-6 pb-4">
+        <Schriftzug className="mb-2.5 w-44" />
         <Wordmark />
       </div>
 
@@ -159,7 +155,7 @@ export function SidebarContent({
 /** Desktop rail. Below `lg` the same content is reachable through the drawer. */
 export function Sidebar({ userName }: { userName: string }) {
   return (
-    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface-2 lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-paper lg:flex">
       <SidebarContent userName={userName} />
     </aside>
   );

@@ -92,7 +92,7 @@ export function VerteilerManager({
             />
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-line-strong bg-surface">
+          <div className="border-y border-line">
             <EmptyState
               className="py-16"
               icon={Mail}

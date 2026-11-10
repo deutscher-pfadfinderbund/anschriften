@@ -713,7 +713,7 @@ export type MailLogEntry = {
 };
 
 /**
- * List-scoped mail log, newest first, for the "Zuletzt versendet" card. Only
+ * List-scoped mail log, newest first, for the "Zuletzt versendet" section. Only
  * entries still tied to a list (table-selection sends have list_id NULL and no
  * home in the per-list view). The Verteiler manager slices this per list.
  */

@@ -104,7 +104,7 @@ function PhoneList({
 
   return (
     <fieldset className={className}>
-      <legend className="eyebrow mb-1.5">Telefon</legend>
+      <legend className="field-label mb-1.5">Telefon</legend>
       {phones.length > 0 ? (
         <ul className="mb-2 flex flex-col gap-2">
           {/* Numbered names: several rows must not read as identical controls. */}

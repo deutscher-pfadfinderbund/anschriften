@@ -30,7 +30,7 @@ function searchText(e: AuditLogRow): string {
 /** One entry: when and who, the person (a link) and what changed. Memoized: a keystroke does not re-render it. */
 const EntryRow = memo(function EntryRow({ entry }: { entry: AuditLogRow }) {
   return (
-    <li className="grid grid-cols-1 items-baseline gap-x-6 gap-y-1 px-4 py-3 sm:px-gutter md:grid-cols-[9.5rem_minmax(0,14rem)_minmax(0,1fr)]">
+    <li className="grid grid-cols-1 items-baseline gap-x-6 gap-y-1 py-3 md:grid-cols-[9.5rem_minmax(0,14rem)_minmax(0,1fr)]">
       <p className="text-caption text-ink-faint tabular-nums">
         {formatDateTime(entry.at)}
         <span className="md:block">
@@ -63,7 +63,7 @@ export function ProtokollList({ entries, limit }: { entries: AuditLogRow[]; limi
   }, [entries, index, q]);
   if (entries.length === 0)
     return (
-      <div className="rounded-lg border border-line bg-surface">
+      <div className="border-y border-line">
         <EmptyState
           icon={History}
           title="Noch keine Änderungen protokolliert."
@@ -96,7 +96,7 @@ export function ProtokollList({ entries, limit }: { entries: AuditLogRow[]; limi
         </p>
       </div>
 
-      <div className="overflow-clip rounded-lg border border-line bg-surface">
+      <div className="border-y border-line">
         {shown.length === 0 ? (
           <EmptyState
             icon={SearchX}

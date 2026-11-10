@@ -1,7 +1,7 @@
 "use client";
 
 // The building blocks the three master-data lists share (Ämter, Stände on /stammdaten,
-// Gliederungen on /gliederungen): the list card, a row that opens its edit dialog, and that
+// Gliederungen on /gliederungen): the list section, a row that opens its edit dialog, and that
 // dialog with its Name and Reihenfolge fields. One recipe, so the lists look and behave alike.
 import { useId, useState, useTransition } from "react";
 import { Pencil, Trash2 } from "lucide-react";
@@ -25,7 +25,7 @@ import { ORDER_MAX } from "@/lib/master-data";
 import { cn } from "@/lib/utils";
 
 /**
- * List card that hugs its content: an ordered list of entries, or the empty state (then
+ * List section that hugs its content: an ordered list of entries, or the empty state (then
  * without the description, which explains the rows).
  */
 export function EntryList({
@@ -45,7 +45,7 @@ export function EntryList({
       title={title}
       description={emptyState ? undefined : description}
       flush
-      className="max-w-2xl overflow-hidden"
+      className="max-w-2xl"
     >
       {emptyState ?? <ul className="divide-y divide-line">{children}</ul>}
     </Panel>
@@ -85,7 +85,7 @@ export function EntryRow({
         onClick={onOpen}
         aria-label={`${name} bearbeiten`}
         aria-describedby={meta ? `${id}-order ${id}-meta` : `${id}-order`}
-        className="group/row flex w-full cursor-pointer items-start gap-3 px-4 py-2 text-left transition-colors hover:bg-hover focus-visible:-outline-offset-2 active:bg-active sm:px-gutter"
+        className="group/row flex w-full cursor-pointer items-start gap-3 py-2 text-left"
       >
         {/* Fixed width and tabular figures, so the column of numbers lines up. */}
         <span

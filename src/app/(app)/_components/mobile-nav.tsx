@@ -10,7 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-import { Raute } from "@/components/brand";
+import { Lilie } from "@/components/brand";
 
 import { SidebarContent, Wordmark } from "./sidebar";
 
@@ -25,9 +25,9 @@ export function MobileNav({ userName }: { userName: string }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-30 flex h-(--top-bar) shrink-0 items-center justify-between gap-3 border-b border-line bg-surface-2 pr-1.5 pl-4 lg:hidden">
+    <header className="sticky top-0 z-30 flex h-(--top-bar) shrink-0 items-center justify-between gap-3 border-b border-line bg-paper pr-1.5 pl-4 lg:hidden">
       <div className="flex min-w-0 items-center gap-2">
-        <Raute className="size-2" />
+        <Lilie className="h-7" />
         <Wordmark />
       </div>
       <Dialog open={open} onOpenChange={setOpen}>
